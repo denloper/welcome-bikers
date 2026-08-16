@@ -1,48 +1,2327 @@
 [
   {
-    "id": "adriatic",
-    "title": "Bay to Capital via Adriatic",
-    "subtitle": "A 2-day tour of Montenegro",
-    "country": "Montenegro",
-    "image": "/photos/route-adriatic.jpg",
-    "days": ["Day 1: Herceg-Novi to Bar", "Day 2: Bar to Podgorica"],
-    "points": [
-      { "name": "Herceg Novi", "lat": 42.4529, "lon": 18.5315 },
-      { "name": "Budva", "lat": 42.2864, "lon": 18.84 },
-      { "name": "Bar", "lat": 42.095, "lon": 19.1003 },
-      { "name": "Podgorica", "lat": 42.4304, "lon": 19.2594 }
-    ]
-  },
-  {
-    "id": "coast-loop",
-    "title": "Adriatic Coast Loop",
-    "subtitle": "Croatia to Albania in 4 days",
-    "country": "Croatia",
-    "image": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1400&q=80",
+    "id": "de01",
+    "title": "DE01 — Bavarian Alpine Road Classic",
+    "subtitle": "A 3-day tour of Germany",
+    "country": "Germany",
+    "image": "/photos/routes/1.jpg",
     "days": [
-      "Day 1: Split to Dubrovnik",
-      "Day 2: Dubrovnik to Kotor",
-      "Day 3: Kotor to Tirana",
-      "Day 4: Rest and viewpoints"
+      {
+        "title": "Day 1",
+        "distanceKm": 155,
+        "description": "Start beneath Neuschwanstein Castle and follow the Deutsche Alpenstraße through the Bavarian foothills. The route combines smooth sweepers, forested climbs, lakeside bends and frequent village sections, with generally excellent pavement and moderate tourist traffic. \nThe approach to Walchensee is especially rewarding, with clear water, high ridges and well-surfaced mountain roads. Expect coaches, cyclists and camper vans around the most popular viewpoints, particularly during summer weekends.",
+        "points": [
+          {
+            "name": "Neuschwanstein Castle, Schwangau",
+            "lat": 47.5576,
+            "lon": 10.7498
+          },
+          {
+            "name": "Oberammergau",
+            "lat": 47.5976,
+            "lon": 11.0669
+          },
+          {
+            "name": "Walchensee",
+            "lat": 47.5964,
+            "lon": 11.3356
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 170,
+        "description": "Ride east through the Bavarian pre-Alps on a mixture of regional roads and quieter connecting sections. The route passes forests, farmland and lake country, with broad curves and smooth surfaces that allow a relaxed touring rhythm. \nContinue toward Berchtesgaden. Traffic increases near larger towns and resort areas, but the road remains scenic and logically connected, giving you long mountain views before the overnight stop.",
+        "points": [
+          {
+            "name": "Walchensee",
+            "lat": 47.5964,
+            "lon": 11.3356
+          },
+          {
+            "name": "Bad Tölz",
+            "lat": 47.7611,
+            "lon": 11.5588
+          },
+          {
+            "name": "Tegernsee",
+            "lat": 47.712,
+            "lon": 11.758
+          },
+          {
+            "name": "Berchtesgaden, Hotel Seimler",
+            "lat": 47.6296,
+            "lon": 13.0121
+          }
+        ]
+      },
+      {
+        "title": "Day 3",
+        "distanceKm": 75,
+        "description": "Start in Berchtesgaden and visit Eagle’s Nest / Kehlsteinhaus before climbing the Roßfeld Panoramastraße. Access to Kehlsteinhaus is via the Obersalzberg shuttle bus and lift; motorcycles remain at the designated parking area. The Roßfeld road offers broad bends, open alpine slopes and panoramic viewpoints, making it one of Germany’s finest motorcycle roads. \nDescend through Ramsau and Hintersee, then finish beside the emerald water of Königssee. The final roads are slower, with visitors and buses around the lake, but the scenery creates an ideal end to this three-day Bavarian route.",
+        "points": [
+          {
+            "name": "Berchtesgaden, Hotel Seimler",
+            "lat": 47.6296,
+            "lon": 13.0121
+          },
+          {
+            "name": "Eagle’s Nest / Kehlsteinhaus",
+            "lat": 47.6167,
+            "lon": 13.0417
+          },
+          {
+            "name": "Roßfeld Panoramastraße",
+            "lat": 47.6045,
+            "lon": 13.045
+          },
+          {
+            "name": "Ramsau bei Berchtesgaden",
+            "lat": 47.604,
+            "lon": 12.898
+          },
+          {
+            "name": "Hintersee",
+            "lat": 47.617,
+            "lon": 12.849
+          },
+          {
+            "name": "Königssee",
+            "lat": 47.5931,
+            "lon": 12.9875
+          }
+        ]
+      }
     ],
     "points": [
-      { "name": "Split", "lat": 43.5081, "lon": 16.4402 },
-      { "name": "Dubrovnik", "lat": 42.6507, "lon": 18.0944 },
-      { "name": "Kotor", "lat": 42.4247, "lon": 18.7712 },
-      { "name": "Tirana", "lat": 41.3275, "lon": 19.8187 }
+      {
+        "name": "Neuschwanstein Castle, Schwangau",
+        "lat": 47.5576,
+        "lon": 10.7498
+      },
+      {
+        "name": "Oberammergau",
+        "lat": 47.5976,
+        "lon": 11.0669
+      },
+      {
+        "name": "Walchensee",
+        "lat": 47.5964,
+        "lon": 11.3356
+      },
+      {
+        "name": "Walchensee",
+        "lat": 47.5964,
+        "lon": 11.3356
+      },
+      {
+        "name": "Bad Tölz",
+        "lat": 47.7611,
+        "lon": 11.5588
+      },
+      {
+        "name": "Tegernsee",
+        "lat": 47.712,
+        "lon": 11.758
+      },
+      {
+        "name": "Berchtesgaden, Hotel Seimler",
+        "lat": 47.6296,
+        "lon": 13.0121
+      },
+      {
+        "name": "Berchtesgaden, Hotel Seimler",
+        "lat": 47.6296,
+        "lon": 13.0121
+      },
+      {
+        "name": "Eagle’s Nest / Kehlsteinhaus",
+        "lat": 47.6167,
+        "lon": 13.0417
+      },
+      {
+        "name": "Roßfeld Panoramastraße",
+        "lat": 47.6045,
+        "lon": 13.045
+      },
+      {
+        "name": "Ramsau bei Berchtesgaden",
+        "lat": 47.604,
+        "lon": 12.898
+      },
+      {
+        "name": "Hintersee",
+        "lat": 47.617,
+        "lon": 12.849
+      },
+      {
+        "name": "Königssee",
+        "lat": 47.5931,
+        "lon": 12.9875
+      }
     ]
   },
   {
-    "id": "alps",
-    "title": "Alpine Pass Run",
-    "subtitle": "Austria and the high roads",
-    "country": "Austria",
-    "image": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1400&q=80",
-    "days": ["Day 1: Innsbruck to Grossglockner", "Day 2: Grossglockner to Salzburg"],
+    "id": "it01",
+    "title": "IT01 — Garda, Iseo and Como Lakes Ride",
+    "subtitle": "A 3-day tour of Italy",
+    "country": "Italy",
+    "image": "/photos/routes/2.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 140,
+        "description": "Start on Strada della Forra, the cliff-cut road above Lake Garda with tunnels, rock walls and dramatic views down to the water. Continue through Tremosine and Limone sul Garda, where the roads stay close to the lake and the villages feel like part of the landscape rather than separate from it. \nThe day is compact but technical, with narrow sections, tourist traffic and frequent photo stops. Pavement is generally good, though the gorge and lake roads can be busy in peak season.",
+        "points": [
+          {
+            "name": "Strada della Forra, Tremosine",
+            "lat": 45.756,
+            "lon": 10.755
+          },
+          {
+            "name": "Tremosine",
+            "lat": 45.7685,
+            "lon": 10.7557
+          },
+          {
+            "name": "Limone sul Garda",
+            "lat": 45.806,
+            "lon": 10.792
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 160,
+        "description": "Ride from Lake Garda toward Lake Iseo, then take the ferry to Monte Isola. The crossing is an essential part of the route, and the island’s fishing villages give the day a slower, more local character. \nContinue to Lovere for the overnight stop. Roads around Iseo are smooth but busy near the popular lakeshores, and ferry timings should be checked in advance so the route remains realistic.",
+        "points": [
+          {
+            "name": "Lake Iseo",
+            "lat": 45.689,
+            "lon": 10.06
+          },
+          {
+            "name": "Monte Isola ferry, Sulzano",
+            "lat": 45.689,
+            "lon": 10.099
+          },
+          {
+            "name": "Monte Isola",
+            "lat": 45.719,
+            "lon": 10.078
+          },
+          {
+            "name": "Lovere",
+            "lat": 45.811,
+            "lon": 10.067
+          }
+        ]
+      },
+      {
+        "title": "Day 3",
+        "distanceKm": 150,
+        "description": "Finish through Lake Como with Bellagio and Varenna, where the roads are narrow, scenic and often slower because of traffic and village geometry. This part of the route is more about atmosphere than speed, with villas, ferries and steep lakeside slopes. \nStop at Mandello del Lario to include the Moto Guzzi connection before wrapping up the loop. Expect heavy tourist use on the Como shoreline, especially in summer and around the main towns.",
+        "points": [
+          {
+            "name": "Lovere",
+            "lat": 45.811,
+            "lon": 10.067
+          },
+          {
+            "name": "Bellagio",
+            "lat": 45.987,
+            "lon": 9.261
+          },
+          {
+            "name": "Varenna",
+            "lat": 46.01,
+            "lon": 9.284
+          },
+          {
+            "name": "Mandello del Lario, Moto Guzzi Museum",
+            "lat": 45.919,
+            "lon": 9.319
+          }
+        ]
+      }
+    ],
     "points": [
-      { "name": "Innsbruck", "lat": 47.2692, "lon": 11.4041 },
-      { "name": "Grossglockner", "lat": 47.0742, "lon": 12.6947 },
-      { "name": "Salzburg", "lat": 47.8095, "lon": 13.055 }
+      {
+        "name": "Strada della Forra, Tremosine",
+        "lat": 45.756,
+        "lon": 10.755
+      },
+      {
+        "name": "Tremosine",
+        "lat": 45.7685,
+        "lon": 10.7557
+      },
+      {
+        "name": "Limone sul Garda",
+        "lat": 45.806,
+        "lon": 10.792
+      },
+      {
+        "name": "Lake Iseo",
+        "lat": 45.689,
+        "lon": 10.06
+      },
+      {
+        "name": "Monte Isola ferry, Sulzano",
+        "lat": 45.689,
+        "lon": 10.099
+      },
+      {
+        "name": "Monte Isola",
+        "lat": 45.719,
+        "lon": 10.078
+      },
+      {
+        "name": "Lovere",
+        "lat": 45.811,
+        "lon": 10.067
+      },
+      {
+        "name": "Lovere",
+        "lat": 45.811,
+        "lon": 10.067
+      },
+      {
+        "name": "Bellagio",
+        "lat": 45.987,
+        "lon": 9.261
+      },
+      {
+        "name": "Varenna",
+        "lat": 46.01,
+        "lon": 9.284
+      },
+      {
+        "name": "Mandello del Lario, Moto Guzzi Museum",
+        "lat": 45.919,
+        "lon": 9.319
+      }
+    ]
+  },
+  {
+    "id": "si01",
+    "title": "SI01 — Julian Alps and Soča Valley Loop",
+    "subtitle": "A 3-day tour of Slovenia",
+    "country": "Slovenia",
+    "image": "/photos/routes/3.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 125,
+        "description": "Start in Kranjska Gora, with a food stop at Brunarica Kosobrin, then climb Vršič Pass. The road is defined by its 50 hairpins, steep gradients and cobbled sections, making it one of the most iconic mountain roads in the Julian Alps. \nDescend into the Soča Valley toward Bovec. The scenery is spectacular and the riding is technical enough to stay engaging, but the narrow road and changing weather require careful attention.",
+        "points": [
+          {
+            "name": "Kranjska Gora",
+            "lat": 46.484,
+            "lon": 13.783
+          },
+          {
+            "name": "Brunarica Kosobrin, Kranjska Gora",
+            "lat": 46.483,
+            "lon": 13.786
+          },
+          {
+            "name": "Vršič Pass",
+            "lat": 46.431,
+            "lon": 13.744
+          },
+          {
+            "name": "Bovec",
+            "lat": 46.338,
+            "lon": 13.552
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 140,
+        "description": "Visit Fort Kluže and then climb Mangart Saddle Road, Slovenia’s highest paved road. The route is short in distance but highly concentrated in difficulty, with narrow lanes, exposed sections and dramatic alpine scenery. \nContinue toward Bled via the northern Alpine corridors. The road becomes more open as you leave the high mountain zone, but the scenery remains strong and the driving stays scenic and flowing.",
+        "points": [
+          {
+            "name": "Bovec",
+            "lat": 46.338,
+            "lon": 13.552
+          },
+          {
+            "name": "Fort Kluže",
+            "lat": 46.388,
+            "lon": 13.589
+          },
+          {
+            "name": "Mangart Saddle Road",
+            "lat": 46.439,
+            "lon": 13.645
+          },
+          {
+            "name": "Bled",
+            "lat": 46.369,
+            "lon": 14.104
+          }
+        ]
+      },
+      {
+        "title": "Day 3",
+        "distanceKm": 135,
+        "description": "Return via the Julian Alpine ring, linking the turquoise Soča corridor back to Kranjska Gora. The roads are a blend of fast valley stretches and tighter mountain bends, with excellent pavement and frequent places to stop. \nWeather can shift quickly in the high country, and tourist traffic is common near the most famous viewpoints. It is a strong final day that ties together the route’s alpine valleys, mountain passes and blue rivers.",
+        "points": [
+          {
+            "name": "Bled",
+            "lat": 46.369,
+            "lon": 14.104
+          },
+          {
+            "name": "Soča Valley",
+            "lat": 46.305,
+            "lon": 13.621
+          },
+          {
+            "name": "Kranjska Gora",
+            "lat": 46.484,
+            "lon": 13.783
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "name": "Kranjska Gora",
+        "lat": 46.484,
+        "lon": 13.783
+      },
+      {
+        "name": "Brunarica Kosobrin, Kranjska Gora",
+        "lat": 46.483,
+        "lon": 13.786
+      },
+      {
+        "name": "Vršič Pass",
+        "lat": 46.431,
+        "lon": 13.744
+      },
+      {
+        "name": "Bovec",
+        "lat": 46.338,
+        "lon": 13.552
+      },
+      {
+        "name": "Bovec",
+        "lat": 46.338,
+        "lon": 13.552
+      },
+      {
+        "name": "Fort Kluže",
+        "lat": 46.388,
+        "lon": 13.589
+      },
+      {
+        "name": "Mangart Saddle Road",
+        "lat": 46.439,
+        "lon": 13.645
+      },
+      {
+        "name": "Bled",
+        "lat": 46.369,
+        "lon": 14.104
+      },
+      {
+        "name": "Bled",
+        "lat": 46.369,
+        "lon": 14.104
+      },
+      {
+        "name": "Soča Valley",
+        "lat": 46.305,
+        "lon": 13.621
+      },
+      {
+        "name": "Kranjska Gora",
+        "lat": 46.484,
+        "lon": 13.783
+      }
+    ]
+  },
+  {
+    "id": "gr01",
+    "title": "GR01 — Wild Crete Mountain and South Coast Route",
+    "subtitle": "A 3-day tour of Greece",
+    "country": "Greece",
+    "image": "/photos/routes/4.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 135,
+        "description": "Leave Chania through Therisso Gorge, where the road narrows between the White Mountains and the ride immediately becomes more technical. Continue to Omalos Plateau and use the Samaria Gorge trailhead at Xyloskalo as a scenic point and optional walking stop. \nThere is no through road for cars or motorcycles across Samaria Gorge, so the route does not enter or pass through the gorge. After the stop near Omalos, continue the next riding stage toward Askifou and the southern coast.",
+        "points": [
+          {
+            "name": "Chania",
+            "lat": 35.513,
+            "lon": 24.018
+          },
+          {
+            "name": "Therisso Gorge",
+            "lat": 35.45,
+            "lon": 23.964
+          },
+          {
+            "name": "Omalos Plateau",
+            "lat": 35.356,
+            "lon": 23.901
+          },
+          {
+            "name": "Samaria Gorge trailhead / Xyloskalo",
+            "lat": 35.313,
+            "lon": 23.916
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 145,
+        "description": "Continue from Omalos across Askifou and descend through Imbros Gorge, which gives the route its most concentrated series of switchbacks. The road is narrow, scenic and very much a mountain route rather than a simple cross-island connector. \nFinish at Chora Sfakion on the Libyan Sea. Traffic is light away from the main villages, but the gorge can be sensitive to loose stones and changing weather, especially in shoulder seasons.",
+        "points": [
+          {
+            "name": "Omalos Plateau",
+            "lat": 35.356,
+            "lon": 23.901
+          },
+          {
+            "name": "Askifou Plateau",
+            "lat": 35.287,
+            "lon": 24.214
+          },
+          {
+            "name": "Imbros Gorge",
+            "lat": 35.238,
+            "lon": 24.179
+          },
+          {
+            "name": "Chora Sfakion",
+            "lat": 35.199,
+            "lon": 24.138
+          }
+        ]
+      },
+      {
+        "title": "Day 3",
+        "distanceKm": 140,
+        "description": "Ride the south coast past Frangokastello and Preveli, combining sea-level curves with short inland connectors. The landscape is drier and more open here, and the road feels remote even when the coastline is close. \nThe final run to Rethymno is more straightforward, but the mix of fortress, monastery and beach scenery keeps the day varied. Expect summer heat, wind exposure and occasional tourist traffic near the major coastal stops.",
+        "points": [
+          {
+            "name": "Chora Sfakion",
+            "lat": 35.199,
+            "lon": 24.138
+          },
+          {
+            "name": "Frangokastello",
+            "lat": 35.187,
+            "lon": 24.233
+          },
+          {
+            "name": "Preveli",
+            "lat": 35.153,
+            "lon": 24.474
+          },
+          {
+            "name": "Rethymno",
+            "lat": 35.365,
+            "lon": 24.482
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "name": "Chania",
+        "lat": 35.513,
+        "lon": 24.018
+      },
+      {
+        "name": "Therisso Gorge",
+        "lat": 35.45,
+        "lon": 23.964
+      },
+      {
+        "name": "Omalos Plateau",
+        "lat": 35.356,
+        "lon": 23.901
+      },
+      {
+        "name": "Samaria Gorge trailhead / Xyloskalo",
+        "lat": 35.313,
+        "lon": 23.916
+      },
+      {
+        "name": "Omalos Plateau",
+        "lat": 35.356,
+        "lon": 23.901
+      },
+      {
+        "name": "Askifou Plateau",
+        "lat": 35.287,
+        "lon": 24.214
+      },
+      {
+        "name": "Imbros Gorge",
+        "lat": 35.238,
+        "lon": 24.179
+      },
+      {
+        "name": "Chora Sfakion",
+        "lat": 35.199,
+        "lon": 24.138
+      },
+      {
+        "name": "Chora Sfakion",
+        "lat": 35.199,
+        "lon": 24.138
+      },
+      {
+        "name": "Frangokastello",
+        "lat": 35.187,
+        "lon": 24.233
+      },
+      {
+        "name": "Preveli",
+        "lat": 35.153,
+        "lon": 24.474
+      },
+      {
+        "name": "Rethymno",
+        "lat": 35.365,
+        "lon": 24.482
+      }
+    ]
+  },
+  {
+    "id": "fi01",
+    "title": "FI01 — Arctic Circle to Utsjoki Lapland Ride",
+    "subtitle": "A 4-day tour of Finland",
+    "country": "Finland",
+    "image": "/photos/routes/5.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 270,
+        "description": "Start in Rovaniemi and head north on the E75 before turning toward Torvinen and Route 962. Continue through Pyhä-Luosto National Park and onward to Sodankylä, where the urban landscape gives way to endless forests, fells and empty northern roads. \nThe roads are generally wide, smooth and easy to follow, but distances between services increase quickly. Reindeer can appear suddenly on the asphalt, particularly in the early morning and evening, while weather may change rapidly even in summer.",
+        "points": [
+          {
+            "name": "Rovaniemi",
+            "lat": 66.503,
+            "lon": 25.73
+          },
+          {
+            "name": "Torvinen",
+            "lat": 67.002,
+            "lon": 26.1
+          },
+          {
+            "name": "Pyhä-Luosto National Park",
+            "lat": 67.04,
+            "lon": 27.1
+          },
+          {
+            "name": "Sodankylä",
+            "lat": 67.417,
+            "lon": 26.59
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 300,
+        "description": "Continue north through Tankavaara and Saariselkä toward Lake Inari and the village of Inari. The route passes through taiga, open fells and long stretches with almost no traffic, creating the vast northern atmosphere that defines Finnish Lapland. \nFuel and food stops should be planned in advance, especially before leaving Saariselkä. The riding is not technically difficult, but monotony, wind, wildlife and large distances require consistent concentration.",
+        "points": [
+          {
+            "name": "Sodankylä",
+            "lat": 67.417,
+            "lon": 26.59
+          },
+          {
+            "name": "Tankavaara",
+            "lat": 68.061,
+            "lon": 27.32
+          },
+          {
+            "name": "Saariselkä",
+            "lat": 68.42,
+            "lon": 27.412
+          },
+          {
+            "name": "Lake Inari",
+            "lat": 68.906,
+            "lon": 27.028
+          },
+          {
+            "name": "Inari",
+            "lat": 68.906,
+            "lon": 27.028
+          }
+        ]
+      },
+      {
+        "title": "Day 3",
+        "distanceKm": 250,
+        "description": "Leave Inari and continue through Kaamanen toward Utsjoki and Nuorgam, the northernmost village in Finland. The road follows wide river valleys and open Arctic terrain, with treeless fells and increasingly remote landscapes along the Teno River. \nThe route remains mostly smooth and flowing, but services are limited and temperatures can drop quickly. Keep the fuel tank topped up and watch carefully for reindeer, especially on open sections with long sightlines.",
+        "points": [
+          {
+            "name": "Inari",
+            "lat": 68.906,
+            "lon": 27.028
+          },
+          {
+            "name": "Kaamanen",
+            "lat": 69.143,
+            "lon": 27.267
+          },
+          {
+            "name": "Utsjoki",
+            "lat": 69.908,
+            "lon": 27.029
+          },
+          {
+            "name": "Nuorgam",
+            "lat": 70.083,
+            "lon": 27.9
+          }
+        ]
+      },
+      {
+        "title": "Day 4",
+        "distanceKm": 120,
+        "description": "Finish with a scenic ride from Nuorgam along the Teno River back to Utsjoki. The route offers open Arctic landscapes, low fells, sparse settlements and a powerful sense of distance from the rest of Europe. \nThis final stage brings the complete route to approximately 940 kilometres over four days. Nordkapp remains an optional continuation from Utsjoki into Norway for riders who want to extend the northern journey.",
+        "points": [
+          {
+            "name": "Nuorgam",
+            "lat": 70.083,
+            "lon": 27.9
+          },
+          {
+            "name": "Teno River scenic road",
+            "lat": 70.0,
+            "lon": 27.5
+          },
+          {
+            "name": "Utsjoki",
+            "lat": 69.908,
+            "lon": 27.029
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "name": "Rovaniemi",
+        "lat": 66.503,
+        "lon": 25.73
+      },
+      {
+        "name": "Torvinen",
+        "lat": 67.002,
+        "lon": 26.1
+      },
+      {
+        "name": "Pyhä-Luosto National Park",
+        "lat": 67.04,
+        "lon": 27.1
+      },
+      {
+        "name": "Sodankylä",
+        "lat": 67.417,
+        "lon": 26.59
+      },
+      {
+        "name": "Sodankylä",
+        "lat": 67.417,
+        "lon": 26.59
+      },
+      {
+        "name": "Tankavaara",
+        "lat": 68.061,
+        "lon": 27.32
+      },
+      {
+        "name": "Saariselkä",
+        "lat": 68.42,
+        "lon": 27.412
+      },
+      {
+        "name": "Lake Inari",
+        "lat": 68.906,
+        "lon": 27.028
+      },
+      {
+        "name": "Inari",
+        "lat": 68.906,
+        "lon": 27.028
+      },
+      {
+        "name": "Inari",
+        "lat": 68.906,
+        "lon": 27.028
+      },
+      {
+        "name": "Kaamanen",
+        "lat": 69.143,
+        "lon": 27.267
+      },
+      {
+        "name": "Utsjoki",
+        "lat": 69.908,
+        "lon": 27.029
+      },
+      {
+        "name": "Nuorgam",
+        "lat": 70.083,
+        "lon": 27.9
+      },
+      {
+        "name": "Nuorgam",
+        "lat": 70.083,
+        "lon": 27.9
+      },
+      {
+        "name": "Teno River scenic road",
+        "lat": 70.0,
+        "lon": 27.5
+      },
+      {
+        "name": "Utsjoki",
+        "lat": 69.908,
+        "lon": 27.029
+      }
+    ]
+  },
+  {
+    "id": "ro01",
+    "title": "RO01 — Apuseni Mountains Discovery Route",
+    "subtitle": "A 3-day tour of Romania",
+    "country": "Romania",
+    "image": "/photos/routes/6.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 145,
+        "description": "Leave Cluj-Napoca and head into the Apuseni Mountains through forests and traditional villages. The road gradually tightens and climbs, with a rural feel that is very different from Romania’s famous headline passes. \nReach Padiș Plateau and Belvedere Glăvoaia, where the scenery opens up to forested ridges and wide mountain views. Road quality is variable on smaller sections, so expect patched surfaces and occasional gravel.",
+        "points": [
+          {
+            "name": "Cluj-Napoca",
+            "lat": 46.771,
+            "lon": 23.624
+          },
+          {
+            "name": "Padiș Plateau",
+            "lat": 46.611,
+            "lon": 22.672
+          },
+          {
+            "name": "Belvedere Glăvoaia",
+            "lat": 46.606,
+            "lon": 22.707
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 155,
+        "description": "Continue toward Cheile Turzii and Rimetea, where limestone walls and narrow valley roads create the route’s most dramatic scenery. The ride is still accessible, but the road surface can change quickly in forested and canyon sections. \nFinish in Alba Iulia at the Alba Carolina fortress. The day combines mountain riding with a more historic urban finish, and traffic increases as you leave the highland roads behind.",
+        "points": [
+          {
+            "name": "Belvedere Glăvoaia",
+            "lat": 46.606,
+            "lon": 22.707
+          },
+          {
+            "name": "Cheile Turzii Viewpoint",
+            "lat": 46.562,
+            "lon": 23.621
+          },
+          {
+            "name": "Rimetea",
+            "lat": 46.453,
+            "lon": 23.578
+          },
+          {
+            "name": "Alba Iulia",
+            "lat": 46.073,
+            "lon": 23.58
+          }
+        ]
+      },
+      {
+        "title": "Day 3",
+        "distanceKm": 150,
+        "description": "Use the final day to return through Turda Gorge and back to Cluj-Napoca. This is a more direct riding day, with smoother regional roads and fewer major elevation changes than the previous stages. \nThe gorge and surrounding countryside still give the route a scenic finish, but the final leg is best treated as a practical return rather than a technical highlight. Fuel and service availability improve as you approach the city.",
+        "points": [
+          {
+            "name": "Alba Iulia",
+            "lat": 46.073,
+            "lon": 23.58
+          },
+          {
+            "name": "Turda Gorge",
+            "lat": 46.562,
+            "lon": 23.621
+          },
+          {
+            "name": "Cluj-Napoca",
+            "lat": 46.771,
+            "lon": 23.624
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "name": "Cluj-Napoca",
+        "lat": 46.771,
+        "lon": 23.624
+      },
+      {
+        "name": "Padiș Plateau",
+        "lat": 46.611,
+        "lon": 22.672
+      },
+      {
+        "name": "Belvedere Glăvoaia",
+        "lat": 46.606,
+        "lon": 22.707
+      },
+      {
+        "name": "Belvedere Glăvoaia",
+        "lat": 46.606,
+        "lon": 22.707
+      },
+      {
+        "name": "Cheile Turzii Viewpoint",
+        "lat": 46.562,
+        "lon": 23.621
+      },
+      {
+        "name": "Rimetea",
+        "lat": 46.453,
+        "lon": 23.578
+      },
+      {
+        "name": "Alba Iulia",
+        "lat": 46.073,
+        "lon": 23.58
+      },
+      {
+        "name": "Alba Iulia",
+        "lat": 46.073,
+        "lon": 23.58
+      },
+      {
+        "name": "Turda Gorge",
+        "lat": 46.562,
+        "lon": 23.621
+      },
+      {
+        "name": "Cluj-Napoca",
+        "lat": 46.771,
+        "lon": 23.624
+      }
+    ]
+  },
+  {
+    "id": "uk01",
+    "title": "UK01 — Scottish Highlands Grand Loop",
+    "subtitle": "A 3-day tour of United Kingdom",
+    "country": "United Kingdom",
+    "image": "/photos/routes/7.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 180,
+        "description": "Start in Glencoe and follow the A82 to Fort William before heading west through Glenfinnan and down to Mallaig. The roads are classic Highland touring: broad scenery, fast-changing weather and a mixture of A-road flow and narrower coastal approaches. \nThe section to Mallaig is especially good in clear weather, but coaches, camper vans and tourist traffic are common. Ferry reservations should be checked before departure if you are continuing to Skye.",
+        "points": [
+          {
+            "name": "Glencoe",
+            "lat": 56.682,
+            "lon": -4.964
+          },
+          {
+            "name": "Fort William",
+            "lat": 56.819,
+            "lon": -5.105
+          },
+          {
+            "name": "Glenfinnan",
+            "lat": 56.872,
+            "lon": -5.449
+          },
+          {
+            "name": "Mallaig",
+            "lat": 57.006,
+            "lon": -5.828
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 190,
+        "description": "Take the ferry from Mallaig to the Isle of Skye, then ride toward the Quiraing and Neist Point. The roads are narrow, scenic and often slow because of single-track sections, passing places and tourist vehicles. \nSkye’s weather can change quickly, and wind exposure is common on the west coast. The day is less about speed and more about constant scenery and careful, patient riding.",
+        "points": [
+          {
+            "name": "Mallaig",
+            "lat": 57.006,
+            "lon": -5.828
+          },
+          {
+            "name": "Isle of Skye, Armadale ferry",
+            "lat": 57.055,
+            "lon": -5.85
+          },
+          {
+            "name": "Quiraing",
+            "lat": 57.64,
+            "lon": -6.275
+          },
+          {
+            "name": "Neist Point",
+            "lat": 57.423,
+            "lon": -6.789
+          }
+        ]
+      },
+      {
+        "title": "Day 3",
+        "distanceKm": 240,
+        "description": "Leave Skye and head for Bealach na Bà, one of the most demanding and famous roads in the Highlands. The climb is steep, narrow and exposed, with hairpins and limited visibility that make it unsuitable for inexperienced riders in poor weather. \nContinue through Applecross and Torridon to Ullapool on some of Scotland’s best coastal and mountain roads. Expect single-track sections, livestock, rain, and very limited opportunities to overtake safely.",
+        "points": [
+          {
+            "name": "Neist Point",
+            "lat": 57.423,
+            "lon": -6.789
+          },
+          {
+            "name": "Applecross, Bealach na Bà",
+            "lat": 57.418,
+            "lon": -5.743
+          },
+          {
+            "name": "Torridon",
+            "lat": 57.55,
+            "lon": -5.516
+          },
+          {
+            "name": "Ullapool",
+            "lat": 57.898,
+            "lon": -5.161
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "name": "Glencoe",
+        "lat": 56.682,
+        "lon": -4.964
+      },
+      {
+        "name": "Fort William",
+        "lat": 56.819,
+        "lon": -5.105
+      },
+      {
+        "name": "Glenfinnan",
+        "lat": 56.872,
+        "lon": -5.449
+      },
+      {
+        "name": "Mallaig",
+        "lat": 57.006,
+        "lon": -5.828
+      },
+      {
+        "name": "Mallaig",
+        "lat": 57.006,
+        "lon": -5.828
+      },
+      {
+        "name": "Isle of Skye, Armadale ferry",
+        "lat": 57.055,
+        "lon": -5.85
+      },
+      {
+        "name": "Quiraing",
+        "lat": 57.64,
+        "lon": -6.275
+      },
+      {
+        "name": "Neist Point",
+        "lat": 57.423,
+        "lon": -6.789
+      },
+      {
+        "name": "Neist Point",
+        "lat": 57.423,
+        "lon": -6.789
+      },
+      {
+        "name": "Applecross, Bealach na Bà",
+        "lat": 57.418,
+        "lon": -5.743
+      },
+      {
+        "name": "Torridon",
+        "lat": 57.55,
+        "lon": -5.516
+      },
+      {
+        "name": "Ullapool",
+        "lat": 57.898,
+        "lon": -5.161
+      }
+    ]
+  },
+  {
+    "id": "nl01",
+    "title": "NL01 — North Sea, Texel and Friesland Dike Ride",
+    "subtitle": "A 3-day tour of Netherlands",
+    "country": "Netherlands",
+    "image": "/photos/routes/8.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 165,
+        "description": "Ride from Alkmaar to the North Sea coast at Bergen aan Zee, then continue to Den Helder for the ferry to Texel. The riding is flat and easy, but wind, sand and busy coastal traffic are the main factors to watch. \nExplore Texel after the ferry, where the roads through the dunes are quiet and scenic. Because the route depends on ferry times, it is worth planning the day so you are not caught waiting at the harbor.",
+        "points": [
+          {
+            "name": "Alkmaar",
+            "lat": 52.632,
+            "lon": 4.753
+          },
+          {
+            "name": "Bergen aan Zee",
+            "lat": 52.66,
+            "lon": 4.63
+          },
+          {
+            "name": "Den Helder",
+            "lat": 52.956,
+            "lon": 4.76
+          },
+          {
+            "name": "Texel, De Koog",
+            "lat": 53.097,
+            "lon": 4.763
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 120,
+        "description": "Cross back to the mainland and ride over the Afsluitdijk, one of the most distinctive long crossings in the Netherlands. The road is straight, exposed and very dependent on weather, especially crosswinds. \nContinue to Harlingen for the overnight stop. The route is technically simple, but the dike roads, open horizon and water on both sides give it a strong touring identity.",
+        "points": [
+          {
+            "name": "Texel, De Slufter",
+            "lat": 53.151,
+            "lon": 4.836
+          },
+          {
+            "name": "Eierland Lighthouse",
+            "lat": 53.179,
+            "lon": 4.868
+          },
+          {
+            "name": "Afsluitdijk",
+            "lat": 52.96,
+            "lon": 5.16
+          },
+          {
+            "name": "Harlingen",
+            "lat": 53.174,
+            "lon": 5.423
+          }
+        ]
+      },
+      {
+        "title": "Day 3",
+        "distanceKm": 120,
+        "description": "Ride through the Friesland dike network and fishing villages toward Lauwersmeer. The roads are flat and easy, with narrow shoulders and frequent water views. \nThe final stage is more about rhythm and landscape than technical riding. Expect weather exposure, crosswinds and occasional traffic near towns and ports.",
+        "points": [
+          {
+            "name": "Harlingen",
+            "lat": 53.174,
+            "lon": 5.423
+          },
+          {
+            "name": "Friesland dike roads",
+            "lat": 53.2,
+            "lon": 5.7
+          },
+          {
+            "name": "Lauwersmeer",
+            "lat": 53.36,
+            "lon": 6.225
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "name": "Alkmaar",
+        "lat": 52.632,
+        "lon": 4.753
+      },
+      {
+        "name": "Bergen aan Zee",
+        "lat": 52.66,
+        "lon": 4.63
+      },
+      {
+        "name": "Den Helder",
+        "lat": 52.956,
+        "lon": 4.76
+      },
+      {
+        "name": "Texel, De Koog",
+        "lat": 53.097,
+        "lon": 4.763
+      },
+      {
+        "name": "Texel, De Slufter",
+        "lat": 53.151,
+        "lon": 4.836
+      },
+      {
+        "name": "Eierland Lighthouse",
+        "lat": 53.179,
+        "lon": 4.868
+      },
+      {
+        "name": "Afsluitdijk",
+        "lat": 52.96,
+        "lon": 5.16
+      },
+      {
+        "name": "Harlingen",
+        "lat": 53.174,
+        "lon": 5.423
+      },
+      {
+        "name": "Harlingen",
+        "lat": 53.174,
+        "lon": 5.423
+      },
+      {
+        "name": "Friesland dike roads",
+        "lat": 53.2,
+        "lon": 5.7
+      },
+      {
+        "name": "Lauwersmeer",
+        "lat": 53.36,
+        "lon": 6.225
+      }
+    ]
+  },
+  {
+    "id": "tr01",
+    "title": "TR01 — Adriatic and Bosnia Seven-Day Grand Tour",
+    "subtitle": "A 3-day tour of Croatia",
+    "country": "Croatia",
+    "image": "/photos/routes/9.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 220,
+        "description": "Leave Banja Luka and head toward Una National Park and Štrbački Buk, where the road mixes forest sections, river views and quieter inland riding. This is a good warm-up for the Balkan terrain that follows. \nRoad quality is variable on smaller sections, and village traffic is common. If you are close to the Bosnia–Croatia border, keep an eye on documentation and local road restrictions, especially around remote river roads.",
+        "points": [
+          {
+            "name": "Banja Luka",
+            "lat": 44.772,
+            "lon": 17.191
+          },
+          {
+            "name": "Štrbački Buk, Una National Park",
+            "lat": 44.572,
+            "lon": 16.009
+          },
+          {
+            "name": "Bihać",
+            "lat": 44.816,
+            "lon": 15.87
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 180,
+        "description": "Ride past the abandoned Željava Air Base and into Croatia toward Plitvice Lakes. The route becomes greener and more structured, with forest roads, lakes and smoother touring sections. \nContinue to Senj as the Adriatic approaches. The road begins to feel more coastal and open, though wind and occasional tourist traffic can be significant near the sea.",
+        "points": [
+          {
+            "name": "Bihać",
+            "lat": 44.816,
+            "lon": 15.87
+          },
+          {
+            "name": "Željava Air Base",
+            "lat": 44.839,
+            "lon": 15.781
+          },
+          {
+            "name": "Plitvice Lakes",
+            "lat": 44.865,
+            "lon": 15.582
+          },
+          {
+            "name": "Senj",
+            "lat": 44.989,
+            "lon": 14.905
+          }
+        ]
+      },
+      {
+        "title": "Day 3",
+        "distanceKm": 190,
+        "description": "Ride the Adriatic coastal road past Karlobag toward Zadar. This is a classic Croatian motorcycle day: sea on one side, mountains on the other, and a long string of bends that reward a steady pace. \nTraffic can be busy in summer, and bora winds can make the exposed sections demanding. The road surface is generally good, but you should expect coaches, camper vans and frequent viewpoint stops.",
+        "points": [
+          {
+            "name": "Senj",
+            "lat": 44.989,
+            "lon": 14.905
+          },
+          {
+            "name": "Karlobag",
+            "lat": 44.527,
+            "lon": 15.073
+          },
+          {
+            "name": "Zadar",
+            "lat": 44.1194,
+            "lon": 15.2314
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "name": "Banja Luka",
+        "lat": 44.772,
+        "lon": 17.191
+      },
+      {
+        "name": "Štrbački Buk, Una National Park",
+        "lat": 44.572,
+        "lon": 16.009
+      },
+      {
+        "name": "Bihać",
+        "lat": 44.816,
+        "lon": 15.87
+      },
+      {
+        "name": "Bihać",
+        "lat": 44.816,
+        "lon": 15.87
+      },
+      {
+        "name": "Željava Air Base",
+        "lat": 44.839,
+        "lon": 15.781
+      },
+      {
+        "name": "Plitvice Lakes",
+        "lat": 44.865,
+        "lon": 15.582
+      },
+      {
+        "name": "Senj",
+        "lat": 44.989,
+        "lon": 14.905
+      },
+      {
+        "name": "Senj",
+        "lat": 44.989,
+        "lon": 14.905
+      },
+      {
+        "name": "Karlobag",
+        "lat": 44.527,
+        "lon": 15.073
+      },
+      {
+        "name": "Zadar",
+        "lat": 44.1194,
+        "lon": 15.2314
+      }
+    ]
+  },
+  {
+    "id": "hr02",
+    "title": "HR02 — Hidden Istria Hill Towns Loop",
+    "subtitle": "A 2-day tour of Croatia",
+    "country": "Croatia",
+    "image": "/photos/routes/10.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 150,
+        "description": "Leave Pula and head inland into Istria’s hill country. The roads rise through vineyards and stone villages, with smooth but narrow asphalt and a steady sequence of short curves. \nVisit Motovun, Grožnjan and Buzet before stopping for the night. This is a culturally rich, low-speed day that fits the hidden-Istria character very well.",
+        "points": [
+          {
+            "name": "Pula",
+            "lat": 44.866,
+            "lon": 13.849
+          },
+          {
+            "name": "Motovun",
+            "lat": 45.336,
+            "lon": 13.828
+          },
+          {
+            "name": "Grožnjan",
+            "lat": 45.379,
+            "lon": 13.723
+          },
+          {
+            "name": "Buzet",
+            "lat": 45.409,
+            "lon": 13.967
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 150,
+        "description": "Ride through Hum and Kotli before climbing into the Učka mountains. The route gets steeper and more exposed, with a stronger mountain feel near Poklon Pass. \nThe descent side offers long views toward the Adriatic. Surface quality is usually good, but forested sections can be damp and traffic can increase near the coast.",
+        "points": [
+          {
+            "name": "Buzet",
+            "lat": 45.409,
+            "lon": 13.967
+          },
+          {
+            "name": "Hum",
+            "lat": 45.347,
+            "lon": 14.054
+          },
+          {
+            "name": "Kotli",
+            "lat": 45.343,
+            "lon": 14.051
+          },
+          {
+            "name": "Učka Mountain / Poklon Pass",
+            "lat": 45.278,
+            "lon": 14.202
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "name": "Pula",
+        "lat": 44.866,
+        "lon": 13.849
+      },
+      {
+        "name": "Motovun",
+        "lat": 45.336,
+        "lon": 13.828
+      },
+      {
+        "name": "Grožnjan",
+        "lat": 45.379,
+        "lon": 13.723
+      },
+      {
+        "name": "Buzet",
+        "lat": 45.409,
+        "lon": 13.967
+      },
+      {
+        "name": "Buzet",
+        "lat": 45.409,
+        "lon": 13.967
+      },
+      {
+        "name": "Hum",
+        "lat": 45.347,
+        "lon": 14.054
+      },
+      {
+        "name": "Kotli",
+        "lat": 45.343,
+        "lon": 14.051
+      },
+      {
+        "name": "Učka Mountain / Poklon Pass",
+        "lat": 45.278,
+        "lon": 14.202
+      }
+    ]
+  },
+  {
+    "id": "fr02",
+    "title": "FR02 — Wild Corsica Interior Weekend",
+    "subtitle": "A 3-day tour of France",
+    "country": "France",
+    "image": "/photos/routes/11.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 165,
+        "description": "Start in Corte and ride through Scala di Santa Regina toward Calacuccia and Col de Vergio. The road is narrow and deeply scenic, with gorge walls, forests and a constant sense of remoteness. \nExpect limited passing space, variable pavement and weather that can turn quickly in the mountains. The route is spectacular but demands patience and concentration on the tighter sections.",
+        "points": [
+          {
+            "name": "Corte",
+            "lat": 42.306,
+            "lon": 9.149
+          },
+          {
+            "name": "Scala di Santa Regina",
+            "lat": 42.398,
+            "lon": 9.055
+          },
+          {
+            "name": "Calacuccia",
+            "lat": 42.329,
+            "lon": 9.014
+          },
+          {
+            "name": "Col de Vergio",
+            "lat": 42.292,
+            "lon": 8.931
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 180,
+        "description": "Move east across Corsica through Ghisoni and the Inzecca gorge before heading to Zicavo. The riding is technical, with narrow roads, repeated bends and strong mountain character. \nRoad surfaces are generally acceptable, but the terrain is rugged and tourist traffic can appear around the best-known scenic points. The landscape is more important than the pace here.",
+        "points": [
+          {
+            "name": "Col de Vergio",
+            "lat": 42.292,
+            "lon": 8.931
+          },
+          {
+            "name": "Ghisoni",
+            "lat": 42.103,
+            "lon": 9.198
+          },
+          {
+            "name": "Défilé de l’Inzecca",
+            "lat": 42.091,
+            "lon": 9.28
+          },
+          {
+            "name": "Zicavo",
+            "lat": 41.879,
+            "lon": 9.129
+          }
+        ]
+      },
+      {
+        "title": "Day 3",
+        "distanceKm": 130,
+        "description": "Finish by climbing toward Zonza and Col de Bavella, where the famous granite spires dominate the skyline. The last day is short but powerful, with steep mountain roads and dramatic scenery. \nWeather can shift quickly at altitude, and loose gravel is possible near the edges of the road. This is one of Corsica’s signature motorcycle finales and an appropriate ending to the route.",
+        "points": [
+          {
+            "name": "Zicavo",
+            "lat": 41.879,
+            "lon": 9.129
+          },
+          {
+            "name": "Col de la Vaccia",
+            "lat": 41.827,
+            "lon": 9.208
+          },
+          {
+            "name": "Zonza",
+            "lat": 41.749,
+            "lon": 9.171
+          },
+          {
+            "name": "Col de Bavella",
+            "lat": 41.791,
+            "lon": 9.226
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "name": "Corte",
+        "lat": 42.306,
+        "lon": 9.149
+      },
+      {
+        "name": "Scala di Santa Regina",
+        "lat": 42.398,
+        "lon": 9.055
+      },
+      {
+        "name": "Calacuccia",
+        "lat": 42.329,
+        "lon": 9.014
+      },
+      {
+        "name": "Col de Vergio",
+        "lat": 42.292,
+        "lon": 8.931
+      },
+      {
+        "name": "Col de Vergio",
+        "lat": 42.292,
+        "lon": 8.931
+      },
+      {
+        "name": "Ghisoni",
+        "lat": 42.103,
+        "lon": 9.198
+      },
+      {
+        "name": "Défilé de l’Inzecca",
+        "lat": 42.091,
+        "lon": 9.28
+      },
+      {
+        "name": "Zicavo",
+        "lat": 41.879,
+        "lon": 9.129
+      },
+      {
+        "name": "Zicavo",
+        "lat": 41.879,
+        "lon": 9.129
+      },
+      {
+        "name": "Col de la Vaccia",
+        "lat": 41.827,
+        "lon": 9.208
+      },
+      {
+        "name": "Zonza",
+        "lat": 41.749,
+        "lon": 9.171
+      },
+      {
+        "name": "Col de Bavella",
+        "lat": 41.791,
+        "lon": 9.226
+      }
+    ]
+  },
+  {
+    "id": "pl01",
+    "title": "PL01 — Bieszczady Great Loop",
+    "subtitle": "A 3-day tour of Poland",
+    "country": "Poland",
+    "image": "/photos/routes/12.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 190,
+        "description": "Start in Lesko and loop past Solina before heading deeper into the Bieszczady Mountains. The roads are quiet and forested, with gentle climbs and long bends that suit a relaxed touring rhythm. \nContinue through Cisna and Wetlina. The route is scenic but remote, and the forest edges can feel close to the road, especially where wildlife may emerge unexpectedly.",
+        "points": [
+          {
+            "name": "Lesko",
+            "lat": 49.47,
+            "lon": 22.33
+          },
+          {
+            "name": "Solina",
+            "lat": 49.392,
+            "lon": 22.454
+          },
+          {
+            "name": "Cisna",
+            "lat": 49.214,
+            "lon": 22.327
+          },
+          {
+            "name": "Wetlina",
+            "lat": 49.151,
+            "lon": 22.473
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 120,
+        "description": "Ride east toward Ustrzyki Górne, then continue through Lutowiska and Czarna Górna. This is the quietest and most remote day of the loop, with very little traffic and a strong wilderness feel. \nRoads are generally in good condition, but they can be narrow and are often shared with animals, tractors and local traffic. Stay alert for deer and other wildlife, especially in the evening.",
+        "points": [
+          {
+            "name": "Wetlina",
+            "lat": 49.151,
+            "lon": 22.473
+          },
+          {
+            "name": "Ustrzyki Górne",
+            "lat": 49.108,
+            "lon": 22.659
+          },
+          {
+            "name": "Lutowiska",
+            "lat": 49.254,
+            "lon": 22.693
+          },
+          {
+            "name": "Czarna Górna",
+            "lat": 49.34,
+            "lon": 22.664
+          }
+        ]
+      },
+      {
+        "title": "Day 3",
+        "distanceKm": 90,
+        "description": "Return to Lesko on a shorter final stage that keeps the route realistic after two longer mountain days. The road is less demanding than the forest sections earlier in the trip, but it still offers a pleasant rolling finish. \nThis closing day is mainly a practical transfer, though the Bieszczady scenery remains attractive throughout. It is a good final stretch before leaving southeastern Poland.",
+        "points": [
+          {
+            "name": "Czarna Górna",
+            "lat": 49.34,
+            "lon": 22.664
+          },
+          {
+            "name": "Lesko",
+            "lat": 49.47,
+            "lon": 22.33
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "name": "Lesko",
+        "lat": 49.47,
+        "lon": 22.33
+      },
+      {
+        "name": "Solina",
+        "lat": 49.392,
+        "lon": 22.454
+      },
+      {
+        "name": "Cisna",
+        "lat": 49.214,
+        "lon": 22.327
+      },
+      {
+        "name": "Wetlina",
+        "lat": 49.151,
+        "lon": 22.473
+      },
+      {
+        "name": "Wetlina",
+        "lat": 49.151,
+        "lon": 22.473
+      },
+      {
+        "name": "Ustrzyki Górne",
+        "lat": 49.108,
+        "lon": 22.659
+      },
+      {
+        "name": "Lutowiska",
+        "lat": 49.254,
+        "lon": 22.693
+      },
+      {
+        "name": "Czarna Górna",
+        "lat": 49.34,
+        "lon": 22.664
+      },
+      {
+        "name": "Czarna Górna",
+        "lat": 49.34,
+        "lon": 22.664
+      },
+      {
+        "name": "Lesko",
+        "lat": 49.47,
+        "lon": 22.33
+      }
+    ]
+  },
+  {
+    "id": "cz01",
+    "title": "CZ01 — Bohemian Switzerland Rock Roads Loop",
+    "subtitle": "A 2-day tour of Czech Republic",
+    "country": "Czech Republic",
+    "image": "/photos/routes/13.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 150,
+        "description": "Start in Děčín and ride along the Elbe toward Hřensko and Janov, where sandstone walls and forested hills define the landscape. Continue through Srbská Kamenice, Jetřichovice and Chřibská before reaching Doubice, Kyjov and Krásná Lípa. \nThe roads are narrow, winding and scenic, with frequent shaded sections and occasional damp surfaces. Traffic can increase around popular hiking areas, while blind bends, cyclists and local vehicles require a controlled pace.",
+        "points": [
+          {
+            "name": "Děčín",
+            "lat": 50.782,
+            "lon": 14.214
+          },
+          {
+            "name": "Hřensko",
+            "lat": 50.875,
+            "lon": 14.281
+          },
+          {
+            "name": "Janov",
+            "lat": 50.872,
+            "lon": 14.303
+          },
+          {
+            "name": "Srbská Kamenice",
+            "lat": 50.797,
+            "lon": 14.352
+          },
+          {
+            "name": "Jetřichovice",
+            "lat": 50.852,
+            "lon": 14.401
+          },
+          {
+            "name": "Chřibská",
+            "lat": 50.863,
+            "lon": 14.485
+          },
+          {
+            "name": "Doubice",
+            "lat": 50.85,
+            "lon": 14.465
+          },
+          {
+            "name": "Kyjov",
+            "lat": 50.91,
+            "lon": 14.466
+          },
+          {
+            "name": "Krásná Lípa",
+            "lat": 50.912,
+            "lon": 14.509
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 150,
+        "description": "Continue from Krásná Lípa through Jiřetín pod Jedlovou, Krompach and Jablonné v Podještědí. The mandatory stop is Pekelné Doly, the famous biker cave bar where motorcycles can enter the former sandstone mining complex. \nAfter Pekelné Doly, ride through Česká Kamenice and return to Děčín. The second day combines forest roads, sandstone formations and small Bohemian towns, with generally good pavement but occasional patched sections and slow village passages.",
+        "points": [
+          {
+            "name": "Krásná Lípa",
+            "lat": 50.912,
+            "lon": 14.509
+          },
+          {
+            "name": "Jiřetín pod Jedlovou",
+            "lat": 50.875,
+            "lon": 14.575
+          },
+          {
+            "name": "Krompach",
+            "lat": 50.809,
+            "lon": 14.706
+          },
+          {
+            "name": "Jablonné v Podještědí",
+            "lat": 50.765,
+            "lon": 14.76
+          },
+          {
+            "name": "Pekelné Doly",
+            "lat": 50.68,
+            "lon": 14.59
+          },
+          {
+            "name": "Česká Kamenice",
+            "lat": 50.798,
+            "lon": 14.418
+          },
+          {
+            "name": "Děčín",
+            "lat": 50.782,
+            "lon": 14.214
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "name": "Děčín",
+        "lat": 50.782,
+        "lon": 14.214
+      },
+      {
+        "name": "Hřensko",
+        "lat": 50.875,
+        "lon": 14.281
+      },
+      {
+        "name": "Janov",
+        "lat": 50.872,
+        "lon": 14.303
+      },
+      {
+        "name": "Srbská Kamenice",
+        "lat": 50.797,
+        "lon": 14.352
+      },
+      {
+        "name": "Jetřichovice",
+        "lat": 50.852,
+        "lon": 14.401
+      },
+      {
+        "name": "Chřibská",
+        "lat": 50.863,
+        "lon": 14.485
+      },
+      {
+        "name": "Doubice",
+        "lat": 50.85,
+        "lon": 14.465
+      },
+      {
+        "name": "Kyjov",
+        "lat": 50.91,
+        "lon": 14.466
+      },
+      {
+        "name": "Krásná Lípa",
+        "lat": 50.912,
+        "lon": 14.509
+      },
+      {
+        "name": "Krásná Lípa",
+        "lat": 50.912,
+        "lon": 14.509
+      },
+      {
+        "name": "Jiřetín pod Jedlovou",
+        "lat": 50.875,
+        "lon": 14.575
+      },
+      {
+        "name": "Krompach",
+        "lat": 50.809,
+        "lon": 14.706
+      },
+      {
+        "name": "Jablonné v Podještědí",
+        "lat": 50.765,
+        "lon": 14.76
+      },
+      {
+        "name": "Pekelné Doly",
+        "lat": 50.68,
+        "lon": 14.59
+      },
+      {
+        "name": "Česká Kamenice",
+        "lat": 50.798,
+        "lon": 14.418
+      },
+      {
+        "name": "Děčín",
+        "lat": 50.782,
+        "lon": 14.214
+      }
+    ]
+  },
+  {
+    "id": "ibr01",
+    "title": "IBR01 — Douro Valley to Arribes Border Ride",
+    "subtitle": "A 3-day tour of Portugal",
+    "country": "Portugal",
+    "image": "/photos/routes/14.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 170,
+        "description": "Ride the N222 from Peso da Régua to Pinhão and onward through the Douro vineyards. The road is famous for its flowing bends and river views, with terraced hillsides on both sides. \nTraffic is usually moderate, but the road can be slower than it looks because of viewpoints, trucks and agricultural activity. It is best ridden with a relaxed pace and plenty of time for stops.",
+        "points": [
+          {
+            "name": "Peso da Régua",
+            "lat": 41.163,
+            "lon": -7.788
+          },
+          {
+            "name": "Pinhão",
+            "lat": 41.191,
+            "lon": -7.546
+          },
+          {
+            "name": "São João da Pesqueira",
+            "lat": 41.161,
+            "lon": -7.405
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 180,
+        "description": "Head east through the Douro Internacional toward Freixo de Espada à Cinta and Miranda do Douro. The scenery changes from vineyards to a much more rugged canyon landscape, with quiet roads and fewer services. \nThe route is smoother than the mountain roads farther north, but it still feels remote. Cross-border movement into Spain requires normal travel documents, though formal checks are generally minimal within Schengen.",
+        "points": [
+          {
+            "name": "São João da Pesqueira",
+            "lat": 41.161,
+            "lon": -7.405
+          },
+          {
+            "name": "Freixo de Espada à Cinta",
+            "lat": 41.091,
+            "lon": -6.805
+          },
+          {
+            "name": "Miranda do Douro",
+            "lat": 41.496,
+            "lon": -6.273
+          }
+        ]
+      },
+      {
+        "title": "Day 3",
+        "distanceKm": 150,
+        "description": "Continue through Arribes del Duero into Spain, where the route stays close to the canyon rim and the roads are light on traffic. The final stretch into Salamanca is more straightforward, but the landscape remains attractive. \nThis is a well-balanced final day, suitable for finishing a border route without overloading the rider. Surface quality is good overall, though rural debris and tight village corners can appear.",
+        "points": [
+          {
+            "name": "Miranda do Douro",
+            "lat": 41.496,
+            "lon": -6.273
+          },
+          {
+            "name": "Fermoselle",
+            "lat": 41.318,
+            "lon": -6.396
+          },
+          {
+            "name": "Aldeadávila de la Ribera",
+            "lat": 41.487,
+            "lon": -6.62
+          },
+          {
+            "name": "Salamanca",
+            "lat": 40.97,
+            "lon": -5.664
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "name": "Peso da Régua",
+        "lat": 41.163,
+        "lon": -7.788
+      },
+      {
+        "name": "Pinhão",
+        "lat": 41.191,
+        "lon": -7.546
+      },
+      {
+        "name": "São João da Pesqueira",
+        "lat": 41.161,
+        "lon": -7.405
+      },
+      {
+        "name": "São João da Pesqueira",
+        "lat": 41.161,
+        "lon": -7.405
+      },
+      {
+        "name": "Freixo de Espada à Cinta",
+        "lat": 41.091,
+        "lon": -6.805
+      },
+      {
+        "name": "Miranda do Douro",
+        "lat": 41.496,
+        "lon": -6.273
+      },
+      {
+        "name": "Miranda do Douro",
+        "lat": 41.496,
+        "lon": -6.273
+      },
+      {
+        "name": "Fermoselle",
+        "lat": 41.318,
+        "lon": -6.396
+      },
+      {
+        "name": "Aldeadávila de la Ribera",
+        "lat": 41.487,
+        "lon": -6.62
+      },
+      {
+        "name": "Salamanca",
+        "lat": 40.97,
+        "lon": -5.664
+      }
+    ]
+  },
+  {
+    "id": "es02",
+    "title": "ES02 — Wild Asturias Northern Highlands",
+    "subtitle": "A 3-day tour of Spain",
+    "country": "Spain",
+    "image": "/photos/routes/15.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 145,
+        "description": "Leave Cangas del Narcea and head into Somiedo on roads that drop into green valleys and climb back into remote mountain country. The riding is scenic and lightly trafficked, with forests coming close to the asphalt in many sections. \nExpect wildlife, especially at dawn and dusk, and a generally quiet pace away from the villages. The route is not technically extreme, but it feels wild and isolated.",
+        "points": [
+          {
+            "name": "Cangas del Narcea",
+            "lat": 43.177,
+            "lon": -6.55
+          },
+          {
+            "name": "Somiedo",
+            "lat": 43.1,
+            "lon": -6.25
+          },
+          {
+            "name": "Valle de Lago",
+            "lat": 43.052,
+            "lon": -6.209
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 140,
+        "description": "Climb from Valle de Lago toward Puerto de San Lorenzo and then continue to Puerto de Ventana. This is the route’s high-point day, with mountain passes, open views and a stronger sense of elevation. \nThe roads are generally good, but fog and rain can appear suddenly in Asturias. Keep a conservative pace through the tighter bends and shaded forest sections.",
+        "points": [
+          {
+            "name": "Valle de Lago",
+            "lat": 43.052,
+            "lon": -6.209
+          },
+          {
+            "name": "Puerto de San Lorenzo",
+            "lat": 43.126,
+            "lon": -6.064
+          },
+          {
+            "name": "Puerto de Ventana",
+            "lat": 43.048,
+            "lon": -6.005
+          },
+          {
+            "name": "Quirós",
+            "lat": 43.155,
+            "lon": -5.971
+          }
+        ]
+      },
+      {
+        "title": "Day 3",
+        "distanceKm": 55,
+        "description": "Use the last day as a short transfer back to Oviedo. The road is less demanding than the previous two stages, but it still offers a pleasant final run through the Asturias hills. \nThis final stretch is practical rather than spectacular, which helps the route stay realistic after the more remote mountain riding. Weather and traffic can change quickly as you approach the city.",
+        "points": [
+          {
+            "name": "Quirós",
+            "lat": 43.155,
+            "lon": -5.971
+          },
+          {
+            "name": "Oviedo",
+            "lat": 43.361,
+            "lon": -5.849
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "name": "Cangas del Narcea",
+        "lat": 43.177,
+        "lon": -6.55
+      },
+      {
+        "name": "Somiedo",
+        "lat": 43.1,
+        "lon": -6.25
+      },
+      {
+        "name": "Valle de Lago",
+        "lat": 43.052,
+        "lon": -6.209
+      },
+      {
+        "name": "Valle de Lago",
+        "lat": 43.052,
+        "lon": -6.209
+      },
+      {
+        "name": "Puerto de San Lorenzo",
+        "lat": 43.126,
+        "lon": -6.064
+      },
+      {
+        "name": "Puerto de Ventana",
+        "lat": 43.048,
+        "lon": -6.005
+      },
+      {
+        "name": "Quirós",
+        "lat": 43.155,
+        "lon": -5.971
+      },
+      {
+        "name": "Quirós",
+        "lat": 43.155,
+        "lon": -5.971
+      },
+      {
+        "name": "Oviedo",
+        "lat": 43.361,
+        "lon": -5.849
+      }
+    ]
+  },
+  {
+    "id": "no02",
+    "title": "NO02 — Ryfylke and Lysefjord Escape",
+    "subtitle": "A 3-day tour of Norway",
+    "country": "Norway",
+    "image": "/photos/routes/16.jpg",
+    "days": [
+      {
+        "title": "Day 1",
+        "distanceKm": 150,
+        "description": "Leave Røldal and cross Saudafjellet on Fv520, a remote high road that can hold snow into the warmer months. The scenery is open and wild, with long views and very little traffic. \nDescend toward Sauda past Allmannajuvet and Svandalsfossen, then continue to Sand. The route is scenic and isolated, but weather changes quickly and fuel stops should not be skipped.",
+        "points": [
+          {
+            "name": "Røldal",
+            "lat": 59.831,
+            "lon": 6.815
+          },
+          {
+            "name": "Saudafjellet",
+            "lat": 59.64,
+            "lon": 6.69
+          },
+          {
+            "name": "Sauda",
+            "lat": 59.65,
+            "lon": 6.355
+          },
+          {
+            "name": "Sand",
+            "lat": 59.484,
+            "lon": 6.247
+          }
+        ]
+      },
+      {
+        "title": "Day 2",
+        "distanceKm": 135,
+        "description": "Ride along the Ryfylke fjords toward Hjelmeland and the Songesand ferry terminal. This stage mixes water-level roads with narrow fjord corridors and occasional ferry-dependent routing. \nThe ferry crossing into the Lysefjord system is a core part of the route and should be planned around the timetable. Once you reach Lysebotn, the terrain becomes more dramatic and more technical.",
+        "points": [
+          {
+            "name": "Sand",
+            "lat": 59.484,
+            "lon": 6.247
+          },
+          {
+            "name": "Hjelmeland",
+            "lat": 59.236,
+            "lon": 6.179
+          },
+          {
+            "name": "Songesand ferry terminal",
+            "lat": 59.028,
+            "lon": 6.487
+          },
+          {
+            "name": "Lysebotn",
+            "lat": 59.05,
+            "lon": 6.647
+          }
+        ]
+      },
+      {
+        "title": "Day 3",
+        "distanceKm": 120,
+        "description": "Climb Lysevegen’s famous hairpins out of Lysebotn, then descend toward Stavanger. The road is steep, narrow and visually spectacular, with tight corners and tunnel sections that require careful speed management. \nThe final run is a strong closing stage, but it is shorter than the first two days. Expect changing weather, limited overtaking room and a high concentration of scenic viewpoints.",
+        "points": [
+          {
+            "name": "Lysebotn",
+            "lat": 59.05,
+            "lon": 6.647
+          },
+          {
+            "name": "Lysevegen summit",
+            "lat": 59.019,
+            "lon": 6.783
+          },
+          {
+            "name": "Stavanger",
+            "lat": 58.97,
+            "lon": 5.733
+          }
+        ]
+      }
+    ],
+    "points": [
+      {
+        "name": "Røldal",
+        "lat": 59.831,
+        "lon": 6.815
+      },
+      {
+        "name": "Saudafjellet",
+        "lat": 59.64,
+        "lon": 6.69
+      },
+      {
+        "name": "Sauda",
+        "lat": 59.65,
+        "lon": 6.355
+      },
+      {
+        "name": "Sand",
+        "lat": 59.484,
+        "lon": 6.247
+      },
+      {
+        "name": "Sand",
+        "lat": 59.484,
+        "lon": 6.247
+      },
+      {
+        "name": "Hjelmeland",
+        "lat": 59.236,
+        "lon": 6.179
+      },
+      {
+        "name": "Songesand ferry terminal",
+        "lat": 59.028,
+        "lon": 6.487
+      },
+      {
+        "name": "Lysebotn",
+        "lat": 59.05,
+        "lon": 6.647
+      },
+      {
+        "name": "Lysebotn",
+        "lat": 59.05,
+        "lon": 6.647
+      },
+      {
+        "name": "Lysevegen summit",
+        "lat": 59.019,
+        "lon": 6.783
+      },
+      {
+        "name": "Stavanger",
+        "lat": 58.97,
+        "lon": 5.733
+      }
     ]
   }
 ]

@@ -1,21 +1,66 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
-import { IconShare } from "../components/Icons";
+import { IconFilter, IconShare } from "../components/Icons";
 import { loadRoutes } from "../lib/data";
 import { googleRouteUrl } from "../lib/geo";
 import type { RideRoute } from "../types";
 
 export function Routes() {
   const [rows, setRows] = useState<RideRoute[]>([]);
+  const [q, setQ] = useState("");
+  const [country, setCountry] = useState("");
+  const [draft, setDraft] = useState("");
+  const [filters, setFilters] = useState(false);
+  const [openList, setOpenList] = useState(false);
+
   useEffect(() => {
     loadRoutes().then(setRows);
   }, []);
 
+  const countries = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.country))).sort(),
+    [rows],
+  );
+
+  const list = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (country && r.country !== country) return false;
+      if (!s) return true;
+      const hay = [r.title, r.subtitle, r.country, ...r.points.map((p) => p.name)]
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(s);
+    });
+  }, [rows, q, country]);
+
   return (
     <div className="page">
-      <TopBar title="Best Routes" />
-      {rows.map((r) => (
+      <TopBar
+        title="Best Routes"
+        right={
+          <button
+            className="icon-btn"
+            onClick={() => {
+              setDraft(country);
+              setOpenList(false);
+              setFilters(true);
+            }}
+            aria-label="Filters"
+          >
+            <IconFilter />
+          </button>
+        }
+      />
+      <div className="search-row">
+        <input
+          placeholder="Search routes, places, countries..."
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      </div>
+      {list.map((r) => (
         <article className="card" key={r.id}>
           <div className="card-photo">
             <img src={r.image} alt={r.title} />
@@ -31,6 +76,47 @@ export function Routes() {
           </div>
         </article>
       ))}
+      {list.length === 0 && <div className="empty">No routes match the filters.</div>}
+
+      {filters && (
+        <>
+          <div className="backdrop" onClick={() => setFilters(false)} />
+          <div className="country-sheet">
+            <div className="globe-ico" aria-hidden>
+              <svg viewBox="0 0 64 64" width="54" height="54">
+                <circle cx="28" cy="30" r="16" fill="none" stroke="#222" strokeWidth="2.4" />
+                <path d="M12 30h32M28 14c6 5 9 10 9 16s-3 11-9 16c-6-5-9-10-9-16s3-11 9-16z" fill="none" stroke="#222" strokeWidth="2" />
+                <path d="M40 40l10 14h-8l-4-6z" fill="#222" />
+              </svg>
+            </div>
+            <button className="country-pick" onClick={() => setOpenList((v) => !v)}>
+              {draft || "All countries"}
+              <span>{openList ? "▴" : "▾"}</span>
+            </button>
+            {openList && (
+              <div className="country-menu">
+                <button className={!draft ? "on" : ""} onClick={() => setDraft("")}>
+                  All countries
+                </button>
+                {countries.map((c) => (
+                  <button key={c} className={draft === c ? "on" : ""} onClick={() => setDraft(c)}>
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              className="btn apply"
+              onClick={() => {
+                setCountry(draft);
+                setFilters(false);
+              }}
+            >
+              Apply
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -46,6 +132,7 @@ export function RouteDetail() {
   const start = route.points[0];
   const end = route.points[route.points.length - 1];
   const gpx = buildGpx(route);
+  const total = route.days.reduce((s, d) => s + d.distanceKm, 0);
 
   function share() {
     const text = `${route!.title} — ${route!.subtitle}`;
@@ -70,13 +157,24 @@ export function RouteDetail() {
         <div className="place-name" style={{ fontSize: 26 }}>
           {route.title}
         </div>
-        <p className="muted">{route.subtitle}</p>
+        <p className="muted">
+          {route.subtitle} · {total} km · {route.country}
+        </p>
         <h3>Information</h3>
-        <ul>
-          {route.days.map((d) => (
-            <li key={d}>{d}</li>
-          ))}
-        </ul>
+        {route.days.map((d) => (
+          <div key={d.title} className="day-block">
+            <b>
+              {d.title}: {d.points[0]?.name} to {d.points[d.points.length - 1]?.name}
+            </b>
+            <p className="muted">{d.distanceKm} km</p>
+            <ul>
+              {d.points.map((p) => (
+                <li key={`${p.name}-${p.lat}`}>{p.name}</li>
+              ))}
+            </ul>
+            <p>{d.description}</p>
+          </div>
+        ))}
         <div className="row-btns">
           <a className="btn blue" href={googleRouteUrl(end.lat, end.lon)} target="_blank" rel="noreferrer">
             Let's ride!
@@ -99,7 +197,11 @@ export function RouteDetail() {
 
 function buildGpx(route: RideRoute): string {
   const pts = route.points
-    .map((p) => `<wpt lat="${p.lat}" lon="${p.lon}"><name>${p.name}</name></wpt>`)
+    .map((p) => `<wpt lat="${p.lat}" lon="${p.lon}"><name>${escapeXml(p.name)}</name></wpt>`)
     .join("");
   return `<?xml version="1.0"?><gpx version="1.1">${pts}</gpx>`;
+}
+
+function escapeXml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

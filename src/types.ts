@@ -50,12 +50,19 @@ export type Place = {
 
 export type RouteStop = { name: string; lat: number; lon: number };
 
+export type RouteDay = {
+  title: string;
+  distanceKm: number;
+  description: string;
+  points: RouteStop[];
+};
+
 export type RideRoute = {
   id: string;
   title: string;
   subtitle: string;
   country: string;
-  days: string[];
+  days: RouteDay[];
   image: string;
   points: RouteStop[];
 };
