@@ -132,8 +132,8 @@ img { max-width: 100%; display: block; }
   font-weight: 500;
 }
 .cat-icon {
-  width: 70px;
-  height: 70px;
+  width: 64px;
+  height: 64px;
   max-width: none;
   object-fit: contain;
   display: block;
