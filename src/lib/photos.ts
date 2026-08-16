@@ -41,25 +41,10 @@ const POOL: Record<PlaceType, string[]> = {
   ],
 };
 
-export const BANNERS = [
-  {
-    image: asset("icons/banner.jpg"),
-    title: "",
-    to: "/objects/hotels",
-  },
-  {
-    image:
-      "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1400&q=80",
-    title: "BEST ROADS OF THE BALKANS",
-    to: "/routes",
-  },
-  {
-    image:
-      "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=1400&q=80",
-    title: "FESTIVALS ON THE ROUTE",
-    to: "/objects/festivals",
-  },
-];
+export const HERO = {
+  image: asset("icons/banner.jpg"),
+  to: "/objects/hotels",
+};
 
 export function photosFor(place: Place): string[] {
   if (place.photos?.length) return place.photos.map(asset);
