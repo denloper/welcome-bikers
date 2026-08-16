@@ -1,0 +1,48 @@
+[
+  {
+    "id": "adriatic",
+    "title": "Bay to Capital via Adriatic",
+    "subtitle": "A 2-day tour of Montenegro",
+    "country": "Montenegro",
+    "image": "/photos/route-adriatic.jpg",
+    "days": ["Day 1: Herceg-Novi to Bar", "Day 2: Bar to Podgorica"],
+    "points": [
+      { "name": "Herceg Novi", "lat": 42.4529, "lon": 18.5315 },
+      { "name": "Budva", "lat": 42.2864, "lon": 18.84 },
+      { "name": "Bar", "lat": 42.095, "lon": 19.1003 },
+      { "name": "Podgorica", "lat": 42.4304, "lon": 19.2594 }
+    ]
+  },
+  {
+    "id": "coast-loop",
+    "title": "Adriatic Coast Loop",
+    "subtitle": "Croatia to Albania in 4 days",
+    "country": "Croatia",
+    "image": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1400&q=80",
+    "days": [
+      "Day 1: Split to Dubrovnik",
+      "Day 2: Dubrovnik to Kotor",
+      "Day 3: Kotor to Tirana",
+      "Day 4: Rest and viewpoints"
+    ],
+    "points": [
+      { "name": "Split", "lat": 43.5081, "lon": 16.4402 },
+      { "name": "Dubrovnik", "lat": 42.6507, "lon": 18.0944 },
+      { "name": "Kotor", "lat": 42.4247, "lon": 18.7712 },
+      { "name": "Tirana", "lat": 41.3275, "lon": 19.8187 }
+    ]
+  },
+  {
+    "id": "alps",
+    "title": "Alpine Pass Run",
+    "subtitle": "Austria and the high roads",
+    "country": "Austria",
+    "image": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1400&q=80",
+    "days": ["Day 1: Innsbruck to Grossglockner", "Day 2: Grossglockner to Salzburg"],
+    "points": [
+      { "name": "Innsbruck", "lat": 47.2692, "lon": 11.4041 },
+      { "name": "Grossglockner", "lat": 47.0742, "lon": 12.6947 },
+      { "name": "Salzburg", "lat": 47.8095, "lon": 13.055 }
+    ]
+  }
+]

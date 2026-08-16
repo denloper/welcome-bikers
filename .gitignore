@@ -1,0 +1,7 @@
+node_modules
+dist
+vk.env
+_refs
+_hist.json
+*.local
+.DS_Store
