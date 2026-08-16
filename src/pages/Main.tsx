@@ -29,7 +29,7 @@ export function Main() {
 
       <button className="banner" onClick={() => nav(banner.to)}>
         <img src={banner.image} alt="" />
-        <h2>{banner.title}</h2>
+        {banner.title ? <h2>{banner.title}</h2> : null}
         <div className="dots">
           {BANNERS.map((_, i) => (
             <i key={i} className={i === slide ? "on" : ""} />

@@ -43,9 +43,8 @@ const POOL: Record<PlaceType, string[]> = {
 
 export const BANNERS = [
   {
-    image:
-      "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1400&q=80",
-    title: "LEAVE THE SEARCH TO US...",
+    image: asset("icons/banner.jpg"),
+    title: "",
     to: "/objects/hotels",
   },
   {

@@ -144,8 +144,12 @@ img { max-width: 100%; display: block; }
   line-height: 1.15;
   max-width: 78px;
 }
-.cat-icon { width: 46px; height: 46px; color: #fff; }
-.cat-icon.red { color: var(--red); }
+.cat-icon {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+  display: block;
+}
 .cat:active { transform: scale(.96); }
 
 .bottom-nav {
