@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { BrandLogo } from "../components/BrandLogo";
 import { TopBar } from "../components/TopBar";
 import { store } from "../lib/store";
 
@@ -12,7 +13,10 @@ export function Account() {
       <div className="page">
         <header className="topbar">
           <div />
-          <h1>Account</h1>
+          <div className="topbar-mid">
+            <BrandLogo compact />
+            <h1>Account</h1>
+          </div>
           <div />
         </header>
         <div className="section">

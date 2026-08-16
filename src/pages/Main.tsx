@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { BrandLogo } from "../components/BrandLogo";
+import { CategoryGlyph } from "../components/Icons";
 import { CATEGORIES } from "../lib/categories";
 import { BANNERS } from "../lib/photos";
-import { CategoryGlyph, IconPin, IconStar } from "../components/Icons";
 
 export function Main() {
   const nav = useNavigate();
@@ -16,15 +17,9 @@ export function Main() {
   const banner = BANNERS[slide];
 
   return (
-    <div className="page">
-      <div className="logo-row">
-        <span className="logo-mark">
-          <IconPin />
-          <span className="star">
-            <IconStar />
-          </span>
-        </span>
-        WelcomeBikers
+    <div className="page home">
+      <div className="logo-wrap">
+        <BrandLogo />
       </div>
 
       <button className="banner" onClick={() => nav(banner.to)}>

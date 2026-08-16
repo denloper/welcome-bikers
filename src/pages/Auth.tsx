@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { BrandLogo } from "../components/BrandLogo";
 import { store } from "../lib/store";
 
 export function Login() {
@@ -12,7 +13,10 @@ export function Login() {
     <div className="page">
       <header className="topbar">
         <div />
-        <h1>Sign in</h1>
+        <div className="topbar-mid">
+          <BrandLogo compact />
+          <h1>Sign in</h1>
+        </div>
         <div />
       </header>
       <form
@@ -54,7 +58,10 @@ export function Register() {
     <div className="page">
       <header className="topbar">
         <div />
-        <h1>Sign up</h1>
+        <div className="topbar-mid">
+          <BrandLogo compact />
+          <h1>Sign up</h1>
+        </div>
         <div />
       </header>
       <form

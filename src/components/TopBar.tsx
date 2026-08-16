@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { BrandLogo } from "./BrandLogo";
 import { IconBack } from "./Icons";
 
 export function TopBar({
@@ -15,7 +16,10 @@ export function TopBar({
       <button className="icon-btn" onClick={() => nav(-1)} aria-label="Back">
         <IconBack />
       </button>
-      <h1>{title}</h1>
+      <div className="topbar-mid">
+        <BrandLogo compact />
+        <h1>{title}</h1>
+      </div>
       <div>{right}</div>
     </header>
   );
