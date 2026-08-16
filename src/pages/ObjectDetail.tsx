@@ -6,6 +6,7 @@ import { IconShare } from "../components/Icons";
 import { GoogleMiniMap } from "../components/GoogleMiniMap";
 import { getPlace, loadPlaces } from "../lib/data";
 import { photosFor } from "../lib/photos";
+import { PlacePhoto } from "../components/PlacePhoto";
 import { appleMapsUrl, googleRouteUrl, validCoords, wazeUrl } from "../lib/geo";
 import { store } from "../lib/store";
 import type { Place } from "../types";
@@ -49,7 +50,7 @@ export function ObjectDetail() {
         }
       />
       <div className="hero">
-        <img src={photos[slide % photos.length]} alt={place.name} />
+        <PlacePhoto src={photos[slide % photos.length]} alt={place.name} />
         <div className="dots">
           {photos.map((_, i) => (
             <i key={i} className={i === slide % photos.length ? "on" : ""} onClick={() => setSlide(i)} />

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { Place } from "../types";
 import { photosFor } from "../lib/photos";
 import { formatDistance } from "../lib/geo";
+import { PlacePhoto } from "./PlacePhoto";
 import { Stars } from "./Stars";
 import { IconPin } from "./Icons";
 
@@ -16,7 +17,7 @@ export function ObjectCard({
   return (
     <article className="card">
       <div className="card-photo">
-        <img src={photo} alt={place.name} />
+        <PlacePhoto src={photo} alt={place.name} />
       </div>
       <div className="card-body">
         <div className="addr">

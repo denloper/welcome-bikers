@@ -11,10 +11,7 @@ const POOL: Record<PlaceType, string[]> = {
     "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=1200&q=70",
     "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=70",
   ],
-  bars: [
-    "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1200&q=70",
-    "https://images.unsplash.com/photo-1572118886163-5a8d1a099d54?auto=format&fit=crop&w=1200&q=70",
-  ],
+  bars: [asset("photos/biker-bar.jpg")],
   restaurants: [
     "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=70",
     "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=70",
@@ -46,10 +43,13 @@ export const HERO = {
   to: "/objects/hotels",
 };
 
+export const FALLBACK_PHOTO = asset("photos/biker-bar.jpg");
+
 export function photosFor(place: Place): string[] {
   if (place.photos?.length) return place.photos.map(asset);
   const type = place.types[0] ?? "hotels";
-  const pool = POOL[type];
+  const pool = POOL[type] ?? [FALLBACK_PHOTO];
+  if (pool.length === 1) return [pool[0]];
   const a = pool[place.id % pool.length];
   const b = pool[(place.id + 1) % pool.length];
   return [a, b];
