@@ -78,16 +78,16 @@ img { max-width: 100%; display: block; }
 .logo-wrap {
   display: flex;
   justify-content: center;
-  padding: 16px 28px 8px;
+  padding: 12px 24px 6px;
 }
 .brand-logo {
-  width: min(300px, 82%);
+  width: 176px;
   height: auto;
-  max-width: 300px;
+  max-width: 48%;
 }
 .brand-logo.sm {
-  width: 132px;
-  max-width: 132px;
+  width: 110px;
+  max-width: 110px;
 }
 
 .banner {
