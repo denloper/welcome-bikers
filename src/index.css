@@ -297,6 +297,7 @@ textarea { min-height: 96px; resize: vertical; }
 }
 .bubble.me { align-self: flex-end; background: #2f6bff; }
 .bubble small { display: block; opacity: .7; font-size: 11px; margin-bottom: 2px; }
+.bubble img { display: block; width: 100%; border-radius: 10px; margin-top: 6px; }
 .composer {
   position: fixed;
   left: 50%;
@@ -434,7 +435,9 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   overflow-y: auto;
 }
 .country-menu button {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   text-align: left;
   background: none;
@@ -443,6 +446,12 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   color: #fff;
   padding: 12px 14px;
   cursor: pointer;
+}
+.country-menu button img {
+  width: 22px;
+  height: 16px;
+  object-fit: cover;
+  border-radius: 2px;
 }
 .country-menu button:last-child { border-bottom: 0; }
 .country-menu button.on { background: #2a2a2a; }

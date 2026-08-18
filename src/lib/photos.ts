@@ -50,7 +50,14 @@ export function photosFor(place: Place): string[] {
   const type = place.types[0] ?? "hotels";
   const pool = POOL[type] ?? [FALLBACK_PHOTO];
   if (pool.length === 1) return [pool[0]];
-  const a = pool[place.id % pool.length];
-  const b = pool[(place.id + 1) % pool.length];
+  const seed = hashId(place.id);
+  const a = pool[seed % pool.length];
+  const b = pool[(seed + 1) % pool.length];
   return [a, b];
+}
+
+function hashId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h;
 }

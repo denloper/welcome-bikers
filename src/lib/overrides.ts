@@ -1,23 +1,9 @@
 import type { Place } from "../types";
 
-export const OVERRIDES: Record<number, Partial<Place>> = {
-  404: {
-    rating: 4.6,
-    reviews: 67,
-    address: "Pedišica 26 Braće Grakalić, 85340 Herceg Novi, Montenegro",
+export const OVERRIDES: Record<string, Partial<Place>> = {
+  "66xiewxec4yj9yzxw18h35v8": {
     slogan: "Try it to feel it!",
     openingHours: "24/7",
-    description:
-      "Hotel Maksim is in Herceg Novi, Montenegro. A curated tourist program includes boat trips, excursions, fishing, biking and cycling — a warm stop for riders crossing the Adriatic coast.",
-    amenities: [
-      "Bikers friendly",
-      "Card payment",
-      "Wi-Fi",
-      "Motorcycle Parking",
-      "Motorcycle wash",
-      "Food & Beverages",
-    ],
-    photos: ["/photos/maksim.jpg"],
     website: "https://welcomebikers.eu",
     bikersFriendly: true,
   },

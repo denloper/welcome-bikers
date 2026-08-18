@@ -53,7 +53,7 @@ export function CategoryList() {
       if (sort === "distance") return (a.d ?? 9e9) - (b.d ?? 9e9);
       if (sort === "rating") return (b.p.rating ?? 0) - (a.p.rating ?? 0);
       if (sort === "reviews") return b.p.reviews - a.p.reviews;
-      return b.p.id - a.p.id;
+      return b.p.id.localeCompare(a.p.id);
     });
     return withDist;
   }, [places, type, q, sort, country, friendly, here]);

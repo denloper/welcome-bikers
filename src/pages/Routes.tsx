@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { IconFilter, IconShare } from "../components/Icons";
-import { loadRoutes } from "../lib/data";
+import { loadCountries, loadRoutes } from "../lib/data";
+import { PlacePhoto } from "../components/PlacePhoto";
 import { googleRouteUrl } from "../lib/geo";
-import type { RideRoute } from "../types";
+import type { Country, RideRoute } from "../types";
 
 export function Routes() {
   const [rows, setRows] = useState<RideRoute[]>([]);
+  const [flags, setFlags] = useState<Country[]>([]);
   const [q, setQ] = useState("");
   const [country, setCountry] = useState("");
   const [draft, setDraft] = useState("");
@@ -16,6 +18,7 @@ export function Routes() {
 
   useEffect(() => {
     loadRoutes().then(setRows);
+    loadCountries().then(setFlags);
   }, []);
 
   const countries = useMemo(
@@ -63,7 +66,7 @@ export function Routes() {
       {list.map((r) => (
         <article className="card" key={r.id}>
           <div className="card-photo">
-            <img src={r.image} alt={r.title} />
+            <PlacePhoto src={r.image} alt={r.title} />
           </div>
           <div className="card-body">
             <p className="muted">{r.subtitle}</p>
@@ -98,11 +101,15 @@ export function Routes() {
                 <button className={!draft ? "on" : ""} onClick={() => setDraft("")}>
                   All countries
                 </button>
-                {countries.map((c) => (
-                  <button key={c} className={draft === c ? "on" : ""} onClick={() => setDraft(c)}>
-                    {c}
-                  </button>
-                ))}
+                {countries.map((c) => {
+                  const flag = flags.find((f) => f.title === c);
+                  return (
+                    <button key={c} className={draft === c ? "on" : ""} onClick={() => setDraft(c)}>
+                      {flag?.flag && <img src={flag.flag} alt="" width={22} height={16} />}
+                      {c}
+                    </button>
+                  );
+                })}
               </div>
             )}
             <button
@@ -151,7 +158,7 @@ export function RouteDetail() {
         }
       />
       <div className="hero">
-        <img src={route.image} alt="" />
+        <PlacePhoto src={route.image} alt="" />
       </div>
       <div className="section">
         <div className="place-name" style={{ fontSize: 26 }}>
@@ -181,7 +188,7 @@ export function RouteDetail() {
           </a>
           <a
             className="btn white small"
-            href={URL.createObjectURL(new Blob([gpx], { type: "application/gpx+xml" }))}
+            href={route.gpxUrl ?? URL.createObjectURL(new Blob([gpx], { type: "application/gpx+xml" }))}
             download={`${route.id}.gpx`}
           >
             GPX

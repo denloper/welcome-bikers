@@ -21,11 +21,10 @@ export function ObjectDetail() {
   const [report, setReport] = useState(false);
 
   useEffect(() => {
-    const n = Number(id);
     loadPlaces().then((all) => {
-      const p = getPlace(all, n);
+      const p = getPlace(all, id);
       setPlace(p ?? null);
-      setFav(store.get().favorites.includes(n));
+      setFav(!!id && store.get().favorites.includes(id));
     });
   }, [id]);
 

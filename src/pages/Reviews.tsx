@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { Stars } from "../components/Stars";
-import { getPlace, loadPlaces } from "../lib/data";
+import { getPlace, loadPlaces, loadReviews } from "../lib/data";
 import { store } from "../lib/store";
 import type { Place, Review } from "../types";
 
@@ -15,9 +15,12 @@ export function Reviews() {
   const [text, setText] = useState("");
 
   useEffect(() => {
-    const n = Number(id);
-    loadPlaces().then((all) => setPlace(getPlace(all, n) ?? null));
-    setRows(store.get().reviews.filter((r) => r.placeId === n));
+    if (!id) return;
+    loadPlaces().then((all) => setPlace(getPlace(all, id) ?? null));
+    Promise.all([loadReviews()]).then(([crm]) => {
+      const local = store.get().reviews.filter((r) => r.placeId === id);
+      setRows([...local, ...crm.filter((r) => r.placeId === id)]);
+    });
   }, [id]);
 
   if (!place) return <div className="empty">Loading…</div>;
@@ -56,7 +59,11 @@ export function Reviews() {
               text: text.trim(),
               createdAt: Date.now(),
             };
-            setRows(store.addReview(review).filter((r) => r.placeId === place.id));
+            const local = store.addReview(review).filter((r) => r.placeId === place.id);
+            setRows((prev) => {
+              const crm = prev.filter((r) => !local.some((l) => l.id === r.id));
+              return [...local, ...crm];
+            });
             setText("");
           }}
         >

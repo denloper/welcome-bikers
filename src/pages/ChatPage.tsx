@@ -1,12 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BrandLogo } from "../components/BrandLogo";
 import { TopBar } from "../components/TopBar";
+import { PlacePhoto } from "../components/PlacePhoto";
+import { loadChat } from "../lib/data";
 import { store } from "../lib/store";
 import type { ChatMessage } from "../types";
 
 const ROOMS = [
   { id: "general", title: "General chat", text: "All riders" },
+  { id: "sos", title: "SOS", text: "Roadside alerts" },
   { id: "montenegro", title: "Montenegro", text: "Coast and mountains" },
   { id: "routes", title: "Routes", text: "Share tracks and GPX" },
   { id: "events", title: "Events", text: "Festivals and meetups" },
@@ -41,10 +44,18 @@ export function ChatRoom() {
   const meta = ROOMS.find((r) => r.id === room) ?? ROOMS[0];
   const [text, setText] = useState("");
   const [tick, setTick] = useState(0);
-  const messages = useMemo(
-    () => store.get().messages.filter((m) => m.room === meta.id),
-    [meta.id, tick],
-  );
+  const [seed, setSeed] = useState<ChatMessage[]>([]);
+
+  useEffect(() => {
+    loadChat().then(setSeed);
+  }, []);
+
+  const messages = useMemo(() => {
+    const local = store.get().messages.filter((m) => m.room === meta.id);
+    const seen = new Set(local.map((m) => m.id));
+    const crm = seed.filter((m) => m.room === meta.id && !seen.has(m.id));
+    return [...crm, ...local].sort((a, b) => a.createdAt - b.createdAt);
+  }, [meta.id, tick, seed]);
 
   function send() {
     const user = store.get().user;
@@ -70,6 +81,7 @@ export function ChatRoom() {
           <div key={m.id} className={`bubble ${m.userId === store.get().user?.id ? "me" : ""}`}>
             <small>{m.name}</small>
             {m.text}
+            {m.image && <PlacePhoto src={m.image} alt="" />}
           </div>
         ))}
       </div>

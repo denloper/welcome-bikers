@@ -1,11 +1,11 @@
 import type { Booking, ChatMessage, Review, User } from "../types";
 
-const KEY = "wb.v1";
+const KEY = "wb.v2";
 
 type State = {
   user: User | null;
   users: Array<User & { password?: string }>;
-  favorites: number[];
+  favorites: string[];
   messages: ChatMessage[];
   reviews: Review[];
   bookings: Booking[];
@@ -91,7 +91,7 @@ export const store = {
     save(s);
     return user;
   },
-  toggleFavorite(id: number) {
+  toggleFavorite(id: string) {
     const s = load();
     s.favorites = s.favorites.includes(id)
       ? s.favorites.filter((x) => x !== id)

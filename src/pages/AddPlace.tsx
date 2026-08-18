@@ -82,7 +82,7 @@ export function AddPlace() {
           const lon = Number(form.lon);
           if (!form.name || !Number.isFinite(lat) || !Number.isFinite(lon) || !form.agree) return;
           const place: Place = {
-            id: Date.now(),
+            id: crypto.randomUUID(),
             name: form.name,
             types: [form.type],
             country: form.country,

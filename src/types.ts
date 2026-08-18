@@ -24,7 +24,7 @@ export type PlaceType =
   | "historical";
 
 export type Place = {
-  id: number;
+  id: string;
   name: string;
   types: PlaceType[];
   country: string;
@@ -64,6 +64,7 @@ export type RideRoute = {
   country: string;
   days: RouteDay[];
   image: string;
+  gpxUrl?: string;
   points: RouteStop[];
 };
 
@@ -83,24 +84,56 @@ export type ChatMessage = {
   name: string;
   text: string;
   createdAt: number;
+  image?: string | null;
 };
 
 export type Review = {
   id: string;
-  placeId: number;
+  placeId: string;
   userId: string;
   name: string;
   rating: number;
   text: string;
   createdAt: number;
+  photo?: string;
 };
 
 export type Booking = {
   id: string;
-  placeId: number;
+  placeId: string;
   placeName: string;
   from: string;
   to: string;
   createdAt: number;
   status: "requested" | "confirmed" | "cancelled";
+};
+
+export type HotelRoom = {
+  id: string;
+  hotelId: string;
+  name: string;
+  type?: string;
+  bed?: string;
+  guests?: string;
+  square?: string;
+  facilities: string[];
+  photos: string[];
+};
+
+export type Country = {
+  id: string;
+  title: string;
+  iso: string;
+  flag: string;
+  filterFlag?: string;
+};
+
+export type SosAlert = {
+  id: string;
+  type: string;
+  additional: string;
+  coords: string;
+  date?: number;
+  active?: boolean;
+  photos?: string[];
 };
