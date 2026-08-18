@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -185,56 +186,60 @@ export function MapPage() {
           </button>
         </div>
       )}
-      {filters && (
-        <>
-          <div className="backdrop" onClick={() => setFilters(false)} />
-          <div className="sheet">
-            <h3>Map layers</h3>
-            {TYPES.map((t) => (
-              <label key={t} style={{ display: "flex", gap: 8, padding: 6 }}>
-                <input
-                  type="checkbox"
-                  checked={!!on[t]}
-                  onChange={(e) => setOn((prev) => ({ ...prev, [t]: e.target.checked }))}
-                />
-                {TYPE_LABEL[t]}
-              </label>
-            ))}
-            <button className="btn blue" onClick={() => setFilters(false)}>
-              Done
-            </button>
-          </div>
-        </>
-      )}
-      {info && (
-        <div className="map-legend" onClick={() => setInfo(false)}>
-          <div className="map-legend-inner" onClick={(e) => e.stopPropagation()}>
-            <p className="map-tip">
-              <span className="tip-i">i</span>
-              Leave a quick rating or review after your visit. This helps other riders and keeps the map useful for
-              planning the best biker routes!
-            </p>
-            <p>
-              <b>Black or white pins:</b> Places recommended by real bikers. These are tested and trusted by biker
-              community.
-            </p>
-            <p>
-              <b>Red pins:</b> Our official partners. They are biker-friendly and often offer discounts, gifts or special
-              service for Welcome Bikers users.
-            </p>
-            <p>
-              <b>Search by name</b> — find hotels, restaurants or any place you want.
-            </p>
-            <p>
-              <b>Filters</b> — show only what you need: biker bars, service stations, festivals, motels, rentals, and
-              more.
-            </p>
-            <button className="btn ghost" onClick={() => setInfo(false)}>
-              Ok
-            </button>
-          </div>
-        </div>
-      )}
+      {filters &&
+        createPortal(
+          <>
+            <div className="backdrop map-overlay" onClick={() => setFilters(false)} />
+            <div className="sheet map-overlay">
+              <h3>Map layers</h3>
+              {TYPES.map((t) => (
+                <label key={t} style={{ display: "flex", gap: 8, padding: 6 }}>
+                  <input
+                    type="checkbox"
+                    checked={!!on[t]}
+                    onChange={(e) => setOn((prev) => ({ ...prev, [t]: e.target.checked }))}
+                  />
+                  {TYPE_LABEL[t]}
+                </label>
+              ))}
+              <button className="btn blue" onClick={() => setFilters(false)}>
+                Done
+              </button>
+            </div>
+          </>,
+          document.body,
+        )}
+      {info &&
+        createPortal(
+          <div className="map-legend map-overlay" onClick={() => setInfo(false)}>
+            <div className="map-legend-inner" onClick={(e) => e.stopPropagation()}>
+              <p className="map-tip">
+                <span className="tip-i">i</span>
+                Leave a quick rating or review after your visit. This helps other riders and keeps the map useful for
+                planning the best biker routes!
+              </p>
+              <p>
+                <b>Black or white pins:</b> Places recommended by real bikers. These are tested and trusted by biker
+                community.
+              </p>
+              <p>
+                <b>Red pins:</b> Our official partners. They are biker-friendly and often offer discounts, gifts or special
+                service for Welcome Bikers users.
+              </p>
+              <p>
+                <b>Search by name</b> — find hotels, restaurants or any place you want.
+              </p>
+              <p>
+                <b>Filters</b> — show only what you need: biker bars, service stations, festivals, motels, rentals, and
+                more.
+              </p>
+              <button className="btn ghost" onClick={() => setInfo(false)}>
+                Ok
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

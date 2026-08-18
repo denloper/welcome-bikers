@@ -296,7 +296,7 @@ textarea { min-height: 96px; resize: vertical; }
   cursor: pointer;
 }
 .hours-dot { color: #fff; opacity: .7; }
-.hours-caret { font-size: 11px; color: #aaa; }
+.hours-caret { font-size: 12px; color: #fff; margin-left: 4px; }
 .hours-pop {
   position: absolute;
   z-index: 12;
@@ -317,8 +317,8 @@ textarea { min-height: 96px; resize: vertical; }
 }
 .hours-pop div.on { font-weight: 800; }
 
-.star-unit { display: inline-flex; color: var(--star); }
-.star-unit svg { width: 20px; height: 20px; display: block; overflow: visible; }
+.star-unit { display: inline-flex; color: var(--star); line-height: 0; }
+.star-unit svg { width: 22px; height: 22px; display: block; overflow: visible; paint-order: stroke fill; }
 .title-row {
   display: flex;
   align-items: flex-start;
@@ -664,6 +664,8 @@ textarea { min-height: 96px; resize: vertical; }
   width: 100%;
   height: 100% !important;
   background: #111;
+  z-index: 0;
+  isolation: isolate;
 }
 .map-search {
   position: absolute;
@@ -882,5 +884,8 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
 .day-block { margin: 0 0 18px; }
 .day-block ul { margin: 6px 0 8px; padding-left: 18px; color: #cfcfcf; }
 .backdrop { position: fixed; inset: 0; background: #0008; z-index: 25; }
+.map-overlay.backdrop { z-index: 4000; }
+.sheet.map-overlay { z-index: 4010; }
+.map-legend.map-overlay { z-index: 4010; }
 
 .empty { padding: 40px 20px; text-align: center; color: var(--muted); }
