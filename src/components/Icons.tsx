@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { CategoryId } from "../types";
 import { asset } from "../lib/assets";
 
@@ -53,9 +54,92 @@ export function IconShare({ className }: P) {
 export function IconFilter({ className }: P) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M4 6h16M7 12h10M10 18h4" />
+      <path d="M4 6h16M4 12h16M4 18h16" />
+      <circle cx="8" cy="6" r="2.1" fill="currentColor" />
+      <circle cx="15" cy="12" r="2.1" fill="currentColor" />
+      <circle cx="10" cy="18" r="2.1" fill="currentColor" />
     </svg>
   );
+}
+export function IconPhone({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M8 3.5h8A1.5 1.5 0 0 1 17.5 5v14A1.5 1.5 0 0 1 16 20.5H8A1.5 1.5 0 0 1 6.5 19V5A1.5 1.5 0 0 1 8 3.5z" />
+      <path d="M10 18h4" />
+    </svg>
+  );
+}
+export function IconCal({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="4" y="5" width="16" height="15" rx="2" />
+      <path d="M4 10h16M8 3v4M16 3v4" />
+    </svg>
+  );
+}
+export function IconInfo({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v6M12 8h.01" />
+    </svg>
+  );
+}
+export function IconSun({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  );
+}
+export function IconLocate({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+    </svg>
+  );
+}
+
+function strokeIco(d: string) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" width="22" height="22">
+      <path d={d} />
+    </svg>
+  );
+}
+
+const AMENITY_ICON: Record<string, () => ReactNode> = {
+  "Card payment": () =>
+    strokeIco("M3.5 7.5h17v10h-17zM3.5 11h17M6 16h4"),
+  "Wi-Fi": () =>
+    strokeIco("M5 10.5c4-4 10-4 14 0M7.5 13c2.6-2.4 6.4-2.4 9 0M12 16.8h.01"),
+  "Motorcycle Parking": () =>
+    strokeIco("M6 6.5h12v12H6zM9.2 9v7M9.2 9h4.2c1.4 0 2.4 1 2.4 2.3S14.8 13.5 13.4 13.5H9.2"),
+  Laundry: () =>
+    strokeIco("M5 4.5h14v15H5zM8 7h.01M16 7h.01M12 14.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"),
+  "Food & Beverages": () =>
+    strokeIco("M8 4v8M6 4v5.5a2 2 0 0 0 4 0V4M16 4v16M14 4h4"),
+  "Food & Beverages 24/7": () =>
+    strokeIco("M8 4v8M6 4v5.5a2 2 0 0 0 4 0V4M16 4v16M14 4h4"),
+  "Food 24/7": () =>
+    strokeIco("M8 4v8M6 4v5.5a2 2 0 0 0 4 0V4M16 4v16M14 4h4"),
+  "Motorcycle wash": () =>
+    strokeIco("M5 16.5h4l2-5h5l3 5h0M7 16.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"),
+  Sauna: () =>
+    strokeIco("M6 18h12M8 18V9h8v9M10 7c0-1 .8-2 2-2s2 1 2 2"),
+  Pool: () =>
+    strokeIco("M5 17c1.5-1 3.5-1 5 0s3.5 1 5 0 3.5-1 5 0M8 8v9M8 8h6v3"),
+  "Bikers friendly": () =>
+    strokeIco("M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"),
+  "Eco village": () =>
+    strokeIco("M4 20V10l8-6 8 6v10H4z"),
+};
+
+export function AmenityIcon({ name }: { name: string }) {
+  const fn = AMENITY_ICON[name];
+  return fn ? fn() : strokeIco("M12 4v16M4 12h16");
 }
 export function IconSearch({ className }: P) {
   return (

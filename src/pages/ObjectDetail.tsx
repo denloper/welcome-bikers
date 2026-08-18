@@ -2,15 +2,20 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { Stars } from "../components/Stars";
-import { IconShare } from "../components/Icons";
+import { AmenityIcon, IconCal, IconGlobe, IconPhone, IconShare } from "../components/Icons";
 import { GoogleMiniMap } from "../components/GoogleMiniMap";
 import { getPlace, loadPlaces } from "../lib/data";
-import { TYPE_LABEL } from "../lib/categories";
 import { photosFor } from "../lib/photos";
 import { PlacePhoto } from "../components/PlacePhoto";
 import { appleMapsUrl, googleRouteUrl, validCoords, wazeUrl } from "../lib/geo";
 import { store } from "../lib/store";
 import type { Place } from "../types";
+
+function fmtDate(iso: string) {
+  const d = new Date(iso + "T12:00:00");
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }).replace(" ", ", ");
+}
 
 export function ObjectDetail() {
   const { id } = useParams();
@@ -20,6 +25,9 @@ export function ObjectDetail() {
   const [navOpen, setNavOpen] = useState(false);
   const [fav, setFav] = useState(false);
   const [report, setReport] = useState(false);
+  const [from, setFrom] = useState("2026-08-18");
+  const [to, setTo] = useState("2026-08-26");
+  const [booked, setBooked] = useState(false);
 
   useEffect(() => {
     loadPlaces().then((all) => {
@@ -32,6 +40,7 @@ export function ObjectDetail() {
   if (!place) return <div className="empty">Loading…</div>;
   const photos = photosFor(place);
   const canRoute = validCoords(place.lat, place.lon);
+  const hotel = place.types.includes("hotels");
 
   function share() {
     const text = `${place!.name} — ${place!.address}\n${place!.lat},${place!.lon}`;
@@ -39,10 +48,28 @@ export function ObjectDetail() {
     else navigator.clipboard.writeText(`${text}\n${location.href}`);
   }
 
+  function requestBook() {
+    const user = store.get().user;
+    if (!user) {
+      nav("/login");
+      return;
+    }
+    store.addBooking({
+      id: crypto.randomUUID(),
+      placeId: place!.id,
+      placeName: place!.name,
+      from,
+      to,
+      createdAt: Date.now(),
+      status: "requested",
+    });
+    setBooked(true);
+  }
+
   return (
     <div className="page">
       <TopBar
-        title={place.types.includes("hotels") ? "Hotel" : TYPE_LABEL[place.types[0]]}
+        title={place.country || place.city}
         right={
           <button className="icon-btn" onClick={share} aria-label="Share">
             <IconShare />
@@ -59,52 +86,67 @@ export function ObjectDetail() {
       </div>
       <div className="section">
         <div className="place-name">{place.name}</div>
-        <div className="open">{place.openingHours === "24/7" ? "Open now · 24/7" : "Hours on request"}</div>
-        <div style={{ margin: "8px 0" }}>
-          <Stars value={place.rating} />
+        <div style={{ margin: "8px 0 12px" }}>
+          <Stars value={place.rating} count={place.reviews || undefined} />
         </div>
-        <Link className="link" to={`/object/${place.id}/reviews`}>
-          View All Reviews
-        </Link>
-        <div className="row-btns">
-          <Link className="btn white" to={`/object/${place.id}/reviews`}>
-            Write a review
-          </Link>
-        </div>
-        <h3>Information</h3>
-        {place.slogan && <p style={{ fontStyle: "italic" }}>«{place.slogan}»</p>}
-        <p className="muted">{place.description}</p>
-        <p className="addr">{place.address}</p>
-        <p className="muted">
-          {place.lat.toFixed(5)}, {place.lon.toFixed(5)}
-        </p>
-        <div className="badges">
-          {place.bikersFriendly && <i>Bikers friendly</i>}
-          {place.amenities?.slice(0, 3).map((a) => (
-            <i key={a}>{a}</i>
-          ))}
-        </div>
-        {place.types.includes("hotels") && (
-          <Link className="btn blue" to={`/object/${place.id}/book`} style={{ marginBottom: 10 }}>
-            Request booking
-          </Link>
+
+        {place.phone && (
+          <a className="contact-row" href={`tel:${place.phone}`}>
+            <IconPhone />
+            <span>{place.phone}</span>
+          </a>
         )}
-        <div className="row-btns">
+        {place.website && (
+          <a className="contact-row" href={place.website} target="_blank" rel="noreferrer">
+            <IconGlobe />
+            <span>{place.website.replace(/^https?:\/\//, "")}</span>
+          </a>
+        )}
+
+        {(place.amenities?.length ?? 0) > 0 && (
+          <>
+            <h3>Services provided</h3>
+            {place.amenities!.map((a) => (
+              <div className="amenity" key={a}>
+                <AmenityIcon name={a} />
+                <span>{a === "Food & Beverages 24/7" ? "Food 24/7" : a}</span>
+              </div>
+            ))}
+          </>
+        )}
+
+        {hotel && (
+          <>
+            <label className="date-pill">
+              <IconCal />
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <span>→</span>
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </label>
+            <p className="muted date-hint">
+              {fmtDate(from)} → {fmtDate(to)}
+            </p>
+            {booked ? (
+              <div className="notice" style={{ margin: "0 0 16px" }}>
+                Booking request sent.
+              </div>
+            ) : (
+              <button className="btn green" onClick={requestBook} style={{ marginBottom: 14 }}>
+                Request booking
+              </button>
+            )}
+            <Link className="link" to={`/object/${place.id}/book`}>
+              Choose a room
+            </Link>
+          </>
+        )}
+
+        <div className="row-btns" style={{ marginTop: 16 }}>
           <button className="btn blue" disabled={!canRoute} onClick={() => setNavOpen(true)}>
             Build route
           </button>
         </div>
         <div className="row-btns">
-          {place.phone && (
-            <a className="btn ghost small" href={`tel:${place.phone}`}>
-              Call
-            </a>
-          )}
-          {place.website && (
-            <a className="btn ghost small" href={place.website} target="_blank" rel="noreferrer">
-              Website
-            </a>
-          )}
           <button
             className="btn ghost small"
             onClick={() => setFav(store.toggleFavorite(place.id).includes(place.id))}
@@ -115,6 +157,12 @@ export function ObjectDetail() {
             Report
           </button>
         </div>
+
+        {place.slogan && <p style={{ fontStyle: "italic" }}>«{place.slogan}»</p>}
+        {place.description && <p className="muted">{place.description}</p>}
+        <Link className="link" to={`/object/${place.id}/reviews`}>
+          View All Reviews
+        </Link>
         <GoogleMiniMap lat={place.lat} lon={place.lon} />
       </div>
 

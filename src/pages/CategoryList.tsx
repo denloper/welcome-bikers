@@ -69,7 +69,7 @@ export function CategoryList() {
   return (
     <div className="page">
       <TopBar
-        title={meta.title}
+        title={country || meta.title}
         right={
           <button className="icon-btn" onClick={() => setFilters(true)} aria-label="Filters">
             <IconFilter />

@@ -5,10 +5,12 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
-import { IconFilter } from "../components/Icons";
+import { IconBack, IconFilter, IconInfo, IconLocate, IconSearch, IconSun } from "../components/Icons";
 import { loadPlaces } from "../lib/data";
+import { asset } from "../lib/assets";
 import { googleRouteUrl, validCoords } from "../lib/geo";
-import { TYPE_COLOR, TYPE_LABEL } from "../lib/categories";
+import { addDarkTiles, satTiles } from "../lib/osm";
+import { TYPE_LABEL } from "../lib/categories";
 import type { Place, PlaceType } from "../types";
 
 const TYPES: PlaceType[] = [
@@ -23,17 +25,22 @@ const TYPES: PlaceType[] = [
   "historical",
 ];
 
-const PIN: Record<PlaceType, string> = {
-  hotels: "#4da3ff",
-  shops: "#e10600",
-  bars: "#ffb020",
-  restaurants: "#ff7a45",
-  services: "#e10600",
-  rent: "#8b6cff",
-  festivals: "#e10600",
-  viewpoints: "#3ddc84",
-  historical: "#d4a017",
+const RED: Partial<Record<PlaceType, boolean>> = {
+  shops: true,
+  services: true,
+  festivals: true,
 };
+
+function pinIcon(type: PlaceType) {
+  const src = asset(`icons/${type}.png`);
+  const tone = RED[type] ? "red" : "white";
+  return L.divIcon({
+    className: "wb-pin",
+    html: `<span class="wb-pin-wrap ${tone}"><img src="${src}" alt="" width="22" height="22"/></span>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  });
+}
 
 export function MapPage() {
   const nav = useNavigate();
@@ -48,6 +55,7 @@ export function MapPage() {
     Object.fromEntries(TYPES.map((t) => [t, true])),
   );
   const [filters, setFilters] = useState(false);
+  const [info, setInfo] = useState(false);
   const [sat, setSat] = useState(false);
   const [picked, setPicked] = useState<Place | null>(null);
   const [ready, setReady] = useState(false);
@@ -69,14 +77,8 @@ export function MapPage() {
   useEffect(() => {
     if (!mapEl.current) return;
     const map = L.map(mapEl.current, { zoomControl: false, attributionControl: false }).setView([45.1, 16.5], 5);
-    const osm = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      attribution: "&copy; OpenStreetMap, Carto",
-    });
-    const hybrid = L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      { attribution: "Esri" },
-    );
-    osm.addTo(map);
+    const osm = addDarkTiles(map, osmRef);
+    const hybrid = satTiles();
     const cluster = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 48 });
     map.addLayer(cluster);
     mapRef.current = map;
@@ -84,7 +86,9 @@ export function MapPage() {
     osmRef.current = osm;
     satRef.current = hybrid;
     setReady(true);
+    const t = window.setTimeout(() => map.invalidateSize(), 120);
     return () => {
+      window.clearTimeout(t);
       map.remove();
       mapRef.current = null;
       clusterRef.current = null;
@@ -110,15 +114,9 @@ export function MapPage() {
     if (!cluster || !ready) return;
     cluster.clearLayers();
     filtered.forEach((p) => {
-      const color = PIN[p.types[0]] ?? TYPE_COLOR[p.types[0]] ?? "#e10600";
       const marker = L.marker([p.lat, p.lon], {
         title: p.name,
-        icon: L.divIcon({
-          className: "wb-pin",
-          html: `<span style="background:${color};width:14px;height:14px;border-radius:50%;display:block;border:2px solid #fff;box-shadow:0 0 0 1px #0003"></span>`,
-          iconSize: [14, 14],
-          iconAnchor: [7, 7],
-        }),
+        icon: pinIcon(p.types[0]),
       });
       marker.on("click", () => setPicked(p));
       cluster.addLayer(marker);
@@ -135,23 +133,37 @@ export function MapPage() {
     <div className="page map-page">
       <div className="map-wrap full" ref={mapEl} />
       <div className="map-search">
-        <input
-          placeholder="Search the map"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <button className="icon-btn" onClick={() => setFilters(true)} aria-label="Filters">
-          <IconFilter />
+        <button className="map-round" onClick={() => nav(-1)} aria-label="Back">
+          <IconBack />
+        </button>
+        <label className="map-q">
+          <IconSearch />
+          <input
+            placeholder="Search the map"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </label>
+        <button className="map-round" onClick={() => setInfo(true)} aria-label="About map">
+          <IconInfo />
         </button>
       </div>
       <div className="map-tools">
-        <button onClick={() => setFilters(true)} aria-label="filters">
+        <button className="map-round" onClick={() => setFilters(true)} aria-label="filters">
           <IconFilter />
         </button>
-        <button onClick={() => setSat((v) => !v)}>{sat ? "Map" : "Sat"}</button>
-        <button onClick={() => mapRef.current?.zoomIn()}>+</button>
-        <button onClick={() => mapRef.current?.zoomOut()}>−</button>
-        <button onClick={locate}>◎</button>
+        <button className="map-round" onClick={() => setSat((v) => !v)} aria-label="satellite">
+          <IconSun />
+        </button>
+        <button className="map-round" onClick={() => mapRef.current?.zoomIn()}>
+          +
+        </button>
+        <button className="map-round" onClick={() => mapRef.current?.zoomOut()}>
+          −
+        </button>
+        <button className="map-round" onClick={locate} aria-label="My location">
+          <IconLocate />
+        </button>
       </div>
       {picked && (
         <div className="sheet" style={{ paddingBottom: 90 }}>
@@ -189,6 +201,21 @@ export function MapPage() {
             ))}
             <button className="btn blue" onClick={() => setFilters(false)}>
               Done
+            </button>
+          </div>
+        </>
+      )}
+      {info && (
+        <>
+          <div className="backdrop" onClick={() => setInfo(false)} />
+          <div className="sheet">
+            <h3>Map</h3>
+            <p className="muted">
+              Google Maps does not allow this GitHub Pages site to use their key, so the map runs on OpenStreetMap.
+              Route still opens Google / Apple / Waze in a new tab.
+            </p>
+            <button className="btn blue" onClick={() => setInfo(false)}>
+              OK
             </button>
           </div>
         </>

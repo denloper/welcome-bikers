@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { addDarkTiles } from "../lib/osm";
 
 export function GoogleMiniMap({ lat, lon }: { lat: number; lon: number }) {
   const el = useRef<HTMLDivElement>(null);
@@ -12,7 +13,7 @@ export function GoogleMiniMap({ lat, lon }: { lat: number; lon: number }) {
       attributionControl: false,
       dragging: true,
     }).setView([lat, lon], 15);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png").addTo(map);
+    addDarkTiles(map);
     L.circleMarker([lat, lon], {
       radius: 8,
       color: "#fff",

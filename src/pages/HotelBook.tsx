@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { PlacePhoto } from "../components/PlacePhoto";
+import { AmenityIcon } from "../components/Icons";
 import { getPlace, loadHotelRooms, loadPlaces } from "../lib/data";
 import { store } from "../lib/store";
 import type { HotelRoom, Place } from "../types";
@@ -29,10 +30,11 @@ export function HotelBook() {
     <div className="page">
       <TopBar title="Hotel" />
       <div className="section">
-        <h3>Services provided</h3>
+            <h3>Services provided</h3>
         {(place.amenities ?? []).map((a) => (
           <div className="amenity" key={a}>
-            {a}
+            <AmenityIcon name={a} />
+            <span>{a}</span>
           </div>
         ))}
         {rooms.length > 0 && (
