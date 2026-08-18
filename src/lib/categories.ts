@@ -21,6 +21,18 @@ export const CATEGORIES: {
   { id: "historical", label: "Historical places", title: "Historical places", type: "historical" },
 ];
 
+export const TYPE_CHIP: Record<PlaceType, string> = {
+  hotels: "Hotels",
+  shops: "Moto Shops",
+  bars: "Bikers Bars",
+  restaurants: "Restaurants",
+  services: "Services",
+  rent: "Rent a Bike",
+  festivals: "Festivals",
+  viewpoints: "Viewpoints",
+  historical: "Historical Places",
+};
+
 export const TYPE_LABEL: Record<PlaceType, string> = {
   hotels: "Hotel",
   shops: "Moto shop",

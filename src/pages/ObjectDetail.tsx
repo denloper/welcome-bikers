@@ -178,6 +178,14 @@ export function ObjectDetail() {
           <div className="backdrop" onClick={() => setNavOpen(false)} />
           <div className="sheet">
             <h3>Open navigation</h3>
+            <button
+              className="btn green"
+              disabled={!canRoute}
+              onClick={() => nav(`/map?to=${place.lat},${place.lon}`)}
+            >
+              In the app
+            </button>
+            <div style={{ height: 8 }} />
             <a className="btn blue" href={googleRouteUrl(place.lat, place.lon)} target="_blank" rel="noreferrer">
               Google Maps
             </a>

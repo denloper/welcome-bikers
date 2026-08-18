@@ -26,6 +26,26 @@ export function googleRouteUrl(lat: number, lon: number): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=driving`;
 }
 
+export function googleMultiRouteUrl(points: { lat: number; lon: number }[]): string {
+  const pts = points.filter((p) => validCoords(p.lat, p.lon));
+  if (!pts.length) return "https://www.google.com/maps";
+  if (pts.length === 1) return googleRouteUrl(pts[0].lat, pts[0].lon);
+  const origin = `${pts[0].lat},${pts[0].lon}`;
+  const dest = `${pts[pts.length - 1].lat},${pts[pts.length - 1].lon}`;
+  const wps = pts
+    .slice(1, -1)
+    .map((p) => `${p.lat},${p.lon}`)
+    .join("|");
+  const q = new URLSearchParams({
+    api: "1",
+    origin,
+    destination: dest,
+    travelmode: "driving",
+  });
+  if (wps) q.set("waypoints", wps);
+  return `https://www.google.com/maps/dir/?${q.toString()}`;
+}
+
 export function appleMapsUrl(lat: number, lon: number): string {
   return `https://maps.apple.com/?daddr=${lat},${lon}&dirflg=d`;
 }

@@ -1,17 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
-import { IconBack, IconFilter, IconInfo, IconLocate, IconSearch, IconSun } from "../components/Icons";
+import {
+  IconBack,
+  IconFilter,
+  IconGlobe,
+  IconInfo,
+  IconLocate,
+  IconMenu,
+  IconMoon,
+  IconSearch,
+  IconShare,
+  IconSun,
+  IconTurn,
+} from "../components/Icons";
+import { Stars } from "../components/Stars";
+import { PlacePhoto } from "../components/PlacePhoto";
 import { loadPlaces } from "../lib/data";
 import { asset } from "../lib/assets";
 import { validCoords } from "../lib/geo";
-import { addDarkTiles, satTiles } from "../lib/osm";
-import { TYPE_LABEL } from "../lib/categories";
+import { addDarkTiles, lightTiles } from "../lib/osm";
+import { osrmDrive } from "../lib/osrm";
+import { photosFor } from "../lib/photos";
+import { TYPE_CHIP, TYPE_LABEL } from "../lib/categories";
 import type { Place, PlaceType } from "../types";
 
 const TYPES: PlaceType[] = [
@@ -37,27 +53,41 @@ function pinIcon(type: PlaceType) {
   const tone = RED[type] ? "red" : "white";
   return L.divIcon({
     className: "wb-pin",
-        html: `<span class="wb-pin-wrap ${tone} drop"><img src="${src}" alt="" width="18" height="18"/></span>`,
-        iconSize: [28, 36],
-        iconAnchor: [14, 34],
+    html: `<span class="wb-pin-wrap ${tone} drop"><img src="${src}" alt="" width="18" height="18"/></span>`,
+    iconSize: [28, 36],
+    iconAnchor: [14, 34],
   });
+}
+
+function parsePts(raw: string | null) {
+  if (!raw) return [];
+  return raw
+    .split("|")
+    .map((s) => {
+      const [lat, lon] = s.split(",").map(Number);
+      return { lat, lon };
+    })
+    .filter((p) => validCoords(p.lat, p.lon));
 }
 
 export function MapPage() {
   const nav = useNavigate();
+  const [params] = useSearchParams();
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
   const osmRef = useRef<L.TileLayer | null>(null);
-  const satRef = useRef<L.TileLayer | null>(null);
+  const lightRef = useRef<L.TileLayer | null>(null);
+  const lineRef = useRef<L.Polyline | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
   const [q, setQ] = useState("");
-  const [on, setOn] = useState<Record<string, boolean>>(
-    Object.fromEntries(TYPES.map((t) => [t, true])),
-  );
+  const [on, setOn] = useState<Record<string, boolean>>(Object.fromEntries(TYPES.map((t) => [t, true])));
+  const [friendly, setFriendly] = useState(false);
+  const [draftOn, setDraftOn] = useState(on);
+  const [draftFriendly, setDraftFriendly] = useState(false);
   const [filters, setFilters] = useState(false);
   const [info, setInfo] = useState(false);
-  const [sat, setSat] = useState(false);
+  const [light, setLight] = useState(false);
   const [picked, setPicked] = useState<Place | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -66,10 +96,11 @@ export function MapPage() {
     return places.filter((p) => {
       if (!validCoords(p.lat, p.lon)) return false;
       if (!p.types.some((t) => on[t])) return false;
+      if (friendly && !p.bikersFriendly) return false;
       if (s && !`${p.name} ${p.city} ${p.country}`.toLowerCase().includes(s)) return false;
       return true;
     });
-  }, [places, q, on]);
+  }, [places, q, on, friendly]);
 
   useEffect(() => {
     loadPlaces().then(setPlaces);
@@ -79,12 +110,12 @@ export function MapPage() {
     if (!mapEl.current) return;
     const map = L.map(mapEl.current, { zoomControl: false, attributionControl: false }).setView([45.1, 16.5], 5);
     addDarkTiles(map, osmRef);
-    const hybrid = satTiles();
+    const lightLayer = lightTiles();
     const cluster = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 48 });
     map.addLayer(cluster);
     mapRef.current = map;
     clusterRef.current = cluster;
-    satRef.current = hybrid;
+    lightRef.current = lightLayer;
     setReady(true);
     const resize = () => map.invalidateSize();
     const t = window.setTimeout(resize, 80);
@@ -102,17 +133,17 @@ export function MapPage() {
 
   useEffect(() => {
     const map = mapRef.current;
-    const osm = osmRef.current;
-    const hybrid = satRef.current;
-    if (!map || !osm || !hybrid || !ready) return;
-    if (sat) {
-      if (map.hasLayer(osm)) map.removeLayer(osm);
-      if (!map.hasLayer(hybrid)) hybrid.addTo(map);
+    const dark = osmRef.current;
+    const day = lightRef.current;
+    if (!map || !dark || !day || !ready) return;
+    if (light) {
+      if (map.hasLayer(dark)) map.removeLayer(dark);
+      if (!map.hasLayer(day)) day.addTo(map);
     } else {
-      if (map.hasLayer(hybrid)) map.removeLayer(hybrid);
-      if (!map.hasLayer(osm)) osm.addTo(map);
+      if (map.hasLayer(day)) map.removeLayer(day);
+      if (!map.hasLayer(dark)) dark.addTo(map);
     }
-  }, [sat, ready]);
+  }, [light, ready]);
 
   useEffect(() => {
     const cluster = clusterRef.current;
@@ -128,11 +159,63 @@ export function MapPage() {
     });
   }, [filtered, ready]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    const via = parsePts(params.get("via"));
+    const to = parsePts(params.get("to"));
+
+    async function draw(pts: { lat: number; lon: number }[]) {
+      if (lineRef.current) {
+        lineRef.current.remove();
+        lineRef.current = null;
+      }
+      if (!pts.length) return;
+      let linePts = pts;
+      if (pts.length === 1) {
+        const dest = pts[0];
+        await new Promise<void>((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              linePts = [{ lat: pos.coords.latitude, lon: pos.coords.longitude }, dest];
+              resolve();
+            },
+            () => resolve(),
+            { timeout: 4000 },
+          );
+        });
+      }
+      const latlngs = await osrmDrive(linePts);
+      const line = L.polyline(latlngs, { color: "#3d8aff", weight: 5, opacity: 0.9 }).addTo(map);
+      lineRef.current = line;
+      map.fitBounds(line.getBounds(), { padding: [40, 40] });
+    }
+
+    if (via.length >= 2) draw(via);
+    else if (to.length) draw(to);
+  }, [params, ready]);
+
   function locate() {
     navigator.geolocation?.getCurrentPosition((pos) => {
       mapRef.current?.setView([pos.coords.latitude, pos.coords.longitude], 11);
     });
   }
+
+  function sharePicked() {
+    if (!picked) return;
+    const text = `${picked.name} — ${picked.city}, ${picked.country}`;
+    if (navigator.share) navigator.share({ title: picked.name, text });
+    else navigator.clipboard.writeText(text);
+  }
+
+  function routeToPicked() {
+    if (!picked) return;
+    nav(`/map?to=${picked.lat},${picked.lon}`, { replace: true });
+    setPicked(null);
+  }
+
+  const photos = picked ? photosFor(picked).slice(0, 2) : [];
+  const site = picked?.website || (picked ? `https://www.google.com/maps/search/?api=1&query=${picked.lat},${picked.lon}` : "");
 
   return (
     <div className="page map-page">
@@ -143,22 +226,26 @@ export function MapPage() {
         </button>
         <label className="map-q">
           <IconSearch />
-          <input
-            placeholder="Search the map"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
+          <input placeholder="Search the map" value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
         <button className="map-round" onClick={() => setInfo(true)} aria-label="About map">
           <IconInfo />
         </button>
       </div>
       <div className="map-tools">
-        <button className="map-round" onClick={() => setFilters(true)} aria-label="filters">
+        <button
+          className="map-round"
+          onClick={() => {
+            setDraftOn(on);
+            setDraftFriendly(friendly);
+            setFilters(true);
+          }}
+          aria-label="filters"
+        >
           <IconFilter />
         </button>
-        <button className="map-round" onClick={() => setSat((v) => !v)} aria-label="satellite">
-          <IconSun />
+        <button className="map-round" onClick={() => setLight((v) => !v)} aria-label="map theme">
+          {light ? <IconMoon /> : <IconSun />}
         </button>
         <button className="map-round" onClick={() => mapRef.current?.zoomIn()}>
           +
@@ -171,40 +258,89 @@ export function MapPage() {
         </button>
       </div>
       {picked && (
-        <div className="map-card">
-          <b>{picked.name}</b>
-          <p className="muted">
-            {TYPE_LABEL[picked.types[0]]} · {picked.city}, {picked.country}
-          </p>
-          <div className="row-btns">
-            <button className="btn blue" onClick={() => nav(`/object/${picked.id}`)}>
-              More details
-            </button>
+        <div className="map-place">
+          <div className="map-place-top">
+            <div>
+              <div className="map-place-title">{picked.name}</div>
+              <Stars value={picked.rating} />
+              <div className="map-place-cat">{TYPE_CHIP[picked.types[0]]}</div>
+            </div>
+            <div className="map-place-icos">
+              <button className="map-mini" onClick={sharePicked} aria-label="Share">
+                <IconShare />
+              </button>
+              <button className="map-mini" onClick={() => nav(`/object/${picked.id}`)} aria-label="Open place">
+                <IconMenu />
+              </button>
+            </div>
           </div>
-          <button className="btn ghost" onClick={() => setPicked(null)}>
-            Close
-          </button>
+          <div className="map-place-btns">
+            <button className="btn green" onClick={routeToPicked}>
+              <IconTurn />
+              Route
+            </button>
+            <a className="btn white" href={site} target="_blank" rel="noreferrer">
+              <IconGlobe />
+              Site
+            </a>
+          </div>
+          {photos.length > 0 && (
+            <div className="map-place-photos">
+              {photos.map((src) => (
+                <PlacePhoto key={src} src={src} alt="" />
+              ))}
+            </div>
+          )}
         </div>
       )}
       {filters &&
         createPortal(
           <>
             <div className="backdrop map-overlay" onClick={() => setFilters(false)} />
-            <div className="sheet map-overlay">
-              <h3>Map layers</h3>
-              {TYPES.map((t) => (
-                <label key={t} style={{ display: "flex", gap: 8, padding: 6 }}>
-                  <input
-                    type="checkbox"
-                    checked={!!on[t]}
-                    onChange={(e) => setOn((prev) => ({ ...prev, [t]: e.target.checked }))}
-                  />
-                  {TYPE_LABEL[t]}
-                </label>
-              ))}
-              <button className="btn blue" onClick={() => setFilters(false)}>
-                Done
-              </button>
+            <div className="country-sheet map-overlay">
+              <div className="sheet-handle" />
+              <div className="map-chips">
+                {TYPES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    className={draftOn[t] ? "on" : ""}
+                    onClick={() => setDraftOn((prev) => ({ ...prev, [t]: !prev[t] }))}
+                  >
+                    {TYPE_CHIP[t]}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className={`friendly ${draftFriendly ? "on" : ""}`}
+                  onClick={() => setDraftFriendly((v) => !v)}
+                >
+                  Bikers Friendly
+                </button>
+              </div>
+              <div className="filter-foot">
+                <button
+                  type="button"
+                  className="clear-all"
+                  onClick={() => {
+                    setDraftOn(Object.fromEntries(TYPES.map((t) => [t, false])));
+                    setDraftFriendly(false);
+                  }}
+                >
+                  Clear all
+                </button>
+                <button
+                  type="button"
+                  className="apply-txt"
+                  onClick={() => {
+                    setOn(draftOn);
+                    setFriendly(draftFriendly);
+                    setFilters(false);
+                  }}
+                >
+                  Apply
+                </button>
+              </div>
             </div>
           </>,
           document.body,

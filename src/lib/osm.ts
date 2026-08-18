@@ -34,6 +34,14 @@ export function satTiles() {
   return L.tileLayer(SAT, { attribution: "Esri", maxZoom: 19 });
 }
 
+export function lightTiles() {
+  return L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    attribution: "&copy; OpenStreetMap, Carto",
+    maxZoom: 20,
+    subdomains: "abcd",
+  });
+}
+
 export function addDarkTiles(map: L.Map, hold?: { current: L.TileLayer | null }) {
   let index = 0;
   let current = darkTiles(0);

@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
-import { IconFilter, IconShare } from "../components/Icons";
+import { IconFilter, IconSearch, IconShare } from "../components/Icons";
 import { loadCountries, loadRoutes } from "../lib/data";
 import { PlacePhoto } from "../components/PlacePhoto";
-import { googleRouteUrl } from "../lib/geo";
+import { validCoords } from "../lib/geo";
 import type { Country, RideRoute } from "../types";
 
 export function Routes() {
   const [rows, setRows] = useState<RideRoute[]>([]);
   const [flags, setFlags] = useState<Country[]>([]);
   const [q, setQ] = useState("");
+  const [draftQ, setDraftQ] = useState("");
   const [country, setCountry] = useState("");
   const [draft, setDraft] = useState("");
   const [filters, setFilters] = useState(false);
@@ -47,6 +48,7 @@ export function Routes() {
             className="icon-btn"
             onClick={() => {
               setDraft(country);
+              setDraftQ(q);
               setOpenList(false);
               setFilters(true);
             }}
@@ -56,23 +58,14 @@ export function Routes() {
           </button>
         }
       />
-      <div className="search-row">
-        <input
-          placeholder="Search routes, places, countries..."
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-      </div>
       {list.map((r) => (
-        <article className="card" key={r.id}>
+        <article className="card route-card" key={r.id}>
           <div className="card-photo">
             <PlacePhoto src={r.image} alt={r.title} />
           </div>
           <div className="card-body">
             <p className="muted">{r.subtitle}</p>
-            <div className="place-name" style={{ fontSize: 24 }}>
-              {r.title}
-            </div>
+            <div className="place-name">{r.title}</div>
             <Link className="btn blue" to={`/routes/${r.id}`}>
               More details
             </Link>
@@ -113,10 +106,19 @@ export function Routes() {
                 })}
               </div>
             )}
+            <label className="sheet-search">
+              <IconSearch />
+              <input
+                placeholder="Search routes, places, countries..."
+                value={draftQ}
+                onChange={(e) => setDraftQ(e.target.value)}
+              />
+            </label>
             <button
               className="btn apply"
               onClick={() => {
                 setCountry(draft);
+                setQ(draftQ);
                 setFilters(false);
               }}
             >
@@ -131,6 +133,7 @@ export function Routes() {
 
 export function RouteDetail() {
   const { id } = useParams();
+  const nav = useNavigate();
   const [route, setRoute] = useState<RideRoute | null>(null);
   useEffect(() => {
     loadRoutes().then((all) => setRoute(all.find((r) => r.id === id) ?? null));
@@ -184,11 +187,16 @@ export function RouteDetail() {
           </div>
         ))}
         <div className="row-btns">
-          {end && (
-            <a className="btn blue" href={googleRouteUrl(end.lat, end.lon)} target="_blank" rel="noreferrer">
-              Let's ride!
-            </a>
-          )}
+          <button
+            className="btn blue"
+            onClick={() => {
+              const pts = route.points.filter((p) => validCoords(p.lat, p.lon));
+              if (!pts.length) return;
+              nav(`/map?via=${pts.map((p) => `${p.lat},${p.lon}`).join("|")}`);
+            }}
+          >
+            Let's ride!
+          </button>
           <a
             className="btn white small"
             href={route.gpxUrl ?? URL.createObjectURL(new Blob([gpx], { type: "application/gpx+xml" }))}

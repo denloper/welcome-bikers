@@ -93,6 +93,28 @@ export function IconSun({ className }: P) {
     </svg>
   );
 }
+export function IconMoon({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M16 3.2A8.5 8.5 0 1 0 20.8 14 7 7 0 0 1 16 3.2z" />
+    </svg>
+  );
+}
+export function IconMenu({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M5 7h14M5 12h14M5 17h14" />
+    </svg>
+  );
+}
+export function IconTurn({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M7 20V10a4 4 0 0 1 4-4h9" />
+      <path d="m16 3 4 3-4 3" />
+    </svg>
+  );
+}
 export function IconLocate({ className }: P) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
