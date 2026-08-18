@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { IconChat, IconGlobe, IconHome, IconUser } from "./Icons";
 
 const items = [
@@ -9,6 +9,9 @@ const items = [
 ];
 
 export function BottomNav() {
+  const path = useLocation().pathname;
+  const accountOn = path === "/login" || path === "/register" || path.startsWith("/account");
+
   return (
     <nav className="bottom-nav">
       {items.map((it) => (
@@ -16,7 +19,7 @@ export function BottomNav() {
           key={it.to}
           to={it.to}
           end={it.end}
-          className={({ isActive }) => (isActive ? "active" : "")}
+          className={({ isActive }) => (it.to === "/account" ? (accountOn ? "active" : "") : isActive ? "active" : "")}
         >
           <it.icon />
           {it.label}

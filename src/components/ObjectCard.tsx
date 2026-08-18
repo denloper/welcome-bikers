@@ -7,6 +7,19 @@ import { HoursToggle } from "./HoursToggle";
 import { Stars } from "./Stars";
 import { AmenityIcon, IconGlobe, IconPinStar } from "./Icons";
 
+function cardTags(place: Place): string[] {
+  const am = (place.amenities ?? []).map((a) => (a === "Motorcycle Parking" ? "Moto Parking" : a));
+  const out: string[] = [];
+  if (place.bikersFriendly || am.includes("Bikers friendly")) out.push("Bikers friendly");
+  if (am.includes("Moto Parking")) out.push("Moto Parking");
+  for (const a of am) {
+    if (out.length >= 2) break;
+    if (a === "Bikers friendly" || a === "Moto Parking") continue;
+    out.push(a);
+  }
+  return out;
+}
+
 export function ObjectCard({
   place,
   distanceKm,
@@ -15,12 +28,7 @@ export function ObjectCard({
   distanceKm?: number;
 }) {
   const photos = photosFor(place);
-  const tags = [
-    ...(place.bikersFriendly ? ["Bikers friendly"] : []),
-    ...(place.amenities ?? [])
-      .map((a) => (a === "Motorcycle Parking" ? "Moto Parking" : a))
-      .filter((a) => a !== "Bikers friendly"),
-  ].slice(0, 2);
+  const tags = cardTags(place);
   const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress(place) || place.name)}`;
 
   return (

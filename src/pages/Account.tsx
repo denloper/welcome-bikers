@@ -1,37 +1,14 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BrandLogo } from "../components/BrandLogo";
 import { TopBar } from "../components/TopBar";
+import { Login } from "./Auth";
 import { store } from "../lib/store";
 
 export function Account() {
   const nav = useNavigate();
   const user = store.get().user;
 
-  if (!user) {
-    return (
-      <div className="page">
-        <header className="topbar">
-          <div />
-          <div className="topbar-mid">
-            <BrandLogo compact />
-            <h1>Account</h1>
-          </div>
-          <div />
-        </header>
-        <div className="section">
-          <p>Sign in to save places, book hotels and write in the chat.</p>
-          <Link className="btn blue" to="/login">
-            Sign in
-          </Link>
-          <div style={{ height: 10 }} />
-          <Link className="btn ghost" to="/register">
-            Create account
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  if (!user) return <Login />;
 
   return (
     <div className="page">

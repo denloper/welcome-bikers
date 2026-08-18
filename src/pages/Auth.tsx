@@ -15,7 +15,7 @@ export function Login() {
   return (
     <div className="page">
       <header className="topbar">
-        <button className="icon-btn" onClick={() => nav(-1)} aria-label="Back">
+        <button className="icon-btn" onClick={() => nav("/")} aria-label="Back">
           <IconBack />
         </button>
         <div className="topbar-mid">

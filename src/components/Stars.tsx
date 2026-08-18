@@ -1,22 +1,38 @@
-function Star({ fill, i }: { fill: number; i: number }) {
-  const pct = Math.round(Math.max(0, Math.min(1, fill)) * 100);
-  const id = `starfill-${i}-${pct}`;
+import { useId } from "react";
+
+const STAR =
+  "M12 3.1 14.7 9.4 21.5 10.1 16.4 14.7 18 21.5 12 18.1 6 21.5 7.6 14.7 2.5 10.1 9.3 9.4 Z";
+
+function Star({ fill }: { fill: number }) {
+  const t = Math.max(0, Math.min(1, fill));
+  const clip = useId().replace(/:/g, "");
   return (
     <span className="star-unit">
       <svg viewBox="0 0 24 24">
-        <defs>
-          <linearGradient id={id} x1="0" x2="1" y1="0" y2="0">
-            <stop offset={`${pct}%`} stopColor="currentColor" />
-            <stop offset={`${pct}%`} stopColor="transparent" />
-          </linearGradient>
-        </defs>
         <path
-          fill={`url(#${id})`}
+          d={STAR}
+          fill="none"
           stroke="currentColor"
-          strokeWidth="1.4"
+          strokeWidth="2.4"
           strokeLinejoin="round"
-          d="m12 3.2 2.35 5.7 6.2.54-4.7 4.08 1.45 6.05L12 16.7 6.7 19.57l1.45-6.05-4.7-4.08 6.2-.54z"
+          strokeLinecap="round"
         />
+        <defs>
+          <clipPath id={clip}>
+            <rect x="0" y="0" width={24 * t} height="24" />
+          </clipPath>
+        </defs>
+        {t > 0 && (
+          <path
+            d={STAR}
+            fill="currentColor"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            clipPath={`url(#${clip})`}
+          />
+        )}
       </svg>
     </span>
   );
@@ -28,7 +44,7 @@ export function Stars({ value, count }: { value: number | null; count?: number }
     <span className="stars" aria-label={`${v} stars`}>
       {value != null && <b className="stars-n">{value.toFixed(1).replace(".", ",")}</b>}
       {Array.from({ length: 5 }, (_, i) => (
-        <Star key={i} i={i} fill={v - i} />
+        <Star key={i} fill={v - i} />
       ))}
       {count != null && <span className="muted">({count})</span>}
     </span>

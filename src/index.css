@@ -224,8 +224,8 @@ textarea { min-height: 96px; resize: vertical; }
 .addr-globe svg { width: 20px; height: 20px; }
 .place-name { font-size: 28px; font-weight: 800; margin: 8px 0 4px; letter-spacing: -0.03em; }
 .open { color: var(--open); font-size: 14px; font-weight: 600; }
-.stars { color: var(--star); display: inline-flex; gap: 4px; align-items: center; }
-.stars svg { width: 16px; height: 16px; }
+.stars { color: var(--star); display: inline-flex; gap: 3px; align-items: center; }
+.stars svg { width: 20px; height: 20px; }
 .stars-n { color: #fff; font-size: 15px; font-weight: 700; margin-right: 4px; }
 .stars .off { opacity: .28; }
 .badges { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 10px 0 14px; font-size: 13px; }
@@ -318,7 +318,7 @@ textarea { min-height: 96px; resize: vertical; }
 .hours-pop div.on { font-weight: 800; }
 
 .star-unit { display: inline-flex; color: var(--star); }
-.star-unit svg { width: 18px; height: 18px; display: block; }
+.star-unit svg { width: 20px; height: 20px; display: block; overflow: visible; }
 .title-row {
   display: flex;
   align-items: flex-start;
@@ -452,8 +452,15 @@ textarea { min-height: 96px; resize: vertical; }
   cursor: pointer;
 }
 .pw-eye svg { width: 20px; height: 20px; }
-.auth-form { gap: 12px; padding-top: 16px; }
-.auth-form .btn { margin-top: 4px; }
+.auth-form { gap: 10px; padding: 18px 18px 24px; }
+.auth-form .lbl { color: #fff; font-size: 14px; margin: 6px 0 2px; }
+.auth-form .field {
+  background: #1c1c1c;
+  border: 1px solid #3a3a3a;
+  border-radius: 10px;
+  min-height: 48px;
+}
+.auth-form .btn { margin-top: 8px; }
 
 .map-legend {
   position: absolute;
