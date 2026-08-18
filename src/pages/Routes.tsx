@@ -85,6 +85,7 @@ export function Routes() {
         <>
           <div className="backdrop" onClick={() => setFilters(false)} />
           <div className="country-sheet">
+            <div className="sheet-handle" />
             <div className="globe-ico" aria-hidden>
               <svg viewBox="0 0 64 64" width="54" height="54">
                 <circle cx="28" cy="30" r="16" fill="none" stroke="#222" strokeWidth="2.4" />

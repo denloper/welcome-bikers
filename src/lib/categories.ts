@@ -8,7 +8,7 @@ export const CATEGORIES: {
   accent?: "red";
 }[] = [
   { id: "hotels", label: "Hotels", title: "Hotels", type: "hotels" },
-  { id: "shops", label: "Moto shops", title: "Moto shops", type: "shops" },
+  { id: "shops", label: "Moto shops", title: "Moto Shops", type: "shops" },
   { id: "bars", label: "Bikers bars", title: "Bikers bars", type: "bars" },
   { id: "restaurants", label: "Restaurants", title: "Restaurants", type: "restaurants" },
   { id: "services", label: "Services", title: "Services", type: "services" },

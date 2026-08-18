@@ -2,12 +2,15 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { Stars } from "../components/Stars";
-import { AmenityIcon, IconCal, IconGlobe, IconPhone, IconShare } from "../components/Icons";
+import { AmenityIcon, IconCal, IconGlobe, IconPencil, IconPhone, IconPin, IconShare } from "../components/Icons";
 import { GoogleMiniMap } from "../components/GoogleMiniMap";
+import { PhotoCarousel } from "../components/PhotoCarousel";
+import { HoursToggle } from "../components/HoursToggle";
 import { getPlace, loadPlaces } from "../lib/data";
 import { photosFor } from "../lib/photos";
-import { PlacePhoto } from "../components/PlacePhoto";
 import { appleMapsUrl, googleRouteUrl, validCoords, wazeUrl } from "../lib/geo";
+import { fullAddress } from "../lib/hours";
+import { TYPE_LABEL } from "../lib/categories";
 import { store } from "../lib/store";
 import type { Place } from "../types";
 
@@ -21,7 +24,6 @@ export function ObjectDetail() {
   const { id } = useParams();
   const nav = useNavigate();
   const [place, setPlace] = useState<Place | null>(null);
-  const [slide, setSlide] = useState(0);
   const [navOpen, setNavOpen] = useState(false);
   const [fav, setFav] = useState(false);
   const [report, setReport] = useState(false);
@@ -41,9 +43,10 @@ export function ObjectDetail() {
   const photos = photosFor(place);
   const canRoute = validCoords(place.lat, place.lon);
   const hotel = place.types.includes("hotels");
+  const maps = `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lon}`;
 
   function share() {
-    const text = `${place!.name} — ${place!.address}\n${place!.lat},${place!.lon}`;
+    const text = `${place!.name} — ${fullAddress(place!)}\n${place!.lat},${place!.lon}`;
     if (navigator.share) navigator.share({ title: place!.name, text, url: location.href });
     else navigator.clipboard.writeText(`${text}\n${location.href}`);
   }
@@ -68,27 +71,49 @@ export function ObjectDetail() {
 
   return (
     <div className="page">
-      <TopBar
-        title={place.country || place.city}
-        right={
+      <TopBar title={TYPE_LABEL[place.types[0]]} />
+      <PhotoCarousel photos={photos} alt={place.name} className="hero" />
+      <div className="section">
+        <div className="title-row">
+          <div className="place-name">{place.name}</div>
           <button className="icon-btn" onClick={share} aria-label="Share">
             <IconShare />
           </button>
-        }
-      />
-      <div className="hero">
-        <PlacePhoto src={photos[slide % photos.length]} alt={place.name} />
-        <div className="dots">
-          {photos.map((_, i) => (
-            <i key={i} className={i === slide % photos.length ? "on" : ""} onClick={() => setSlide(i)} />
-          ))}
         </div>
-      </div>
-      <div className="section">
-        <div className="place-name">{place.name}</div>
-        <div style={{ margin: "8px 0 12px" }}>
-          <Stars value={place.rating} count={place.reviews || undefined} />
+        <HoursToggle hours={place.openingHours} />
+        <div className="rate-row">
+          <Stars value={place.rating} />
+          <a className="addr-globe" href={maps} target="_blank" rel="noreferrer" aria-label="Map">
+            <IconGlobe />
+          </a>
         </div>
+        <Link className="reviews-link" to={`/object/${place.id}/reviews`}>
+          View All Reviews
+        </Link>
+        <Link className="btn white review-btn" to={`/object/${place.id}/reviews`}>
+          <IconPencil />
+          Write a review
+        </Link>
+
+        <h3>Information</h3>
+        {place.slogan && <p style={{ fontStyle: "italic" }}>«{place.slogan}»</p>}
+        {place.description && <p className="muted">{place.description}</p>}
+        <p className="addr">
+          <IconPin />
+          <span>{fullAddress(place)}</span>
+        </p>
+
+        {(place.amenities?.length ?? 0) > 0 && (
+          <>
+            <h3>Services provided</h3>
+            {place.amenities!.map((a) => (
+              <div className="amenity" key={a}>
+                <AmenityIcon name={a} />
+                <span>{a === "Food & Beverages 24/7" ? "Food 24/7" : a === "Motorcycle Parking" ? "Moto Parking" : a}</span>
+              </div>
+            ))}
+          </>
+        )}
 
         {place.phone && (
           <a className="contact-row" href={`tel:${place.phone}`}>
@@ -101,18 +126,6 @@ export function ObjectDetail() {
             <IconGlobe />
             <span>{place.website.replace(/^https?:\/\//, "")}</span>
           </a>
-        )}
-
-        {(place.amenities?.length ?? 0) > 0 && (
-          <>
-            <h3>Services provided</h3>
-            {place.amenities!.map((a) => (
-              <div className="amenity" key={a}>
-                <AmenityIcon name={a} />
-                <span>{a === "Food & Beverages 24/7" ? "Food 24/7" : a}</span>
-              </div>
-            ))}
-          </>
         )}
 
         {hotel && (
@@ -157,12 +170,6 @@ export function ObjectDetail() {
             Report
           </button>
         </div>
-
-        {place.slogan && <p style={{ fontStyle: "italic" }}>«{place.slogan}»</p>}
-        {place.description && <p className="muted">{place.description}</p>}
-        <Link className="link" to={`/object/${place.id}/reviews`}>
-          View All Reviews
-        </Link>
         <GoogleMiniMap lat={place.lat} lon={place.lon} />
       </div>
 

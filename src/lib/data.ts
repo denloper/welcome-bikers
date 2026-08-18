@@ -1,5 +1,6 @@
 import type { ChatMessage, Country, HotelRoom, Place, PlaceType, Review, RideRoute, SosAlert } from "../types";
 import { asset } from "./assets";
+import { defaultHours } from "./hours";
 import { DEFAULT_AMENITIES, OVERRIDES } from "./overrides";
 import { store } from "./store";
 
@@ -22,6 +23,9 @@ function enrich(raw: Place): Place {
     amenities: extra.amenities ?? raw.amenities ?? DEFAULT_AMENITIES[type] ?? [],
     photos: extra.photos ?? raw.photos,
     status: extra.status ?? raw.status ?? "published",
+    openingHours:
+      extra.openingHours ??
+      (raw.openingHours && raw.openingHours !== "Hours on request" ? raw.openingHours : defaultHours(type)),
     address: extra.address ?? raw.address ?? [raw.city, raw.country].filter(Boolean).join(", "),
     description:
       extra.description ??

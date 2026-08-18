@@ -27,6 +27,7 @@ export function AddPlace() {
     country: "",
     city: "",
     address: "",
+    zip: "",
     lat: "",
     lon: "",
     phone: "",
@@ -75,7 +76,7 @@ export function AddPlace() {
     <div className="page">
       <TopBar title="Add your place" />
       <form
-        className="form"
+        className="form form-spaced"
         onSubmit={(e) => {
           e.preventDefault();
           const lat = Number(form.lat);
@@ -93,7 +94,7 @@ export function AddPlace() {
             reviews: 0,
             video: null,
             bikersFriendly: form.bikersFriendly,
-            address: form.address || `${form.city}, ${form.country}`,
+            address: [form.address, form.zip].filter(Boolean).join(", ") || `${form.city}, ${form.country}`,
             description: form.description,
             phone: form.phone,
             website: form.website,
@@ -120,6 +121,8 @@ export function AddPlace() {
         <input className="field" value={form.city} onChange={(e) => set("city", e.target.value)} />
         <label className="lbl">Address</label>
         <input className="field" value={form.address} onChange={(e) => set("address", e.target.value)} />
+        <label className="lbl">Index / ZIP</label>
+        <input className="field" value={form.zip} onChange={(e) => set("zip", e.target.value)} />
         <label className="lbl">Latitude / longitude *</label>
         <div className="row-btns">
           <input className="field" placeholder="lat" value={form.lat} onChange={(e) => set("lat", e.target.value)} required />

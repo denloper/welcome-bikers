@@ -117,6 +117,8 @@ const AMENITY_ICON: Record<string, () => ReactNode> = {
     strokeIco("M5 10.5c4-4 10-4 14 0M7.5 13c2.6-2.4 6.4-2.4 9 0M12 16.8h.01"),
   "Motorcycle Parking": () =>
     strokeIco("M6 6.5h12v12H6zM9.2 9v7M9.2 9h4.2c1.4 0 2.4 1 2.4 2.3S14.8 13.5 13.4 13.5H9.2"),
+  "Moto Parking": () =>
+    strokeIco("M6 6.5h12v12H6zM9.2 9v7M9.2 9h4.2c1.4 0 2.4 1 2.4 2.3S14.8 13.5 13.4 13.5H9.2"),
   Laundry: () =>
     strokeIco("M5 4.5h14v15H5zM8 7h.01M16 7h.01M12 14.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"),
   "Food & Beverages": () =>
@@ -159,7 +161,69 @@ export function IconPin({ className }: P) {
 export function IconStar({ className }: P) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="m12 3 2.6 6.3 6.9.6-5.2 4.5 1.6 6.7L12 17.8 6.1 21.1l1.6-6.7-5.2-4.5 6.9-.6z" />
+      <path
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+        d="m12 3.2 2.35 5.7 6.2.54-4.7 4.08 1.45 6.05L12 16.7 6.7 19.57l1.45-6.05-4.7-4.08 6.2-.54z"
+      />
+    </svg>
+  );
+}
+
+export function IconPencil({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M4 16.8V20h3.2L19 8.2 15.8 5zM14.2 6.6l3.2 3.2" />
+    </svg>
+  );
+}
+
+export function IconEye({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M2.5 12S6 6.5 12 6.5 21.5 12 21.5 12 18 17.5 12 17.5 2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="2.4" />
+    </svg>
+  );
+}
+
+export function IconPinStar({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+      <path d="M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" />
+      <path fill="currentColor" stroke="none" d="m12 8.2.7 1.6 1.7.2-1.3 1.1.4 1.7-1.5-.9-1.5.9.4-1.7-1.3-1.1 1.7-.2z" />
+    </svg>
+  );
+}
+
+export function IconNear({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <circle cx="12" cy="12" r="2.1" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="9.5" strokeDasharray="2.4 2.2" />
+    </svg>
+  );
+}
+
+export function IconEco({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+      <path d="M4 20V11l8-7 8 7v9H4z" />
+      <path d="M9 20v-6h6v6" />
+      <path d="M16.2 8.2c1.6-.2 2.8-1.4 3-3-1.8.3-3 1.4-3.2 3z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function IconGoogle({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24">
+      <path fill="#4285F4" d="M21.6 12.23c0-.74-.06-1.45-.18-2.13H12v4.03h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.89-1.74 2.99-4.3 2.99-7.42z" />
+      <path fill="#34A853" d="M12 22c2.7 0 4.97-.9 6.63-2.35l-3.23-2.5c-.9.6-2.05.96-3.4.96-2.61 0-4.82-1.76-5.61-4.13H3.06v2.58A10 10 0 0 0 12 22z" />
+      <path fill="#FBBC05" d="M6.39 13.98A6.01 6.01 0 0 1 6.08 12c0-.69.12-1.35.31-1.98V7.44H3.06A10 10 0 0 0 2 12c0 1.61.39 3.14 1.06 4.56l3.33-2.58z" />
+      <path fill="#EA4335" d="M12 5.89c1.47 0 2.79.5 3.82 1.5l2.87-2.87C16.96 2.89 14.7 2 12 2A10 10 0 0 0 3.06 7.44l3.33 2.58C7.18 7.65 9.39 5.89 12 5.89z" />
     </svg>
   );
 }

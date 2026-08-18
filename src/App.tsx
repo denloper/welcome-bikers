@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { BottomNav } from "./components/BottomNav";
 import { Main } from "./pages/Main";
 import { CategoryList } from "./pages/CategoryList";
@@ -15,11 +15,8 @@ import { RouteDetail, Routes as RideRoutes } from "./pages/Routes";
 import { Admin } from "./pages/Admin";
 
 export default function App() {
-  const { pathname } = useLocation();
-  const hideNav = pathname === "/login" || pathname === "/register";
-
   return (
-    <div className={`app ${hideNav ? "no-nav" : ""}`}>
+    <div className="app">
       <Routes>
         <Route path="/" element={<Main />} />
         <Route path="/objects/:category" element={<CategoryList />} />
@@ -42,7 +39,7 @@ export default function App() {
         <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      {!hideNav && <BottomNav />}
+      <BottomNav />
     </div>
   );
 }

@@ -4,5 +4,10 @@ _api
 vk.env
 _refs
 _hist.json
+_vk.json
+_parse_vk.py
+_sample_obj.py
+tmp-vk
+.cursor
 *.local
 .DS_Store

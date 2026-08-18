@@ -2,28 +2,35 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { ObjectCard } from "../components/ObjectCard";
-import { IconFilter } from "../components/Icons";
+import { IconEco, IconFilter, IconNear, IconPinStar, IconSearch } from "../components/Icons";
 import { CATEGORIES } from "../lib/categories";
-import { byCategory, loadPlaces } from "../lib/data";
+import { byCategory, loadCountries, loadPlaces } from "../lib/data";
 import { haversineKm } from "../lib/geo";
-import type { Place, PlaceType } from "../types";
-
-type Sort = "distance" | "rating" | "reviews" | "newest";
+import type { Country, Place, PlaceType } from "../types";
 
 export function CategoryList() {
   const { category } = useParams();
   const meta = CATEGORIES.find((c) => c.id === category);
   const [places, setPlaces] = useState<Place[]>([]);
+  const [flags, setFlags] = useState<Country[]>([]);
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<Sort>("rating");
+  const [draftQ, setDraftQ] = useState("");
   const [country, setCountry] = useState("");
+  const [draft, setDraft] = useState("");
   const [friendly, setFriendly] = useState(false);
+  const [draftFriendly, setDraftFriendly] = useState(false);
+  const [eco, setEco] = useState(false);
+  const [draftEco, setDraftEco] = useState(false);
+  const [near, setNear] = useState(false);
+  const [draftNear, setDraftNear] = useState(false);
   const [filters, setFilters] = useState(false);
+  const [openList, setOpenList] = useState(false);
   const [here, setHere] = useState<{ lat: number; lon: number } | null>(null);
   const [limit, setLimit] = useState(12);
 
   useEffect(() => {
     loadPlaces().then(setPlaces);
+    loadCountries().then(setFlags);
     navigator.geolocation?.getCurrentPosition(
       (p) => setHere({ lat: p.coords.latitude, lon: p.coords.longitude }),
       () => setHere({ lat: 42.43, lon: 19.26 }),
@@ -40,59 +47,52 @@ export function CategoryList() {
         (p) =>
           p.name.toLowerCase().includes(s) ||
           p.city.toLowerCase().includes(s) ||
-          p.country.toLowerCase().includes(s),
+          p.country.toLowerCase().includes(s) ||
+          (p.address ?? "").toLowerCase().includes(s),
       );
     }
     if (country) rows = rows.filter((p) => p.country === country);
     if (friendly) rows = rows.filter((p) => p.bikersFriendly);
+    if (eco) rows = rows.filter((p) => (p.amenities ?? []).some((a) => /eco/i.test(a)) || /eco/i.test(p.name));
     const withDist = rows.map((p) => ({
       p,
       d: here ? haversineKm(here, { lat: p.lat, lon: p.lon }) : undefined,
     }));
-    withDist.sort((a, b) => {
-      if (sort === "distance") return (a.d ?? 9e9) - (b.d ?? 9e9);
-      if (sort === "rating") return (b.p.rating ?? 0) - (a.p.rating ?? 0);
-      if (sort === "reviews") return b.p.reviews - a.p.reviews;
-      return b.p.id.localeCompare(a.p.id);
-    });
-    return withDist;
-  }, [places, type, q, sort, country, friendly, here]);
+    const limited = near ? withDist.filter((x) => (x.d ?? 9e9) <= 50) : withDist;
+    limited.sort((a, b) => (b.p.rating ?? 0) - (a.p.rating ?? 0));
+    return limited;
+  }, [places, type, q, country, friendly, eco, near, here]);
 
   const countries = useMemo(
-    () =>
-      Array.from(new Set(byCategory(places, type ?? "hotels").map((p) => p.country))).sort(),
+    () => Array.from(new Set(byCategory(places, type ?? "hotels").map((p) => p.country))).sort(),
     [places, type],
   );
 
   if (!meta || !type) return <div className="empty">Unknown category</div>;
+  const showEco = type === "hotels";
 
   return (
     <div className="page">
       <TopBar
-        title={country || meta.title}
+        title={meta.title}
         right={
-          <button className="icon-btn" onClick={() => setFilters(true)} aria-label="Filters">
+          <button
+            className="icon-btn"
+            onClick={() => {
+              setDraft(country);
+              setDraftQ(q);
+              setDraftFriendly(friendly);
+              setDraftEco(eco);
+              setDraftNear(near);
+              setOpenList(false);
+              setFilters(true);
+            }}
+            aria-label="Filters"
+          >
             <IconFilter />
           </button>
         }
       />
-      <div className="search-row">
-        <input
-          placeholder="Search name, city..."
-          value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setLimit(12);
-          }}
-        />
-      </div>
-      <div className="filters">
-        {(["rating", "distance", "reviews", "newest"] as Sort[]).map((s) => (
-          <button key={s} className={`chip ${sort === s ? "on" : ""}`} onClick={() => setSort(s)}>
-            {s[0].toUpperCase() + s.slice(1)}
-          </button>
-        ))}
-      </div>
       {list.slice(0, limit).map(({ p, d }) => (
         <ObjectCard key={p.id} place={p} distanceKm={d} />
       ))}
@@ -108,20 +108,86 @@ export function CategoryList() {
       {filters && (
         <>
           <div className="backdrop" onClick={() => setFilters(false)} />
-          <div className="sheet">
-            <h3>Filters</h3>
-            <label className="lbl">Country</label>
-            <select value={country} onChange={(e) => setCountry(e.target.value)}>
-              <option value="">All countries</option>
-              {countries.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-            <label style={{ display: "flex", gap: 8, margin: "12px 0" }}>
-              <input type="checkbox" checked={friendly} onChange={(e) => setFriendly(e.target.checked)} />
-              Bikers friendly only
+          <div className="country-sheet">
+            <div className="sheet-handle" />
+            <div className="globe-ico" aria-hidden>
+              <svg viewBox="0 0 64 64" width="54" height="54">
+                <circle cx="28" cy="30" r="16" fill="none" stroke="#222" strokeWidth="2.4" />
+                <path
+                  d="M12 30h32M28 14c6 5 9 10 9 16s-3 11-9 16c-6-5-9-10-9-16s3-11 9-16z"
+                  fill="none"
+                  stroke="#222"
+                  strokeWidth="2"
+                />
+                <path d="M40 40l10 14h-8l-4-6z" fill="#222" />
+              </svg>
+            </div>
+            <button className="country-pick" onClick={() => setOpenList((v) => !v)}>
+              {draft || "All countries"}
+              <span>{openList ? "▴" : "▾"}</span>
+            </button>
+            {openList && (
+              <div className="country-menu">
+                <button className={!draft ? "on" : ""} onClick={() => setDraft("")}>
+                  All countries
+                </button>
+                {countries.map((c) => {
+                  const flag = flags.find((f) => f.title === c);
+                  return (
+                    <button key={c} className={draft === c ? "on" : ""} onClick={() => setDraft(c)}>
+                      {flag?.flag && <img src={flag.flag} alt="" width={22} height={16} />}
+                      {c}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <label className="sheet-search">
+              <IconSearch />
+              <input
+                placeholder="Search..."
+                value={draftQ}
+                onChange={(e) => setDraftQ(e.target.value)}
+              />
             </label>
-            <button className="btn blue" onClick={() => setFilters(false)}>
+            <div className="filter-icons">
+              <button
+                type="button"
+                className={draftFriendly ? "on" : ""}
+                onClick={() => setDraftFriendly((v) => !v)}
+              >
+                <span className="filter-ico">
+                  <IconPinStar />
+                </span>
+                Bikers friendly
+              </button>
+              {showEco && (
+                <button type="button" className={draftEco ? "on" : ""} onClick={() => setDraftEco((v) => !v)}>
+                  <span className="filter-ico">
+                    <IconEco />
+                  </span>
+                  Eco village
+                </button>
+              )}
+              <button type="button" className={draftNear ? "on" : ""} onClick={() => setDraftNear((v) => !v)}>
+                <span className="filter-ico">
+                  <IconNear />
+                </span>
+                Within 50 km
+              </button>
+            </div>
+            <button
+              className="btn apply"
+              onClick={() => {
+                setCountry(draft);
+                setQ(draftQ);
+                setFriendly(draftFriendly);
+                setEco(draftEco);
+                setNear(draftNear);
+                setLimit(12);
+                setFilters(false);
+              }}
+            >
               Apply
             </button>
           </div>

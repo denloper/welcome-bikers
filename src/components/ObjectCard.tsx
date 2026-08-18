@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import type { Place } from "../types";
 import { photosFor } from "../lib/photos";
-import { PlacePhoto } from "./PlacePhoto";
+import { fullAddress } from "../lib/hours";
+import { PhotoCarousel } from "./PhotoCarousel";
+import { HoursToggle } from "./HoursToggle";
 import { Stars } from "./Stars";
-import { AmenityIcon, IconGlobe, IconPin } from "./Icons";
+import { AmenityIcon, IconGlobe, IconPinStar } from "./Icons";
 
 export function ObjectCard({
   place,
@@ -12,33 +14,34 @@ export function ObjectCard({
   place: Place;
   distanceKm?: number;
 }) {
-  const photo = photosFor(place)[0];
+  const photos = photosFor(place);
   const tags = [
     ...(place.bikersFriendly ? ["Bikers friendly"] : []),
-    ...(place.amenities ?? []).filter((a) => a !== "Bikers friendly"),
+    ...(place.amenities ?? [])
+      .map((a) => (a === "Motorcycle Parking" ? "Moto Parking" : a))
+      .filter((a) => a !== "Bikers friendly"),
   ].slice(0, 2);
-  const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.address || place.name)}`;
+  const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullAddress(place) || place.name)}`;
 
   return (
     <article className="card">
-      <div className="card-photo">
-        <PlacePhoto src={photo} alt={place.name} />
-      </div>
+      <PhotoCarousel photos={photos} alt={place.name} className="card-photo" />
       <div className="card-body">
         <div className="addr-line">
-          <span>{place.address}</span>
+          <span>{fullAddress(place)}</span>
           <a className="addr-globe" href={place.website || maps} target="_blank" rel="noreferrer" aria-label="Open map">
             <IconGlobe />
           </a>
         </div>
         <div className="place-name">{place.name}</div>
-        <div style={{ margin: "6px 0 8px" }}>
+        <HoursToggle hours={place.openingHours} />
+        <div style={{ margin: "8px 0" }}>
           <Stars value={place.rating} />
         </div>
         <div className="badges">
           {tags.map((t) => (
             <i key={t}>
-              {t === "Bikers friendly" ? <IconPin /> : <AmenityIcon name={t} />}
+              {t === "Bikers friendly" ? <IconPinStar /> : <AmenityIcon name={t} />}
               {t}
             </i>
           ))}

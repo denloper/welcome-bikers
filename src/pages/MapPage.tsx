@@ -8,7 +8,7 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { IconBack, IconFilter, IconInfo, IconLocate, IconSearch, IconSun } from "../components/Icons";
 import { loadPlaces } from "../lib/data";
 import { asset } from "../lib/assets";
-import { googleRouteUrl, validCoords } from "../lib/geo";
+import { validCoords } from "../lib/geo";
 import { addDarkTiles, satTiles } from "../lib/osm";
 import { TYPE_LABEL } from "../lib/categories";
 import type { Place, PlaceType } from "../types";
@@ -36,9 +36,9 @@ function pinIcon(type: PlaceType) {
   const tone = RED[type] ? "red" : "white";
   return L.divIcon({
     className: "wb-pin",
-    html: `<span class="wb-pin-wrap ${tone}"><img src="${src}" alt="" width="22" height="22"/></span>`,
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
+        html: `<span class="wb-pin-wrap ${tone} drop"><img src="${src}" alt="" width="18" height="18"/></span>`,
+        iconSize: [28, 36],
+        iconAnchor: [14, 34],
   });
 }
 
@@ -170,18 +170,15 @@ export function MapPage() {
         </button>
       </div>
       {picked && (
-        <div className="sheet" style={{ paddingBottom: 90 }}>
+        <div className="map-card">
           <b>{picked.name}</b>
           <p className="muted">
             {TYPE_LABEL[picked.types[0]]} · {picked.city}, {picked.country}
           </p>
           <div className="row-btns">
             <button className="btn blue" onClick={() => nav(`/object/${picked.id}`)}>
-              Open
+              More details
             </button>
-            <a className="btn ghost" href={googleRouteUrl(picked.lat, picked.lon)} target="_blank" rel="noreferrer">
-              Route
-            </a>
           </div>
           <button className="btn ghost" onClick={() => setPicked(null)}>
             Close
@@ -210,19 +207,33 @@ export function MapPage() {
         </>
       )}
       {info && (
-        <>
-          <div className="backdrop" onClick={() => setInfo(false)} />
-          <div className="sheet">
-            <h3>Map</h3>
-            <p className="muted">
-              Google Maps does not allow this GitHub Pages site to use their key, so the map runs on OpenStreetMap.
-              Route still opens Google / Apple / Waze in a new tab.
+        <div className="map-legend" onClick={() => setInfo(false)}>
+          <div className="map-legend-inner" onClick={(e) => e.stopPropagation()}>
+            <p className="map-tip">
+              <span className="tip-i">i</span>
+              Leave a quick rating or review after your visit. This helps other riders and keeps the map useful for
+              planning the best biker routes!
             </p>
-            <button className="btn blue" onClick={() => setInfo(false)}>
-              OK
+            <p>
+              <b>Black or white pins:</b> Places recommended by real bikers. These are tested and trusted by biker
+              community.
+            </p>
+            <p>
+              <b>Red pins:</b> Our official partners. They are biker-friendly and often offer discounts, gifts or special
+              service for Welcome Bikers users.
+            </p>
+            <p>
+              <b>Search by name</b> — find hotels, restaurants or any place you want.
+            </p>
+            <p>
+              <b>Filters</b> — show only what you need: biker bars, service stations, festivals, motels, rentals, and
+              more.
+            </p>
+            <button className="btn ghost" onClick={() => setInfo(false)}>
+              Ok
             </button>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

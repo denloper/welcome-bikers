@@ -10,7 +10,7 @@ export const OVERRIDES: Record<string, Partial<Place>> = {
 };
 
 export const DEFAULT_AMENITIES: Record<string, string[]> = {
-  hotels: ["Bikers friendly", "Card payment", "Wi-Fi", "Motorcycle Parking"],
+  hotels: ["Bikers friendly", "Card payment", "Wi-Fi", "Moto Parking"],
   shops: ["Spare parts", "Gear", "Card payment"],
   bars: ["Bikers friendly", "Food & Beverages"],
   restaurants: ["Card payment", "Food & Beverages"],
