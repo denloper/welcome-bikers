@@ -318,9 +318,15 @@ textarea { min-height: 96px; resize: vertical; }
   border: 0;
   border-radius: 10px;
   margin: 8px 0 16px;
+  overflow: hidden;
+}
+.mini-map .leaflet-container {
+  height: 180px;
+  width: 100%;
 }
 .map-wrap { height: calc(100dvh - var(--nav) - 56px); }
 .map-wrap.full { height: calc(100dvh - var(--nav)); }
+.map-wrap.is-booting { visibility: hidden; }
 .leaflet-container { background: #0b1220; font-family: inherit; }
 .map-tools {
   position: absolute;
