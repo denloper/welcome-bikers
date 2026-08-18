@@ -77,18 +77,22 @@ export function MapPage() {
   useEffect(() => {
     if (!mapEl.current) return;
     const map = L.map(mapEl.current, { zoomControl: false, attributionControl: false }).setView([45.1, 16.5], 5);
-    const osm = addDarkTiles(map, osmRef);
+    addDarkTiles(map, osmRef);
     const hybrid = satTiles();
     const cluster = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 48 });
     map.addLayer(cluster);
     mapRef.current = map;
     clusterRef.current = cluster;
-    osmRef.current = osm;
     satRef.current = hybrid;
     setReady(true);
-    const t = window.setTimeout(() => map.invalidateSize(), 120);
+    const resize = () => map.invalidateSize();
+    const t = window.setTimeout(resize, 80);
+    const t2 = window.setTimeout(resize, 400);
+    window.addEventListener("resize", resize);
     return () => {
       window.clearTimeout(t);
+      window.clearTimeout(t2);
+      window.removeEventListener("resize", resize);
       map.remove();
       mapRef.current = null;
       clusterRef.current = null;

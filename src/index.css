@@ -379,11 +379,22 @@ textarea { min-height: 96px; resize: vertical; }
   height: 180px;
   width: 100%;
 }
-.map-page { position: relative; padding: 0; }
-.map-wrap { height: calc(100dvh - var(--nav) - 56px); }
-.map-wrap.full { height: calc(100dvh - var(--nav)); }
-.map-wrap .leaflet-container,
-.map-wrap.leaflet-container { height: 100%; width: 100%; background: #0b1220; }
+.map-page {
+  position: relative;
+  padding: 0;
+  height: calc(100dvh - var(--nav) - env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+}
+.map-wrap,
+.map-wrap.full,
+.map-wrap.leaflet-container,
+.map-wrap.full.leaflet-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100% !important;
+  background: #111;
+}
 .map-search {
   position: absolute;
   left: 12px;
