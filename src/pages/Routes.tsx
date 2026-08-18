@@ -183,9 +183,11 @@ export function RouteDetail() {
           </div>
         ))}
         <div className="row-btns">
-          <a className="btn blue" href={googleRouteUrl(end.lat, end.lon)} target="_blank" rel="noreferrer">
-            Let's ride!
-          </a>
+          {end && (
+            <a className="btn blue" href={googleRouteUrl(end.lat, end.lon)} target="_blank" rel="noreferrer">
+              Let's ride!
+            </a>
+          )}
           <a
             className="btn white small"
             href={route.gpxUrl ?? URL.createObjectURL(new Blob([gpx], { type: "application/gpx+xml" }))}
@@ -194,9 +196,11 @@ export function RouteDetail() {
             GPX
           </a>
         </div>
-        <p className="muted">
-          Start: {start.name} → Finish: {end.name}
-        </p>
+        {start && end && (
+          <p className="muted">
+            Start: {start.name} → Finish: {end.name}
+          </p>
+        )}
       </div>
     </div>
   );

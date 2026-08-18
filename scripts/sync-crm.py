@@ -377,12 +377,65 @@ def main() -> None:
             }
         )
 
+    chats = []
+    for row in load_backup("backup_chat"):
+        text = strip_html(row.get("message") or "")
+        image = abs_url(row.get("attachment"))
+        if not text and not image:
+            continue
+        try:
+            created = int(str(row.get("date") or "0").split(".")[0] or 0)
+        except ValueError:
+            created = 0
+        kind = str(row.get("type") or "text") or "text"
+        chats.append(
+            {
+                "id": row["id"],
+                "room": "sos" if kind == "sos" else "general",
+                "userId": row.get("user_id") or "",
+                "name": (row.get("user_name") or "Rider").strip() or "Rider",
+                "text": text or ("Photo" if image else ""),
+                "createdAt": created,
+                "image": image,
+            }
+        )
+    chats.sort(key=lambda m: m["createdAt"])
+
+    alerts = []
+    for row in load_backup("backup_sos"):
+        photos = []
+        raw = row.get("photos")
+        if isinstance(raw, str) and raw.strip():
+            u = abs_url(raw)
+            if u:
+                photos.append(u)
+        try:
+            created = int(str(row.get("date") or "0").split(".")[0] or 0)
+        except ValueError:
+            created = 0
+        alerts.append(
+            {
+                "id": row.get("id") or "",
+                "type": row.get("type") or "SOS",
+                "additional": (row.get("additional") or "").strip(),
+                "coords": (row.get("coords") or "").strip(),
+                "date": created,
+                "active": str(row.get("active")) == "1",
+                "photos": photos,
+            }
+        )
+
     dump("countries.json", countries)
     dump("objects.json", places)
     dump("routes.json", routes)
     dump("reviews.json", reviews)
     dump("hotel-rooms.json", rooms)
-    print(f"places={len(places)} skipped={skipped} routes={len(routes)} reviews={len(reviews)} rooms={len(rooms)}")
+    dump("chat.json", chats)
+    dump("sos.json", alerts)
+    print(
+        f"places={len(places)} skipped={skipped} routes={len(routes)} "
+        f"reviews={len(reviews)} rooms={len(rooms)} chat={len(chats)} sos={len(alerts)}"
+    )
 
 
 if __name__ == "__main__":
