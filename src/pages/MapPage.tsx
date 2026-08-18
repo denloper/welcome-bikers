@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MarkerClusterer } from "@googlemaps/markerclusterer";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster";
@@ -8,9 +7,8 @@ import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { IconFilter } from "../components/Icons";
 import { loadPlaces } from "../lib/data";
-import { loadGoogleMaps, waitGoogleAuth } from "../lib/googleMaps";
 import { googleRouteUrl, validCoords } from "../lib/geo";
-import { TYPE_COLOR } from "../lib/categories";
+import { TYPE_COLOR, TYPE_LABEL } from "../lib/categories";
 import type { Place, PlaceType } from "../types";
 
 const TYPES: PlaceType[] = [
@@ -25,14 +23,23 @@ const TYPES: PlaceType[] = [
   "historical",
 ];
 
+const PIN: Record<PlaceType, string> = {
+  hotels: "#4da3ff",
+  shops: "#e10600",
+  bars: "#ffb020",
+  restaurants: "#ff7a45",
+  services: "#e10600",
+  rent: "#8b6cff",
+  festivals: "#e10600",
+  viewpoints: "#3ddc84",
+  historical: "#d4a017",
+};
+
 export function MapPage() {
   const nav = useNavigate();
   const mapEl = useRef<HTMLDivElement>(null);
-  const searchEl = useRef<HTMLInputElement>(null);
-  const gmapRef = useRef<google.maps.Map | null>(null);
-  const clusterRef = useRef<MarkerClusterer | null>(null);
-  const lmapRef = useRef<L.Map | null>(null);
-  const lclusterRef = useRef<L.MarkerClusterGroup | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
   const osmRef = useRef<L.TileLayer | null>(null);
   const satRef = useRef<L.TileLayer | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
@@ -44,7 +51,6 @@ export function MapPage() {
   const [sat, setSat] = useState(false);
   const [picked, setPicked] = useState<Place | null>(null);
   const [ready, setReady] = useState(false);
-  const [engine, setEngine] = useState<"google" | "osm" | "">("");
 
   const filtered = useMemo(() => {
     const s = q.toLowerCase();
@@ -61,128 +67,50 @@ export function MapPage() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    function startOsm() {
-      if (cancelled || !mapEl.current) return;
-      mapEl.current.innerHTML = "";
-      const map = L.map(mapEl.current, { zoomControl: false }).setView([45.1, 16.5], 5);
-      const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap",
-      });
-      const hybrid = L.tileLayer(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        { attribution: "Esri" },
-      );
-      osm.addTo(map);
-      const cluster = L.markerClusterGroup();
-      map.addLayer(cluster);
-      lmapRef.current = map;
-      lclusterRef.current = cluster;
-      osmRef.current = osm;
-      satRef.current = hybrid;
-      setEngine("osm");
-      setReady(true);
-    }
-
-    loadGoogleMaps()
-      .then(async () => {
-        if (cancelled || !mapEl.current) return;
-        const map = new google.maps.Map(mapEl.current, {
-          center: { lat: 45.1, lng: 16.5 },
-          zoom: 5,
-          disableDefaultUI: true,
-          clickableIcons: false,
-          gestureHandling: "greedy",
-          backgroundColor: "#0b1220",
-        });
-        try {
-          await waitGoogleAuth();
-        } catch {
-          startOsm();
-          return;
-        }
-        if (cancelled) return;
-        gmapRef.current = map;
-        clusterRef.current = new MarkerClusterer({ map, markers: [] });
-        if (searchEl.current) {
-          const box = new google.maps.places.Autocomplete(searchEl.current, {
-            fields: ["geometry", "name"],
-          });
-          box.addListener("place_changed", () => {
-            const place = box.getPlace();
-            const loc = place.geometry?.location;
-            if (loc) map.panTo(loc);
-            map.setZoom(12);
-          });
-        }
-        setEngine("google");
-        setReady(true);
-      })
-      .catch(() => startOsm());
-
+    if (!mapEl.current) return;
+    const map = L.map(mapEl.current, { zoomControl: false, attributionControl: false }).setView([45.1, 16.5], 5);
+    const osm = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      attribution: "&copy; OpenStreetMap, Carto",
+    });
+    const hybrid = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      { attribution: "Esri" },
+    );
+    osm.addTo(map);
+    const cluster = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 48 });
+    map.addLayer(cluster);
+    mapRef.current = map;
+    clusterRef.current = cluster;
+    osmRef.current = osm;
+    satRef.current = hybrid;
+    setReady(true);
     return () => {
-      cancelled = true;
-      clusterRef.current?.clearMarkers();
+      map.remove();
+      mapRef.current = null;
       clusterRef.current = null;
-      gmapRef.current = null;
-      lmapRef.current?.remove();
-      lmapRef.current = null;
-      lclusterRef.current = null;
     };
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
-    if (engine === "google") {
-      gmapRef.current?.setMapTypeId(sat ? "hybrid" : "roadmap");
-      return;
-    }
-    const map = lmapRef.current;
+    const map = mapRef.current;
     const osm = osmRef.current;
     const hybrid = satRef.current;
-    if (!map || !osm || !hybrid) return;
+    if (!map || !osm || !hybrid || !ready) return;
     if (sat) {
-      map.removeLayer(osm);
+      if (map.hasLayer(osm)) map.removeLayer(osm);
       if (!map.hasLayer(hybrid)) hybrid.addTo(map);
     } else {
-      map.removeLayer(hybrid);
+      if (map.hasLayer(hybrid)) map.removeLayer(hybrid);
       if (!map.hasLayer(osm)) osm.addTo(map);
     }
-  }, [sat, ready, engine]);
+  }, [sat, ready]);
 
   useEffect(() => {
-    if (!ready) return;
-    if (engine === "google") {
-      const map = gmapRef.current;
-      const cluster = clusterRef.current;
-      if (!map || !cluster) return;
-      cluster.clearMarkers();
-      const markers = filtered.map((p) => {
-        const type = p.types[0];
-        const marker = new google.maps.Marker({
-          position: { lat: p.lat, lng: p.lon },
-          title: p.name,
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            fillColor: TYPE_COLOR[type] ?? "#c1121f",
-            fillOpacity: 1,
-            strokeColor: "#ffffff",
-            strokeWeight: 2,
-            scale: 8,
-          },
-        });
-        marker.addListener("click", () => setPicked(p));
-        return marker;
-      });
-      cluster.addMarkers(markers);
-      return;
-    }
-    const cluster = lclusterRef.current;
-    if (!cluster) return;
+    const cluster = clusterRef.current;
+    if (!cluster || !ready) return;
     cluster.clearLayers();
     filtered.forEach((p) => {
-      const color = TYPE_COLOR[p.types[0]] ?? "#c1121f";
+      const color = PIN[p.types[0]] ?? TYPE_COLOR[p.types[0]] ?? "#e10600";
       const marker = L.marker([p.lat, p.lon], {
         title: p.name,
         icon: L.divIcon({
@@ -195,30 +123,19 @@ export function MapPage() {
       marker.on("click", () => setPicked(p));
       cluster.addLayer(marker);
     });
-  }, [filtered, ready, engine]);
+  }, [filtered, ready]);
 
   function locate() {
     navigator.geolocation?.getCurrentPosition((pos) => {
-      const center = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      gmapRef.current?.panTo(center);
-      gmapRef.current?.setZoom(11);
-      lmapRef.current?.setView([center.lat, center.lng], 11);
+      mapRef.current?.setView([pos.coords.latitude, pos.coords.longitude], 11);
     });
   }
 
-  function zoom(delta: number) {
-    if (gmapRef.current) {
-      gmapRef.current.setZoom((gmapRef.current.getZoom() ?? 5) + delta);
-      return;
-    }
-    lmapRef.current?.setZoom((lmapRef.current.getZoom() ?? 5) + delta);
-  }
-
   return (
-    <div className="page" style={{ position: "relative" }}>
-      <div className="search-row">
+    <div className="page map-page">
+      <div className="map-wrap full" ref={mapEl} />
+      <div className="map-search">
         <input
-          ref={searchEl}
           placeholder="Search the map"
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -227,21 +144,20 @@ export function MapPage() {
           <IconFilter />
         </button>
       </div>
-      <div className={`map-wrap ${ready ? "" : "is-booting"}`} ref={mapEl} />
       <div className="map-tools">
         <button onClick={() => setFilters(true)} aria-label="filters">
           <IconFilter />
         </button>
         <button onClick={() => setSat((v) => !v)}>{sat ? "Map" : "Sat"}</button>
-        <button onClick={() => zoom(1)}>+</button>
-        <button onClick={() => zoom(-1)}>−</button>
+        <button onClick={() => mapRef.current?.zoomIn()}>+</button>
+        <button onClick={() => mapRef.current?.zoomOut()}>−</button>
         <button onClick={locate}>◎</button>
       </div>
       {picked && (
         <div className="sheet" style={{ paddingBottom: 90 }}>
           <b>{picked.name}</b>
           <p className="muted">
-            {picked.city}, {picked.country}
+            {TYPE_LABEL[picked.types[0]]} · {picked.city}, {picked.country}
           </p>
           <div className="row-btns">
             <button className="btn blue" onClick={() => nav(`/object/${picked.id}`)}>
@@ -268,7 +184,7 @@ export function MapPage() {
                   checked={!!on[t]}
                   onChange={(e) => setOn((prev) => ({ ...prev, [t]: e.target.checked }))}
                 />
-                {t}
+                {TYPE_LABEL[t]}
               </label>
             ))}
             <button className="btn blue" onClick={() => setFilters(false)}>

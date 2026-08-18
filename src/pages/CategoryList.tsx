@@ -89,7 +89,7 @@ export function CategoryList() {
       <div className="filters">
         {(["rating", "distance", "reviews", "newest"] as Sort[]).map((s) => (
           <button key={s} className={`chip ${sort === s ? "on" : ""}`} onClick={() => setSort(s)}>
-            {s}
+            {s[0].toUpperCase() + s.slice(1)}
           </button>
         ))}
       </div>

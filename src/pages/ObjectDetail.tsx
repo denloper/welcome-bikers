@@ -5,6 +5,7 @@ import { Stars } from "../components/Stars";
 import { IconShare } from "../components/Icons";
 import { GoogleMiniMap } from "../components/GoogleMiniMap";
 import { getPlace, loadPlaces } from "../lib/data";
+import { TYPE_LABEL } from "../lib/categories";
 import { photosFor } from "../lib/photos";
 import { PlacePhoto } from "../components/PlacePhoto";
 import { appleMapsUrl, googleRouteUrl, validCoords, wazeUrl } from "../lib/geo";
@@ -41,7 +42,7 @@ export function ObjectDetail() {
   return (
     <div className="page">
       <TopBar
-        title={place.types.includes("hotels") ? "Hotel" : place.types[0]}
+        title={place.types.includes("hotels") ? "Hotel" : TYPE_LABEL[place.types[0]]}
         right={
           <button className="icon-btn" onClick={share} aria-label="Share">
             <IconShare />

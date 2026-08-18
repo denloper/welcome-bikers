@@ -195,7 +195,7 @@ textarea { min-height: 96px; resize: vertical; }
   height: 210px;
 }
 .card-photo img { width: 100%; height: 100%; object-fit: cover; }
-.card-body { padding: 12px 4px 4px; }
+.card-body { padding: 14px 12px 12px; }
 .muted { color: var(--muted); font-size: 13px; }
 .addr { color: #cfcfcf; font-size: 13px; display: flex; gap: 6px; align-items: flex-start; }
 .addr svg { width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; }
@@ -324,15 +324,33 @@ textarea { min-height: 96px; resize: vertical; }
   height: 180px;
   width: 100%;
 }
+.map-page { position: relative; padding: 0; }
 .map-wrap { height: calc(100dvh - var(--nav) - 56px); }
 .map-wrap.full { height: calc(100dvh - var(--nav)); }
-.map-wrap.is-booting { visibility: hidden; }
-.leaflet-container { background: #0b1220; font-family: inherit; }
+.map-wrap .leaflet-container,
+.map-wrap.leaflet-container { height: 100%; width: 100%; background: #0b1220; }
+.map-search {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 10px;
+  z-index: 500;
+  display: flex;
+  gap: 8px;
+}
+.map-search input {
+  flex: 1;
+  background: #111c;
+  backdrop-filter: blur(10px);
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
 .map-tools {
   position: absolute;
   right: 10px;
-  top: 70px;
-  z-index: 400;
+  top: 64px;
+  z-index: 500;
   display: flex;
   flex-direction: column;
   gap: 8px;
