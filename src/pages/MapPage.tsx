@@ -12,6 +12,7 @@ import {
   IconGlobe,
   IconGo,
   IconInfo,
+  IconLayers,
   IconLocate,
   IconMenu,
   IconMoon,
@@ -26,7 +27,7 @@ import { PlacePhoto } from "../components/PlacePhoto";
 import { loadPlaces } from "../lib/data";
 import { asset } from "../lib/assets";
 import { bearingDeg, haversineKm, pointAhead, validCoords } from "../lib/geo";
-import { addDarkTiles, lightTiles } from "../lib/osm";
+import { darkTiles, lightTiles, satTiles } from "../lib/osm";
 import {
   formatArrival,
   formatDriveTime,
@@ -38,7 +39,7 @@ import {
   type NavStep,
 } from "../lib/osrm";
 import { photosFor } from "../lib/photos";
-import { TYPE_CHIP } from "../lib/categories";
+import { TYPE_CHIP, TYPE_COLOR } from "../lib/categories";
 import type { Place, PlaceType } from "../types";
 
 const TYPES: PlaceType[] = [
@@ -53,22 +54,16 @@ const TYPES: PlaceType[] = [
   "historical",
 ];
 
-const RED: Partial<Record<PlaceType, boolean>> = {
-  shops: true,
-  services: true,
-  festivals: true,
-};
-
 type Stop = { lat: number; lon: number; label: string; role: "start" | "via" | "end" };
 
 function pinIcon(type: PlaceType) {
   const src = asset(`icons/${type}.png`);
-  const tone = RED[type] ? "red" : "white";
+  const tone = TYPE_COLOR[type] === "#1f1f1f" ? "black" : "red";
   return L.divIcon({
     className: "wb-pin",
     html: `<span class="wb-pin-wrap ${tone} drop"><img src="${src}" alt="" width="18" height="18"/></span>`,
-    iconSize: [28, 36],
-    iconAnchor: [14, 34],
+    iconSize: [30, 38],
+    iconAnchor: [15, 36],
   });
 }
 
@@ -175,6 +170,7 @@ export function MapPage() {
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
   const osmRef = useRef<L.TileLayer | null>(null);
   const lightRef = useRef<L.TileLayer | null>(null);
+  const satRef = useRef<L.TileLayer | null>(null);
   const lineRef = useRef<L.Polyline | null>(null);
   const endsRef = useRef<L.LayerGroup | null>(null);
   const meRef = useRef<L.Marker | null>(null);
@@ -187,7 +183,9 @@ export function MapPage() {
   const [draftFriendly, setDraftFriendly] = useState(false);
   const [filters, setFilters] = useState(false);
   const [info, setInfo] = useState(false);
-  const [light, setLight] = useState(false);
+  const [light, setLight] = useState(true);
+  const [sat, setSat] = useState(false);
+  const [layersOpen, setLayersOpen] = useState(false);
   const [picked, setPicked] = useState<Place | null>(null);
   const [ready, setReady] = useState(false);
   const [stops, setStops] = useState<Stop[] | null>(null);
@@ -226,13 +224,16 @@ export function MapPage() {
   useEffect(() => {
     if (!mapEl.current) return;
     const map = L.map(mapEl.current, { zoomControl: false, attributionControl: false }).setView([45.1, 16.5], 5);
-    addDarkTiles(map, osmRef);
-    const lightLayer = lightTiles();
+    const dark = darkTiles(0);
+    const day = lightTiles().addTo(map);
+    const satLayer = satTiles();
     const cluster = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 48 });
     map.addLayer(cluster);
     mapRef.current = map;
     clusterRef.current = cluster;
-    lightRef.current = lightLayer;
+    osmRef.current = dark;
+    lightRef.current = day;
+    satRef.current = satLayer;
     endsRef.current = L.layerGroup().addTo(map);
     setReady(true);
     const resize = () => map.invalidateSize();
@@ -247,6 +248,7 @@ export function MapPage() {
       mapRef.current = null;
       clusterRef.current = null;
       endsRef.current = null;
+      satRef.current = null;
     };
   }, []);
 
@@ -254,15 +256,17 @@ export function MapPage() {
     const map = mapRef.current;
     const dark = osmRef.current;
     const day = lightRef.current;
-    if (!map || !dark || !day || !ready) return;
-    if (light) {
-      if (map.hasLayer(dark)) map.removeLayer(dark);
-      if (!map.hasLayer(day)) day.addTo(map);
-    } else {
-      if (map.hasLayer(day)) map.removeLayer(day);
-      if (!map.hasLayer(dark)) dark.addTo(map);
+    const satLayer = satRef.current;
+    if (!map || !dark || !day || !satLayer || !ready) return;
+    const show = sat ? satLayer : light ? day : dark;
+    for (const layer of [dark, day, satLayer]) {
+      if (layer === show) {
+        if (!map.hasLayer(layer)) layer.addTo(map);
+      } else if (map.hasLayer(layer)) {
+        map.removeLayer(layer);
+      }
     }
-  }, [light, ready]);
+  }, [light, sat, ready]);
 
   useEffect(() => {
     const cluster = clusterRef.current;
@@ -628,6 +632,41 @@ export function MapPage() {
         </>
       )}
       <div className={`map-tools${trip && !navigating ? " route-tools" : ""}`}>
+        {!trip && (
+          <div className="map-tool-wrap">
+            <button
+              className={`map-round${sat ? " on" : ""}`}
+              onClick={() => setLayersOpen((v) => !v)}
+              aria-label="Map layers"
+            >
+              <IconLayers />
+            </button>
+            {layersOpen && (
+              <div className="map-layer-menu">
+                <button
+                  type="button"
+                  className={!sat ? "on" : ""}
+                  onClick={() => {
+                    setSat(false);
+                    setLayersOpen(false);
+                  }}
+                >
+                  Map
+                </button>
+                <button
+                  type="button"
+                  className={sat ? "on" : ""}
+                  onClick={() => {
+                    setSat(true);
+                    setLayersOpen(false);
+                  }}
+                >
+                  Satellite
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {!navigating && (
           <button
             className="map-round"
@@ -641,8 +680,19 @@ export function MapPage() {
             <IconFilter />
           </button>
         )}
-        <button className="map-round" onClick={() => setLight((v) => !v)} aria-label="map theme">
-          {light ? <IconMoon /> : <IconSun />}
+        <button
+          className="map-round"
+          onClick={() => {
+            if (sat) {
+              setSat(false);
+              setLight(true);
+            } else {
+              setLight((v) => !v);
+            }
+          }}
+          aria-label="map theme"
+        >
+          {light && !sat ? <IconSun /> : <IconMoon />}
         </button>
         {!trip && (
           <>
@@ -816,7 +866,7 @@ export function MapPage() {
                 planning the best biker routes!
               </p>
               <p>
-                <b>Black or white pins:</b> Places recommended by real bikers. These are tested and trusted by biker
+                <b>Black pins:</b> Places recommended by real bikers. These are tested and trusted by biker
                 community.
               </p>
               <p>

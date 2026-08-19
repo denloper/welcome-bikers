@@ -61,6 +61,15 @@ export function IconFilter({ className }: P) {
     </svg>
   );
 }
+export function IconLayers({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+      <path d="M12 3.5 20 8l-8 4.5L4 8z" />
+      <path d="m6.2 12.2 5.8 3.3 5.8-3.3" />
+      <path d="m6.2 15.6 5.8 3.3 5.8-3.3" />
+    </svg>
+  );
+}
 export function IconPhone({ className }: P) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
