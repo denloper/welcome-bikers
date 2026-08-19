@@ -1,40 +1,52 @@
 import { useId } from "react";
 
-/** Chubby 5-point star; round stroke makes the tips like the original app. */
+/** Short-point star; thick round stroke + slight blur matches the original app. */
 const STAR =
-  "M12 3.4 14.35 9.1 20.6 9.7 15.85 13.9 17.3 20.2 12 16.85 6.7 20.2 8.15 13.9 3.4 9.7 9.65 9.1 Z";
+  "M12 3.6 14.12 8.9 19.9 9.42 15.7 13.18 16.92 18.9 12 16.05 7.08 18.9 8.3 13.18 4.1 9.42 9.88 8.9 Z";
 
 function Star({ fill }: { fill: number }) {
   const t = Math.max(0, Math.min(1, fill));
-  const clip = useId().replace(/:/g, "");
+  const uid = useId().replace(/:/g, "");
+  const clip = `${uid}-c`;
+  const round = `${uid}-r`;
   return (
     <span className="star-unit">
       <svg viewBox="0 0 24 24" overflow="visible">
-        <path
-          d={STAR}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3.2"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
         <defs>
+          <filter id={round} x="-35%" y="-35%" width="170%" height="170%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="0.85" result="b" />
+            <feColorMatrix
+              in="b"
+              type="matrix"
+              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -8"
+            />
+          </filter>
           <clipPath id={clip}>
-            <rect x="-2" y="-2" width={4 + 24 * t} height="28" />
+            <rect x="-4" y="-4" width={8 + 24 * t} height="32" />
           </clipPath>
         </defs>
-        {t > 0 && (
-          <g clipPath={`url(#${clip})`}>
-            <path
-              d={STAR}
-              fill="currentColor"
-              stroke="currentColor"
-              strokeWidth="3.2"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          </g>
-        )}
+        <g filter={`url(#${round})`}>
+          <path
+            d={STAR}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="4.4"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+          {t > 0 && (
+            <g clipPath={`url(#${clip})`}>
+              <path
+                d={STAR}
+                fill="currentColor"
+                stroke="currentColor"
+                strokeWidth="4.4"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            </g>
+          )}
+        </g>
       </svg>
     </span>
   );

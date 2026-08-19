@@ -181,7 +181,7 @@ export function ObjectDetail() {
             <button
               className="btn green"
               disabled={!canRoute}
-              onClick={() => nav(`/map?to=${place.lat},${place.lon}`)}
+              onClick={() => nav(`/map?to=${place.lat},${place.lon}&name=${encodeURIComponent(place.name)}&type=${place.types[0]}`)}
             >
               In the app
             </button>

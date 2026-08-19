@@ -192,7 +192,9 @@ export function RouteDetail() {
             onClick={() => {
               const pts = route.points.filter((p) => validCoords(p.lat, p.lon));
               if (!pts.length) return;
-              nav(`/map?via=${pts.map((p) => `${p.lat},${p.lon}`).join("|")}`);
+              nav(
+                `/map?via=${pts.map((p) => `${p.lat},${p.lon}`).join("|")}&name=${encodeURIComponent(end?.name || route.title)}`,
+              );
             }}
           >
             Let's ride!

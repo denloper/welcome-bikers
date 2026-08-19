@@ -8,6 +8,9 @@ _refs
 _hist.json
 _vk.json
 _parse_vk.py
+_vk_out.txt
+_vk_reply.txt
+_dl_vk.py
 _sample_obj.py
 tmp-vk
 .cursor

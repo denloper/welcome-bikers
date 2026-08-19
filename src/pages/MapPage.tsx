@@ -10,10 +10,12 @@ import {
   IconBack,
   IconFilter,
   IconGlobe,
+  IconGo,
   IconInfo,
   IconLocate,
   IconMenu,
   IconMoon,
+  IconPlus,
   IconSearch,
   IconShare,
   IconSun,
@@ -23,11 +25,20 @@ import { Stars } from "../components/Stars";
 import { PlacePhoto } from "../components/PlacePhoto";
 import { loadPlaces } from "../lib/data";
 import { asset } from "../lib/assets";
-import { validCoords } from "../lib/geo";
+import { haversineKm, validCoords } from "../lib/geo";
 import { addDarkTiles, lightTiles } from "../lib/osm";
-import { osrmDrive } from "../lib/osrm";
+import {
+  formatArrival,
+  formatDriveTime,
+  formatMeters,
+  osrmRoute,
+  stepThen,
+  stepToward,
+  type DriveRoute,
+  type NavStep,
+} from "../lib/osrm";
 import { photosFor } from "../lib/photos";
-import { TYPE_CHIP, TYPE_LABEL } from "../lib/categories";
+import { TYPE_CHIP } from "../lib/categories";
 import type { Place, PlaceType } from "../types";
 
 const TYPES: PlaceType[] = [
@@ -48,6 +59,8 @@ const RED: Partial<Record<PlaceType, boolean>> = {
   festivals: true,
 };
 
+type Stop = { lat: number; lon: number; label: string; role: "start" | "via" | "end" };
+
 function pinIcon(type: PlaceType) {
   const src = asset(`icons/${type}.png`);
   const tone = RED[type] ? "red" : "white";
@@ -56,6 +69,23 @@ function pinIcon(type: PlaceType) {
     html: `<span class="wb-pin-wrap ${tone} drop"><img src="${src}" alt="" width="18" height="18"/></span>`,
     iconSize: [28, 36],
     iconAnchor: [14, 34],
+  });
+}
+
+function meIcon(heading?: number) {
+  if (heading == null) {
+    return L.divIcon({
+      className: "wb-me",
+      html: `<span class="wb-me-dot"></span>`,
+      iconSize: [18, 18],
+      iconAnchor: [9, 9],
+    });
+  }
+  return L.divIcon({
+    className: "wb-me",
+    html: `<span class="wb-nav-arrow" style="transform:rotate(${heading}deg)"></span>`,
+    iconSize: [20, 22],
+    iconAnchor: [10, 14],
   });
 }
 
@@ -70,6 +100,75 @@ function parsePts(raw: string | null) {
     .filter((p) => validCoords(p.lat, p.lon));
 }
 
+function getHere(): Promise<{ lat: number; lon: number } | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      () => resolve(null),
+      { timeout: 5000, maximumAge: 30_000 },
+    );
+  });
+}
+
+function nearestPlace(places: Place[], lat: number, lon: number): Place | null {
+  let best: Place | null = null;
+  let d = 0.25;
+  for (const p of places) {
+    if (!validCoords(p.lat, p.lon)) continue;
+    const km = haversineKm({ lat, lon }, p);
+    if (km < d) {
+      d = km;
+      best = p;
+    }
+  }
+  return best;
+}
+
+function TurnArrow({ turn }: { turn: string }) {
+  const t = turn.toLowerCase();
+  let d = "M12 20V6M12 6l-5 5M12 6l5 5";
+  if (t.includes("left")) d = "M18 12H6M6 12l5-5M6 12l5 5";
+  else if (t.includes("right")) d = "M6 12h12M18 12l-5-5M18 12l-5 5";
+  else if (t.includes("uturn") || t.includes("u-turn")) d = "M8 18V10a4 4 0 0 1 8 0v2M8 18l-3-3M8 18l3-3";
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+      <path d={d} />
+    </svg>
+  );
+}
+
+function remainingAlong(route: DriveRoute, here: { lat: number; lon: number }) {
+  const pts = route.geometry;
+  if (pts.length < 2) return { distance: route.distance, duration: route.duration, stepI: 0 };
+  let bestI = 0;
+  let best = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const km = haversineKm(here, { lat: pts[i][0], lon: pts[i][1] });
+    if (km < best) {
+      best = km;
+      bestI = i;
+    }
+  }
+  let rest = 0;
+  for (let i = bestI; i < pts.length - 1; i++) {
+    rest += haversineKm({ lat: pts[i][0], lon: pts[i][1] }, { lat: pts[i + 1][0], lon: pts[i + 1][1] }) * 1000;
+  }
+  const ratio = route.distance > 0 ? rest / route.distance : 1;
+  let traveled = route.distance - rest;
+  let acc = 0;
+  let stepI = 0;
+  for (let i = 0; i < route.steps.length; i++) {
+    acc += route.steps[i].distance;
+    if (acc >= traveled) {
+      stepI = i;
+      break;
+    }
+    stepI = i;
+  }
+  return { distance: rest, duration: route.duration * ratio, stepI };
+}
+
 export function MapPage() {
   const nav = useNavigate();
   const [params] = useSearchParams();
@@ -79,6 +178,9 @@ export function MapPage() {
   const osmRef = useRef<L.TileLayer | null>(null);
   const lightRef = useRef<L.TileLayer | null>(null);
   const lineRef = useRef<L.Polyline | null>(null);
+  const endsRef = useRef<L.LayerGroup | null>(null);
+  const meRef = useRef<L.Marker | null>(null);
+  const watchRef = useRef<number | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
   const [q, setQ] = useState("");
   const [on, setOn] = useState<Record<string, boolean>>(Object.fromEntries(TYPES.map((t) => [t, true])));
@@ -90,6 +192,13 @@ export function MapPage() {
   const [light, setLight] = useState(false);
   const [picked, setPicked] = useState<Place | null>(null);
   const [ready, setReady] = useState(false);
+  const [stops, setStops] = useState<Stop[] | null>(null);
+  const [tolls, setTolls] = useState(false);
+  const [drive, setDrive] = useState<DriveRoute | null>(null);
+  const [navigating, setNavigating] = useState(false);
+  const [pickMode, setPickMode] = useState<null | "start" | "via">(null);
+  const [here, setHere] = useState<{ lat: number; lon: number } | null>(null);
+  const [heading, setHeading] = useState<number | null>(null);
 
   const filtered = useMemo(() => {
     const s = q.toLowerCase();
@@ -101,6 +210,12 @@ export function MapPage() {
       return true;
     });
   }, [places, q, on, friendly]);
+
+  const trip = Boolean(stops && stops.length >= 2);
+  const live = navigating && drive ? remainingAlong(drive, here || { lat: stops![0].lat, lon: stops![0].lon }) : null;
+  const nowStep: NavStep | undefined = drive?.steps[live?.stepI ?? 0];
+  const nextStep: NavStep | undefined = drive?.steps[(live?.stepI ?? 0) + 1];
+  const then = stepThen(nextStep);
 
   useEffect(() => {
     loadPlaces().then(setPlaces);
@@ -116,6 +231,7 @@ export function MapPage() {
     mapRef.current = map;
     clusterRef.current = cluster;
     lightRef.current = lightLayer;
+    endsRef.current = L.layerGroup().addTo(map);
     setReady(true);
     const resize = () => map.invalidateSize();
     const t = window.setTimeout(resize, 80);
@@ -128,6 +244,7 @@ export function MapPage() {
       map.remove();
       mapRef.current = null;
       clusterRef.current = null;
+      endsRef.current = null;
     };
   }, []);
 
@@ -154,46 +271,200 @@ export function MapPage() {
         title: p.name,
         icon: pinIcon(p.types[0]),
       });
-      marker.on("click", () => setPicked(p));
+      marker.on("click", () => {
+        if (pickMode === "via") {
+          setStops((cur) => {
+            if (!cur || cur.length < 2) return cur;
+            const next = cur.slice();
+            next.splice(next.length - 1, 0, { lat: p.lat, lon: p.lon, label: p.name, role: "via" });
+            return next;
+          });
+          setPickMode(null);
+          return;
+        }
+        if (pickMode === "start") {
+          setStops((cur) => {
+            if (!cur) return cur;
+            const next = cur.slice();
+            next[0] = { lat: p.lat, lon: p.lon, label: p.name, role: "start" };
+            return next;
+          });
+          setPickMode(null);
+          return;
+        }
+        setPicked(p);
+      });
       cluster.addLayer(marker);
     });
-  }, [filtered, ready]);
+  }, [filtered, ready, pickMode]);
+
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    async function init() {
+      const via = parsePts(params.get("via"));
+      const to = parsePts(params.get("to"));
+      const named = params.get("name")?.trim() || "";
+      if (!via.length && !to.length) {
+        if (!cancelled) {
+          setStops(null);
+          setDrive(null);
+          setNavigating(false);
+        }
+        return;
+      }
+      setPicked(null);
+      setNavigating(false);
+      if (via.length >= 2) {
+        const built: Stop[] = via.map((p, i) => {
+          const hit = nearestPlace(places, p.lat, p.lon);
+          const role: Stop["role"] = i === 0 ? "start" : i === via.length - 1 ? "end" : "via";
+          let label = hit?.name || `Stop ${i + 1}`;
+          if (i === via.length - 1 && named) label = named;
+          return { ...p, label, role };
+        });
+        if (!cancelled) setStops(built);
+        return;
+      }
+      const dest = to[0];
+      const hit = nearestPlace(places, dest.lat, dest.lon);
+      const end: Stop = {
+        ...dest,
+        label: named || hit?.name || "Destination",
+        role: "end",
+      };
+      const geo = await getHere();
+      if (cancelled) return;
+      const start: Stop = geo
+        ? { ...geo, label: "My current location", role: "start" }
+        : { ...dest, label: "My current location", role: "start" };
+      if (!geo) setPickMode("start");
+      setStops([start, end]);
+    }
+    init();
+    return () => {
+      cancelled = true;
+    };
+  }, [params, ready, places]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
-    const via = parsePts(params.get("via"));
-    const to = parsePts(params.get("to"));
-
-    async function draw(pts: { lat: number; lon: number }[]) {
-      if (lineRef.current) {
-        lineRef.current.remove();
-        lineRef.current = null;
+    if (!map || !ready || !stops || stops.length < 2) {
+      lineRef.current?.remove();
+      lineRef.current = null;
+      endsRef.current?.clearLayers();
+      return;
+    }
+    let cancelled = false;
+    async function draw() {
+      const route = await osrmRoute(stops!, { excludeToll: !tolls });
+      if (cancelled) return;
+      lineRef.current?.remove();
+      endsRef.current?.clearLayers();
+      const latlngs = route?.geometry.length ? route.geometry : stops!.map((s) => [s.lat, s.lon] as [number, number]);
+      let used = route;
+      if (!used) {
+        let meters = 0;
+        for (let i = 0; i < stops!.length - 1; i++) meters += haversineKm(stops![i], stops![i + 1]) * 1000;
+        used = {
+          geometry: latlngs,
+          distance: meters,
+          duration: (meters / 1000 / 75) * 3600,
+          steps: [],
+        };
       }
-      if (!pts.length) return;
-      let linePts = pts;
-      if (pts.length === 1) {
-        const dest = pts[0];
-        await new Promise<void>((resolve) => {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              linePts = [{ lat: pos.coords.latitude, lon: pos.coords.longitude }, dest];
-              resolve();
-            },
-            () => resolve(),
-            { timeout: 4000 },
-          );
+      setDrive(used);
+      const line = L.polyline(latlngs, { color: "#3d8aff", weight: 6, opacity: 0.95 }).addTo(map);
+      lineRef.current = line;
+      const start = stops![0];
+      const end = stops![stops!.length - 1];
+      L.circleMarker([start.lat, start.lon], {
+        radius: 8,
+        color: "#fff",
+        weight: 2,
+        fillColor: "#3d8aff",
+        fillOpacity: 1,
+      }).addTo(endsRef.current!);
+      const endPlace = nearestPlace(places, end.lat, end.lon);
+      L.marker([end.lat, end.lon], {
+        icon: pinIcon(endPlace?.types[0] || "hotels"),
+        interactive: false,
+      }).addTo(endsRef.current!);
+      map.fitBounds(line.getBounds(), { paddingTopLeft: [24, 130], paddingBottomRight: [56, 250] });
+    }
+    draw();
+    return () => {
+      cancelled = true;
+    };
+  }, [stops, tolls, ready, places]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !pickMode) return;
+    const onClick = (e: L.LeafletMouseEvent) => {
+      const hit = nearestPlace(places, e.latlng.lat, e.latlng.lng);
+      const label = hit?.name || `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+      if (pickMode === "start") {
+        setStops((cur) => {
+          if (!cur) return cur;
+          const next = cur.slice();
+          next[0] = { lat: e.latlng.lat, lon: e.latlng.lng, label: hit?.name || "My current location", role: "start" };
+          return next;
+        });
+      } else {
+        setStops((cur) => {
+          if (!cur || cur.length < 2) return cur;
+          const next = cur.slice();
+          next.splice(next.length - 1, 0, { lat: e.latlng.lat, lon: e.latlng.lng, label, role: "via" });
+          return next;
         });
       }
-      const latlngs = await osrmDrive(linePts);
-      const line = L.polyline(latlngs, { color: "#3d8aff", weight: 5, opacity: 0.9 }).addTo(map);
-      lineRef.current = line;
-      map.fitBounds(line.getBounds(), { padding: [40, 40] });
-    }
+      setPickMode(null);
+    };
+    map.on("click", onClick);
+    return () => {
+      map.off("click", onClick);
+    };
+  }, [pickMode, ready, places]);
 
-    if (via.length >= 2) draw(via);
-    else if (to.length) draw(to);
-  }, [params, ready]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!navigating || !map) {
+      if (watchRef.current != null) {
+        navigator.geolocation?.clearWatch(watchRef.current);
+        watchRef.current = null;
+      }
+      meRef.current?.remove();
+      meRef.current = null;
+      return;
+    }
+    const placeMe = (lat: number, lon: number, hd?: number | null) => {
+      setHere({ lat, lon });
+      if (hd != null && Number.isFinite(hd) && hd >= 0) setHeading(hd);
+      if (!meRef.current) {
+        meRef.current = L.marker([lat, lon], { icon: meIcon(hd ?? undefined), zIndexOffset: 800 }).addTo(map);
+      } else {
+        meRef.current.setLatLng([lat, lon]);
+        meRef.current.setIcon(meIcon(hd ?? heading ?? undefined));
+      }
+      map.setView([lat, lon], Math.max(map.getZoom(), 16), { animate: true });
+    };
+    getHere().then((p) => {
+      if (p) placeMe(p.lat, p.lon);
+      else if (stops?.[0]) placeMe(stops[0].lat, stops[0].lon);
+    });
+    if (navigator.geolocation) {
+      watchRef.current = navigator.geolocation.watchPosition(
+        (pos) => placeMe(pos.coords.latitude, pos.coords.longitude, pos.coords.heading),
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 1000 },
+      );
+    }
+    return () => {
+      if (watchRef.current != null) navigator.geolocation?.clearWatch(watchRef.current);
+      watchRef.current = null;
+    };
+  }, [navigating, stops]);
 
   function locate() {
     navigator.geolocation?.getCurrentPosition((pos) => {
@@ -210,54 +481,174 @@ export function MapPage() {
 
   function routeToPicked() {
     if (!picked) return;
-    nav(`/map?to=${picked.lat},${picked.lon}`, { replace: true });
+    nav(`/map?to=${picked.lat},${picked.lon}&name=${encodeURIComponent(picked.name)}&type=${picked.types[0]}`);
     setPicked(null);
+  }
+
+  function shareRoute() {
+    if (!stops || !drive) return;
+    const text = `${stops[0].label} → ${stops[stops.length - 1].label} · ${formatMeters(drive.distance)} · ${formatDriveTime(drive.duration)}`;
+    if (navigator.share) navigator.share({ title: "Route", text });
+    else navigator.clipboard.writeText(text);
+  }
+
+  async function useMyLocation() {
+    const geo = await getHere();
+    if (!geo) {
+      setPickMode("start");
+      return;
+    }
+    setStops((cur) => {
+      if (!cur) return cur;
+      const next = cur.slice();
+      next[0] = { ...geo, label: "My current location", role: "start" };
+      return next;
+    });
+    setPickMode(null);
   }
 
   const photos = picked ? photosFor(picked).slice(0, 2) : [];
   const site = picked?.website || (picked ? `https://www.google.com/maps/search/?api=1&query=${picked.lat},${picked.lon}` : "");
+  const hudDist = live?.distance ?? drive?.distance ?? 0;
+  const hudTime = live?.duration ?? drive?.duration ?? 0;
 
   return (
     <div className="page map-page">
       <div className="map-wrap full" ref={mapEl} />
-      <div className="map-search">
-        <button className="map-round" onClick={() => nav(-1)} aria-label="Back">
-          <IconBack />
-        </button>
-        <label className="map-q">
-          <IconSearch />
-          <input placeholder="Search the map" value={q} onChange={(e) => setQ(e.target.value)} />
-        </label>
-        <button className="map-round" onClick={() => setInfo(true)} aria-label="About map">
-          <IconInfo />
-        </button>
-      </div>
-      <div className="map-tools">
-        <button
-          className="map-round"
-          onClick={() => {
-            setDraftOn(on);
-            setDraftFriendly(friendly);
-            setFilters(true);
-          }}
-          aria-label="filters"
-        >
-          <IconFilter />
-        </button>
+      {!trip && (
+        <div className="map-search">
+          <button className="map-round" onClick={() => nav(-1)} aria-label="Back">
+            <IconBack />
+          </button>
+          <label className="map-q">
+            <IconSearch />
+            <input placeholder="Search the map" value={q} onChange={(e) => setQ(e.target.value)} />
+          </label>
+          <button className="map-round" onClick={() => setInfo(true)} aria-label="About map">
+            <IconInfo />
+          </button>
+        </div>
+      )}
+      {trip && !navigating && (
+        <div className="route-ab">
+          {stops!.map((s, i) => (
+            <button
+              key={`${s.role}-${i}`}
+              type="button"
+              className="route-stop"
+              onClick={() => {
+                if (s.role === "start") useMyLocation();
+              }}
+            >
+              <span className={`route-dot ${s.role}`}>{s.role === "via" ? i : ""}</span>
+              <div>
+                <b>{s.label}</b>
+                {s.role === "start" && <span>Tap to change</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      {pickMode && !navigating && (
+        <div className="route-hint">{pickMode === "start" ? "Tap the map to set start" : "Tap the map to add a waypoint"}</div>
+      )}
+      {navigating && drive && (
+        <>
+          <div className="nav-banner">
+            <TurnArrow turn={nowStep?.modifier || "straight"} />
+            <span>{stepToward(nowStep)}</span>
+          </div>
+          {then && (
+            <div className="nav-then">
+              <span>{then.label}</span>
+              <TurnArrow turn={then.turn} />
+            </div>
+          )}
+        </>
+      )}
+      <div className={`map-tools${trip && !navigating ? " route-tools" : ""}`}>
+        {!navigating && (
+          <button
+            className="map-round"
+            onClick={() => {
+              setDraftOn(on);
+              setDraftFriendly(friendly);
+              setFilters(true);
+            }}
+            aria-label="filters"
+          >
+            <IconFilter />
+          </button>
+        )}
         <button className="map-round" onClick={() => setLight((v) => !v)} aria-label="map theme">
           {light ? <IconMoon /> : <IconSun />}
         </button>
-        <button className="map-round" onClick={() => mapRef.current?.zoomIn()}>
-          +
-        </button>
-        <button className="map-round" onClick={() => mapRef.current?.zoomOut()}>
-          −
-        </button>
-        <button className="map-round" onClick={locate} aria-label="My location">
-          <IconLocate />
-        </button>
+        {!trip && (
+          <>
+            <button className="map-round" onClick={() => mapRef.current?.zoomIn()}>
+              +
+            </button>
+            <button className="map-round" onClick={() => mapRef.current?.zoomOut()}>
+              −
+            </button>
+            <button className="map-round" onClick={locate} aria-label="My location">
+              <IconLocate />
+            </button>
+          </>
+        )}
+        {navigating && (
+          <button
+            className="map-round"
+            onClick={() => here && mapRef.current?.setView([here.lat, here.lon], 17)}
+            aria-label="Recenter"
+          >
+            <IconLocate />
+          </button>
+        )}
       </div>
-      {picked && (
+      {trip && !navigating && drive && (
+        <div className="route-sheet">
+          <div className="route-sheet-top">
+            <div>
+              <p className="route-time">{formatDriveTime(drive.duration)}</p>
+              <p className="route-meta">
+                {formatArrival(drive.duration)}
+                <br />
+                {formatMeters(drive.distance)}
+              </p>
+            </div>
+            <button className="route-share" onClick={shareRoute} aria-label="Share">
+              <IconShare />
+            </button>
+          </div>
+          <label className="route-toll">
+            Toll roads
+            <button type="button" className={`sw${tolls ? " on" : ""}`} onClick={() => setTolls((v) => !v)} aria-label="Toll roads">
+              <i />
+            </button>
+          </label>
+          <button className="btn green route-go" onClick={() => setNavigating(true)}>
+            <IconGo />
+            GO!
+          </button>
+          <button className="btn white route-add" onClick={() => setPickMode("via")}>
+            <IconPlus />
+            Add waypoint
+          </button>
+        </div>
+      )}
+      {navigating && drive && (
+        <div className="nav-hud">
+          <div>
+            <p className="nav-hud-time">{formatDriveTime(hudTime)}</p>
+            <p className="nav-hud-km">{formatMeters(hudDist)}</p>
+          </div>
+          <button className="nav-exit" onClick={() => setNavigating(false)}>
+            EXIT
+          </button>
+        </div>
+      )}
+      {picked && !trip && (
         <div className="map-place">
           <div className="map-place-top">
             <div>
