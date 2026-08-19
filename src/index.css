@@ -1094,16 +1094,23 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   transition: left .15s;
 }
 .sw.on i { left: 23px; }
-.route-go {
-  height: 52px;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+.route-sheet .btn {
+  height: 44px;
+  padding: 0 16px;
+  font-size: 16px;
+  gap: 8px;
+  white-space: nowrap;
 }
-.route-add { margin-top: 10px; height: 48px; }
+.route-sheet .btn svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+.route-go { font-size: 17px; font-weight: 800; }
+.route-add { margin-top: 8px; }
 .map-tools.route-tools {
   top: auto;
-  bottom: 268px;
+  bottom: 220px;
 }
 .nav-banner {
   position: absolute;
