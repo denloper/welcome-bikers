@@ -39,7 +39,7 @@ import {
   type NavStep,
 } from "../lib/osrm";
 import { photosFor } from "../lib/photos";
-import { TYPE_CHIP, TYPE_COLOR } from "../lib/categories";
+import { TYPE_CHIP } from "../lib/categories";
 import type { Place, PlaceType } from "../types";
 
 const TYPES: PlaceType[] = [
@@ -56,14 +56,13 @@ const TYPES: PlaceType[] = [
 
 type Stop = { lat: number; lon: number; label: string; role: "start" | "via" | "end" };
 
-function pinIcon(type: PlaceType) {
-  const src = asset(`icons/${type}.png`);
-  const tone = TYPE_COLOR[type] === "#1f1f1f" ? "black" : "red";
-  return L.divIcon({
+function pinIcon(type: PlaceType, friendly = false, darkPins = false) {
+  const tone = friendly ? "friendly" : darkPins ? "white" : "black";
+  return L.icon({
     className: "wb-pin",
-    html: `<span class="wb-pin-wrap ${tone} drop"><img src="${src}" alt="" width="18" height="18"/></span>`,
-    iconSize: [30, 38],
-    iconAnchor: [15, 36],
+    iconUrl: asset(`pins/${tone}/${type}.svg`),
+    iconSize: [30, 40],
+    iconAnchor: [15, 40],
   });
 }
 
@@ -212,6 +211,7 @@ export function MapPage() {
   }, [places, q, on, friendly]);
 
   const trip = Boolean(stops && stops.length >= 2);
+  const darkPins = !light && !sat;
   const live = navigating && drive ? remainingAlong(drive, here || { lat: stops![0].lat, lon: stops![0].lon }) : null;
   const nowStep: NavStep | undefined = drive?.steps[live?.stepI ?? 0];
   const nextStep: NavStep | undefined = drive?.steps[(live?.stepI ?? 0) + 1];
@@ -275,7 +275,7 @@ export function MapPage() {
     filtered.forEach((p) => {
       const marker = L.marker([p.lat, p.lon], {
         title: p.name,
-        icon: pinIcon(p.types[0]),
+        icon: pinIcon(p.types[0], p.bikersFriendly, darkPins),
       });
       marker.on("click", () => {
         if (pickMode === "via") {
@@ -302,7 +302,7 @@ export function MapPage() {
       });
       cluster.addLayer(marker);
     });
-  }, [filtered, ready, pickMode]);
+  }, [filtered, ready, pickMode, darkPins]);
 
   useEffect(() => {
     if (!ready) return;
@@ -390,7 +390,7 @@ export function MapPage() {
       }).addTo(endsRef.current!);
       const endPlace = nearestPlace(places, end.lat, end.lon);
       L.marker([end.lat, end.lon], {
-        icon: pinIcon(endPlace?.types[0] || "hotels"),
+        icon: pinIcon(endPlace?.types[0] || "hotels", Boolean(endPlace?.bikersFriendly), !light && !sat),
         interactive: false,
       }).addTo(endsRef.current!);
       map.fitBounds(line.getBounds(), { paddingTopLeft: [24, 130], paddingBottomRight: [56, 250] });
@@ -399,7 +399,7 @@ export function MapPage() {
     return () => {
       cancelled = true;
     };
-  }, [stops, tolls, ready, places]);
+  }, [stops, tolls, ready, places, light, sat]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -870,7 +870,7 @@ export function MapPage() {
                 community.
               </p>
               <p>
-                <b>Red pins:</b> Our official partners. They are biker-friendly and often offer discounts, gifts or special
+                <b>Red pins:</b> Biker-friendly partners. They often offer discounts, gifts or special
                 service for Welcome Bikers users.
               </p>
               <p>

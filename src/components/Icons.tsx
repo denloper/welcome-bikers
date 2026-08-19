@@ -126,9 +126,8 @@ export function IconTurn({ className }: P) {
 }
 export function IconLocate({ className }: P) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <circle cx="12" cy="12" r="3.2" />
-      <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+    <svg className={className} viewBox="0 -960 960 960" fill="currentColor">
+      <path d="M516-120 402-402 120-516v-56l720-268-268 720h-56Zm26-148 162-436-436 162 196 78 78 196Zm-78-196Z" />
     </svg>
   );
 }
