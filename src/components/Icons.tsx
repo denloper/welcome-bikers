@@ -125,14 +125,14 @@ export function IconLocate({ className }: P) {
 }
 export function IconPlus({ className }: P) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M12 5v14M5 12h14" />
     </svg>
   );
 }
 export function IconGo({ className }: P) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <svg className={className} viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
       <path d="M12 4 6 12h4v8h4v-8h4z" />
     </svg>
   );

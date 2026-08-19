@@ -1121,16 +1121,16 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   background: #0b7a3e;
   color: #fff;
   border-radius: 16px;
-  padding: 14px 16px;
+  padding: 10px 14px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 20px;
+  gap: 10px;
+  font-size: 17px;
   font-weight: 800;
-  min-height: 64px;
+  min-height: 48px;
   box-shadow: 0 8px 24px #0006;
 }
-.nav-banner svg { width: 32px; height: 32px; flex: 0 0 32px; }
+.nav-banner svg { width: 22px; height: 22px; flex: 0 0 22px; }
 .nav-then {
   position: absolute;
   left: 10px;
@@ -1156,7 +1156,7 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   background: #d8d8d8;
   color: #111;
   border-radius: 18px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1164,20 +1164,21 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
 }
 .nav-hud-time {
   margin: 0;
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 800;
   color: #1ec96b;
   line-height: 1;
 }
-.nav-hud-km { margin: 4px 0 0; color: #666; font-size: 14px; font-weight: 600; }
+.nav-hud-km { margin: 4px 0 0; color: #666; font-size: 13px; font-weight: 600; }
 .nav-exit {
   background: #e10600;
   color: #fff;
   border: 0;
-  border-radius: 14px;
-  padding: 14px 22px;
+  border-radius: 12px;
+  padding: 8px 16px;
   font-weight: 800;
-  font-size: 16px;
+  font-size: 14px;
+  height: 40px;
   cursor: pointer;
 }
 .wb-me {

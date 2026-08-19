@@ -132,7 +132,7 @@ function TurnArrow({ turn }: { turn: string }) {
   else if (t.includes("right")) d = "M6 12h12M18 12l-5-5M18 12l-5 5";
   else if (t.includes("uturn") || t.includes("u-turn")) d = "M8 18V10a4 4 0 0 1 8 0v2M8 18l-3-3M8 18l3-3";
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.2">
       <path d={d} />
     </svg>
   );
@@ -140,6 +140,9 @@ function TurnArrow({ turn }: { turn: string }) {
 
 function remainingAlong(route: DriveRoute, here: { lat: number; lon: number }) {
   const pts = route.geometry;
+  const last = pts[pts.length - 1];
+  const nearEnd = last && haversineKm(here, { lat: last[0], lon: last[1] }) < 0.08;
+  if (nearEnd) return { distance: 0, duration: 0, stepI: Math.max(0, route.steps.length - 1) };
   if (pts.length < 2) return { distance: route.distance, duration: route.duration, stepI: 0 };
   let bestI = 0;
   let best = Infinity;
@@ -150,12 +153,15 @@ function remainingAlong(route: DriveRoute, here: { lat: number; lon: number }) {
       bestI = i;
     }
   }
+  if (best > 0.8) {
+    return { distance: route.distance, duration: route.duration, stepI: 0 };
+  }
   let rest = 0;
   for (let i = bestI; i < pts.length - 1; i++) {
     rest += haversineKm({ lat: pts[i][0], lon: pts[i][1] }, { lat: pts[i + 1][0], lon: pts[i + 1][1] }) * 1000;
   }
   const ratio = route.distance > 0 ? rest / route.distance : 1;
-  let traveled = route.distance - rest;
+  const traveled = route.distance - rest;
   let acc = 0;
   let stepI = 0;
   for (let i = 0; i < route.steps.length; i++) {
@@ -195,6 +201,7 @@ export function MapPage() {
   const [stops, setStops] = useState<Stop[] | null>(null);
   const [tolls, setTolls] = useState(false);
   const [drive, setDrive] = useState<DriveRoute | null>(null);
+  const [routingErr, setRoutingErr] = useState(false);
   const [navigating, setNavigating] = useState(false);
   const [pickMode, setPickMode] = useState<null | "start" | "via">(null);
   const [here, setHere] = useState<{ lat: number; lon: number } | null>(null);
@@ -361,20 +368,17 @@ export function MapPage() {
       if (cancelled) return;
       lineRef.current?.remove();
       endsRef.current?.clearLayers();
-      const latlngs = route?.geometry.length ? route.geometry : stops!.map((s) => [s.lat, s.lon] as [number, number]);
-      let used = route;
-      if (!used) {
-        let meters = 0;
-        for (let i = 0; i < stops!.length - 1; i++) meters += haversineKm(stops![i], stops![i + 1]) * 1000;
-        used = {
-          geometry: latlngs,
-          distance: meters,
-          duration: (meters / 1000 / 75) * 3600,
-          steps: [],
-        };
-      }
-      setDrive(used);
-      const line = L.polyline(latlngs, { color: "#3d8aff", weight: 6, opacity: 0.95 }).addTo(map);
+      setDrive(route);
+      setRoutingErr(!route);
+      const latlngs = route?.geometry.length
+        ? route.geometry
+        : stops!.map((s) => [s.lat, s.lon] as [number, number]);
+      const line = L.polyline(latlngs, {
+        color: "#3d8aff",
+        weight: route ? 6 : 4,
+        opacity: 0.95,
+        dashArray: route ? undefined : "8 10",
+      }).addTo(map);
       lineRef.current = line;
       const start = stops![0];
       const end = stops![stops!.length - 1];
@@ -635,6 +639,13 @@ export function MapPage() {
             <IconPlus />
             Add waypoint
           </button>
+        </div>
+      )}
+      {trip && !navigating && routingErr && !drive && (
+        <div className="route-sheet">
+          <p className="route-meta" style={{ margin: 0 }}>
+            Couldn&apos;t snap this trip to roads. Change the start point or try again.
+          </p>
         </div>
       )}
       {navigating && drive && (
