@@ -1194,28 +1194,24 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   height: 40px;
   cursor: pointer;
 }
+.map-page.is-nav {
+  perspective: 900px;
+}
+.map-page.is-nav .map-wrap.full {
+  transform: rotateX(52deg) rotateZ(var(--nav-rot, 0deg)) scale(1.72);
+  transform-origin: 50% 78%;
+  will-change: transform;
+}
 .wb-me {
   background: none !important;
   border: 0 !important;
 }
-.wb-me-dot {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #3d8aff;
-  border: 3px solid #fff;
-  box-shadow: 0 0 0 6px #3d8aff44, 0 2px 8px #0006;
+.wb-nav-chevron {
   display: block;
+  line-height: 0;
+  filter: drop-shadow(0 2px 5px #0009);
 }
-.wb-nav-arrow {
-  width: 0;
-  height: 0;
-  border-left: 10px solid transparent;
-  border-right: 10px solid transparent;
-  border-bottom: 22px solid #3d8aff;
-  filter: drop-shadow(0 2px 4px #0007);
-  display: block;
-}
+.wb-nav-chevron svg { display: block; }
 .route-hint {
   position: absolute;
   left: 16px;

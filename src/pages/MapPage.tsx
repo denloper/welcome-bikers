@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import L from "leaflet";
@@ -25,7 +25,7 @@ import { Stars } from "../components/Stars";
 import { PlacePhoto } from "../components/PlacePhoto";
 import { loadPlaces } from "../lib/data";
 import { asset } from "../lib/assets";
-import { haversineKm, validCoords } from "../lib/geo";
+import { bearingDeg, haversineKm, pointAhead, validCoords } from "../lib/geo";
 import { addDarkTiles, lightTiles } from "../lib/osm";
 import {
   formatArrival,
@@ -72,20 +72,12 @@ function pinIcon(type: PlaceType) {
   });
 }
 
-function meIcon(heading?: number) {
-  if (heading == null) {
-    return L.divIcon({
-      className: "wb-me",
-      html: `<span class="wb-me-dot"></span>`,
-      iconSize: [18, 18],
-      iconAnchor: [9, 9],
-    });
-  }
+function navArrowIcon() {
   return L.divIcon({
     className: "wb-me",
-    html: `<span class="wb-nav-arrow" style="transform:rotate(${heading}deg)"></span>`,
-    iconSize: [20, 22],
-    iconAnchor: [10, 14],
+    html: `<span class="wb-nav-chevron"><svg viewBox="0 0 24 32" width="26" height="34"><path d="M12 2 L22 30 L12 23 L2 30 Z" fill="#3d8aff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></span>`,
+    iconSize: [26, 34],
+    iconAnchor: [13, 26],
   });
 }
 
@@ -201,6 +193,8 @@ export function MapPage() {
   const [stops, setStops] = useState<Stop[] | null>(null);
   const [tolls, setTolls] = useState(false);
   const [drive, setDrive] = useState<DriveRoute | null>(null);
+  const driveRef = useRef<DriveRoute | null>(null);
+  driveRef.current = drive;
   const [routingErr, setRoutingErr] = useState(false);
   const [navigating, setNavigating] = useState(false);
   const [pickMode, setPickMode] = useState<null | "start" | "via">(null);
@@ -434,6 +428,19 @@ export function MapPage() {
 
   useEffect(() => {
     const map = mapRef.current;
+    const cluster = clusterRef.current;
+    if (!map || !ready) return;
+    if (navigating) {
+      if (cluster && map.hasLayer(cluster)) map.removeLayer(cluster);
+      map.invalidateSize();
+    } else {
+      if (cluster && !map.hasLayer(cluster)) map.addLayer(cluster);
+      map.invalidateSize();
+    }
+  }, [navigating, ready]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!navigating || !map) {
       if (watchRef.current != null) {
         navigator.geolocation?.clearWatch(watchRef.current);
@@ -443,16 +450,24 @@ export function MapPage() {
       meRef.current = null;
       return;
     }
-    const placeMe = (lat: number, lon: number, hd?: number | null) => {
-      setHere({ lat, lon });
-      if (hd != null && Number.isFinite(hd) && hd >= 0) setHeading(hd);
+    const placeMe = (lat: number, lon: number, gpsHeading?: number | null) => {
+      const herePt = { lat, lon };
+      setHere(herePt);
+      const geom = driveRef.current?.geometry;
+      let br = gpsHeading != null && Number.isFinite(gpsHeading) && gpsHeading >= 0 ? gpsHeading : null;
+      let look = herePt;
+      if (geom && geom.length >= 2) {
+        look = pointAhead(geom, herePt, 90);
+        if (br == null) br = (bearingDeg(herePt, look) + 360) % 360;
+      }
+      if (br != null) setHeading(br);
       if (!meRef.current) {
-        meRef.current = L.marker([lat, lon], { icon: meIcon(hd ?? undefined), zIndexOffset: 800 }).addTo(map);
+        meRef.current = L.marker([lat, lon], { icon: navArrowIcon(), zIndexOffset: 1200 }).addTo(map);
       } else {
         meRef.current.setLatLng([lat, lon]);
-        meRef.current.setIcon(meIcon(hd ?? heading ?? undefined));
       }
-      map.setView([lat, lon], Math.max(map.getZoom(), 16), { animate: true });
+      const z = Math.max(map.getZoom(), 17);
+      map.setView([look.lat, look.lon], z, { animate: true });
     };
     getHere().then((p) => {
       if (p) placeMe(p.lat, p.lon);
@@ -462,7 +477,7 @@ export function MapPage() {
       watchRef.current = navigator.geolocation.watchPosition(
         (pos) => placeMe(pos.coords.latitude, pos.coords.longitude, pos.coords.heading),
         () => {},
-        { enableHighAccuracy: true, maximumAge: 1000 },
+        { enableHighAccuracy: true, maximumAge: 800 },
       );
     }
     return () => {
@@ -518,8 +533,12 @@ export function MapPage() {
   const hudTime = live?.duration ?? drive?.duration ?? 0;
 
   return (
-    <div className="page map-page">
-      <div className="map-wrap full" ref={mapEl} />
+    <div className={`page map-page${navigating ? " is-nav" : ""}`}>
+      <div
+        className="map-wrap full"
+        ref={mapEl}
+        style={navigating ? ({ ["--nav-rot"]: `${-(heading ?? 0)}deg` } as CSSProperties) : undefined}
+      />
       {!trip && (
         <div className="map-search">
           <button className="map-round" onClick={() => nav(-1)} aria-label="Back">

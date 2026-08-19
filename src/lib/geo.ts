@@ -63,3 +63,51 @@ export function validCoords(lat: number, lon: number): boolean {
     !(lat === 0 && lon === 0)
   );
 }
+
+export function bearingDeg(
+  a: { lat: number; lon: number },
+  b: { lat: number; lon: number },
+): number {
+  const φ1 = (a.lat * Math.PI) / 180;
+  const φ2 = (b.lat * Math.PI) / 180;
+  const Δλ = ((b.lon - a.lon) * Math.PI) / 180;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(y, x) * 180) / Math.PI;
+}
+
+export function nearestIndex(
+  pts: [number, number][],
+  here: { lat: number; lon: number },
+): number {
+  let bestI = 0;
+  let best = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const km = haversineKm(here, { lat: pts[i][0], lon: pts[i][1] });
+    if (km < best) {
+      best = km;
+      bestI = i;
+    }
+  }
+  return bestI;
+}
+
+export function pointAhead(
+  pts: [number, number][],
+  here: { lat: number; lon: number },
+  meters: number,
+): { lat: number; lon: number } {
+  if (!pts.length) return here;
+  let i = nearestIndex(pts, here);
+  let left = meters / 1000;
+  while (i < pts.length - 1 && left > 0) {
+    const a = { lat: pts[i][0], lon: pts[i][1] };
+    const b = { lat: pts[i + 1][0], lon: pts[i + 1][1] };
+    const d = haversineKm(a, b);
+    if (d >= left || i === pts.length - 2) return b;
+    left -= d;
+    i += 1;
+  }
+  const last = pts[pts.length - 1];
+  return { lat: last[0], lon: last[1] };
+}
