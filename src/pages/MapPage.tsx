@@ -204,6 +204,7 @@ export function MapPage() {
   const [routingErr, setRoutingErr] = useState(false);
   const [navigating, setNavigating] = useState(false);
   const [pickMode, setPickMode] = useState<null | "start" | "via">(null);
+  const [viaOpen, setViaOpen] = useState(false);
   const [here, setHere] = useState<{ lat: number; lon: number } | null>(null);
   const [heading, setHeading] = useState<number | null>(null);
 
@@ -534,23 +535,60 @@ export function MapPage() {
         </div>
       )}
       {trip && !navigating && (
-        <div className="route-ab">
-          {stops!.map((s, i) => (
-            <button
-              key={`${s.role}-${i}`}
-              type="button"
-              className="route-stop"
-              onClick={() => {
-                if (s.role === "start") useMyLocation();
-              }}
-            >
-              <span className={`route-dot ${s.role}`}>{s.role === "via" ? i : ""}</span>
-              <div>
-                <b>{s.label}</b>
-                {s.role === "start" && <span>Tap to change</span>}
-              </div>
-            </button>
-          ))}
+        <div className={`route-ab${viaOpen ? " open" : ""}`}>
+          {(() => {
+            const list = stops!;
+            const start = list[0];
+            const end = list[list.length - 1];
+            const vias = list.slice(1, -1);
+            const rows = viaOpen || vias.length === 0 ? list : [start];
+            return (
+              <>
+                {rows.map((s, i) => (
+                  <button
+                    key={`${s.role}-${i}-${s.label}`}
+                    type="button"
+                    className="route-stop"
+                    onClick={() => {
+                      if (s.role === "start") useMyLocation();
+                    }}
+                  >
+                    <span className={`route-dot ${s.role}`}>{s.role === "via" ? i : ""}</span>
+                    <div>
+                      <b>{s.label}</b>
+                      {s.role === "start" && <span>Tap to change</span>}
+                    </div>
+                  </button>
+                ))}
+                {!viaOpen && vias.length > 0 && (
+                  <button type="button" className="route-stop" onClick={() => setViaOpen(true)}>
+                    <span className="route-dot via">⚑</span>
+                    <div>
+                      <b>
+                        {vias.length} stop{vias.length === 1 ? "" : "s"}
+                      </b>
+                    </div>
+                  </button>
+                )}
+                {(!viaOpen && vias.length > 0) && (
+                  <button type="button" className="route-stop" onClick={() => setViaOpen(true)}>
+                    <span className="route-dot end" />
+                    <div>
+                      <b>{end.label}</b>
+                    </div>
+                  </button>
+                )}
+                {viaOpen && vias.length > 0 && (
+                  <button type="button" className="route-stop via-hide" onClick={() => setViaOpen(false)}>
+                    <span className="route-dot via">–</span>
+                    <div>
+                      <b>Hide stops</b>
+                    </div>
+                  </button>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
       {pickMode && !navigating && (
@@ -631,14 +669,16 @@ export function MapPage() {
               <i />
             </button>
           </label>
-          <button className="btn green route-go" onClick={() => setNavigating(true)}>
-            <IconGo />
-            GO!
-          </button>
-          <button className="btn white route-add" onClick={() => setPickMode("via")}>
-            <IconPlus />
-            Add waypoint
-          </button>
+          <div className="route-actions">
+            <button className="btn green route-go" onClick={() => setNavigating(true)}>
+              <IconGo />
+              GO!
+            </button>
+            <button className="btn white route-add" onClick={() => setPickMode("via")}>
+              <IconPlus />
+              Add waypoint
+            </button>
+          </div>
         </div>
       )}
       {trip && !navigating && routingErr && !drive && (

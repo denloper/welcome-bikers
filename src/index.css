@@ -989,18 +989,20 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   right: 12px;
   top: 10px;
   z-index: 530;
-  background: #d0d0d0;
+  background: #d4d4d4;
   color: #111;
-  border-radius: 18px;
-  padding: 10px 14px;
+  border-radius: 16px;
+  padding: 4px 12px;
   box-shadow: 0 6px 20px #0005;
+  max-height: 34dvh;
+  overflow: auto;
 }
 .route-stop {
   display: grid;
-  grid-template-columns: 28px 1fr;
-  gap: 10px;
+  grid-template-columns: 22px 1fr;
+  gap: 8px;
   align-items: center;
-  padding: 8px 0;
+  padding: 6px 0;
   width: 100%;
   border: 0;
   background: transparent;
@@ -1010,16 +1012,24 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   font: inherit;
 }
 .route-stop + .route-stop { border-top: 1px solid #b8b8b8; }
-.route-stop b { display: block; font-size: 15px; font-weight: 800; line-height: 1.2; }
-.route-stop span { display: block; font-size: 13px; color: var(--blue); font-weight: 600; }
+.route-stop b {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.route-stop span { display: block; font-size: 12px; color: var(--blue); font-weight: 600; }
 .route-dot {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   color: #fff;
-  font-size: 11px;
+  font-size: 10px;
 }
 .route-dot.start { background: #3d8aff; }
 .route-dot.via { background: #555; }
@@ -1030,10 +1040,10 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   right: 10px;
   bottom: 10px;
   z-index: 530;
-  background: #d0d0d0;
+  background: #d4d4d4;
   color: #111;
-  border-radius: 22px;
-  padding: 16px 16px 14px;
+  border-radius: 18px;
+  padding: 12px 14px 12px;
   box-shadow: 0 8px 30px #0007;
 }
 .route-sheet-top {
@@ -1044,16 +1054,16 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
 }
 .route-time {
   margin: 0;
-  font-size: 34px;
+  font-size: 28px;
   font-weight: 800;
   color: #1ec96b;
   letter-spacing: -0.03em;
   line-height: 1;
 }
-.route-meta { margin: 8px 0 0; color: #555; font-size: 14px; font-weight: 600; }
+.route-meta { margin: 6px 0 0; color: #555; font-size: 13px; font-weight: 600; }
 .route-share {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border: 0;
   background: transparent;
   color: #111;
@@ -1062,13 +1072,13 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   cursor: pointer;
   padding: 0;
 }
-.route-share svg { width: 22px; height: 22px; }
+.route-share svg { width: 20px; height: 20px; }
 .route-toll {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 14px 0 12px;
-  font-size: 15px;
+  margin: 8px 0 10px;
+  font-size: 14px;
   font-weight: 600;
 }
 .sw {
@@ -1095,22 +1105,25 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
 }
 .sw.on i { left: 23px; }
 .route-sheet .btn {
-  height: 44px;
-  padding: 0 16px;
-  font-size: 16px;
-  gap: 8px;
+  height: 42px;
+  padding: 0 10px;
+  font-size: 14px;
+  gap: 6px;
   white-space: nowrap;
+  width: auto;
+  flex: 1;
 }
 .route-sheet .btn svg {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
 }
-.route-go { font-size: 17px; font-weight: 800; }
-.route-add { margin-top: 8px; }
+.route-actions { display: flex; gap: 8px; }
+.route-go { font-size: 16px; font-weight: 800; }
+.route-add { margin-top: 0; font-size: 13px; }
 .map-tools.route-tools {
   top: auto;
-  bottom: 220px;
+  bottom: 168px;
 }
 .nav-banner {
   position: absolute;
