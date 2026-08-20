@@ -16,3 +16,7 @@ tmp-vk
 .cursor
 *.local
 .DS_Store
+test-results
+playwright-report
+blob-report
+playwright/.cache

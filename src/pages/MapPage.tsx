@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import L from "leaflet";
@@ -27,6 +27,7 @@ import { PlacePhoto } from "../components/PlacePhoto";
 import { loadPlaces } from "../lib/data";
 import { asset } from "../lib/assets";
 import { bearingDeg, haversineKm, nearestIndex, pointAhead, validCoords } from "../lib/geo";
+import { MIN_NAV_METERS, remainingAlong, tripTooShort } from "../lib/nav";
 import { darkTiles, lightTiles, satTiles } from "../lib/osm";
 import {
   formatArrival,
@@ -92,7 +93,7 @@ function getHere(): Promise<{ lat: number; lon: number } | null> {
     navigator.geolocation.getCurrentPosition(
       (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
       () => resolve(null),
-      { timeout: 5000, maximumAge: 30_000 },
+      { timeout: 8000, enableHighAccuracy: true, maximumAge: 15_000 },
     );
   });
 }
@@ -124,36 +125,9 @@ function TurnArrow({ turn }: { turn: string }) {
   );
 }
 
-function remainingAlong(route: DriveRoute, here: { lat: number; lon: number }) {
-  const pts = route.geometry;
-  if (pts.length < 2) return { distance: route.distance, duration: route.duration, stepI: 0, arrived: false };
-  const last = pts[pts.length - 1];
-  const bestI = nearestIndex(pts, here);
-  const distToLine = haversineKm(here, { lat: pts[bestI][0], lon: pts[bestI][1] });
-  const distToEnd = haversineKm(here, { lat: last[0], lon: last[1] });
-  if (distToEnd < 0.08 && distToLine < 0.2) {
-    return { distance: 0, duration: 0, stepI: Math.max(0, route.steps.length - 1), arrived: true };
-  }
-  if (distToLine > 0.8) {
-    return { distance: route.distance, duration: route.duration, stepI: 0, arrived: false };
-  }
-  let rest = 0;
-  for (let i = bestI; i < pts.length - 1; i++) {
-    rest += haversineKm({ lat: pts[i][0], lon: pts[i][1] }, { lat: pts[i + 1][0], lon: pts[i + 1][1] }) * 1000;
-  }
-  const ratio = route.distance > 0 ? rest / route.distance : 1;
-  const traveled = route.distance - rest;
-  let acc = 0;
-  let stepI = 0;
-  for (let i = 0; i < route.steps.length; i++) {
-    acc += route.steps[i].distance;
-    if (acc >= traveled) {
-      stepI = i;
-      break;
-    }
-    stepI = i;
-  }
-  return { distance: rest, duration: route.duration * ratio, stepI, arrived: false };
+function setGoChrome(on: boolean) {
+  document.body.classList.toggle("wb-nav-go", on);
+  document.querySelector(".app")?.classList.toggle("no-nav", on);
 }
 
 export function MapPage() {
@@ -192,7 +166,8 @@ export function MapPage() {
   const [pickMode, setPickMode] = useState<null | "start" | "via">(null);
   const [viaOpen, setViaOpen] = useState(false);
   const [here, setHere] = useState<{ lat: number; lon: number } | null>(null);
-  const [heading, setHeading] = useState<number | null>(null);
+  const [locating, setLocating] = useState(false);
+  const pickGen = useRef(0);
 
   const filtered = useMemo(() => {
     const s = q.toLowerCase();
@@ -284,6 +259,8 @@ export function MapPage() {
           return;
         }
         if (pickMode === "start") {
+          pickGen.current += 1;
+          setLocating(false);
           setStops((cur) => {
             if (!cur) return cur;
             const next = cur.slice();
@@ -349,6 +326,28 @@ export function MapPage() {
   }, [params, ready, places]);
 
   useEffect(() => {
+    if (!ready || !stops || stops.length < 2) {
+      setDrive(null);
+      setRoutingErr(false);
+      return;
+    }
+    if (tripTooShort(stops)) {
+      setDrive(null);
+      setRoutingErr(false);
+      return;
+    }
+    let cancelled = false;
+    osrmRoute(stops, { excludeToll: !tolls }).then((route) => {
+      if (cancelled) return;
+      setDrive(route);
+      setRoutingErr(!route);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [stops, tolls, ready]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready || !stops || stops.length < 2) {
       lineRef.current?.remove();
@@ -356,45 +355,53 @@ export function MapPage() {
       endsRef.current?.clearLayers();
       return;
     }
-    let cancelled = false;
-    async function draw() {
-      const route = await osrmRoute(stops!, { excludeToll: !tolls });
-      if (cancelled) return;
-      lineRef.current?.remove();
-      endsRef.current?.clearLayers();
-      setDrive(route);
-      setRoutingErr(!route);
-      const latlngs = route?.geometry.length
-        ? route.geometry
-        : stops!.map((s) => [s.lat, s.lon] as [number, number]);
-      const line = L.polyline(latlngs, {
-        color: "#3d8aff",
-        weight: route ? 6 : 4,
-        opacity: 0.95,
-        dashArray: route ? undefined : "8 10",
-      }).addTo(map);
-      lineRef.current = line;
-      const start = stops![0];
-      const end = stops![stops!.length - 1];
-      L.circleMarker([start.lat, start.lon], {
-        radius: 8,
-        color: "#fff",
-        weight: 2,
-        fillColor: "#3d8aff",
-        fillOpacity: 1,
-      }).addTo(endsRef.current!);
-      const endPlace = nearestPlace(places, end.lat, end.lon);
-      L.marker([end.lat, end.lon], {
-        icon: pinIcon(endPlace?.types[0] || "hotels", Boolean(endPlace?.bikersFriendly), !light && !sat),
-        interactive: false,
-      }).addTo(endsRef.current!);
-      map.fitBounds(line.getBounds(), { paddingTopLeft: [24, 130], paddingBottomRight: [56, 250] });
+    lineRef.current?.remove();
+    endsRef.current?.clearLayers();
+    const start = stops[0];
+    const end = stops[stops.length - 1];
+    if (tripTooShort(stops)) {
+      if (!navigating) {
+        L.circleMarker([start.lat, start.lon], {
+          radius: 8,
+          color: "#fff",
+          weight: 2,
+          fillColor: "#3d8aff",
+          fillOpacity: 1,
+        }).addTo(endsRef.current!);
+        const endPlace = nearestPlace(places, end.lat, end.lon);
+        L.marker([end.lat, end.lon], {
+          icon: pinIcon(endPlace?.types[0] || "hotels", Boolean(endPlace?.bikersFriendly), !light && !sat),
+          interactive: false,
+        }).addTo(endsRef.current!);
+        map.setView([end.lat, end.lon], 16, { animate: false });
+      }
+      return;
     }
-    draw();
-    return () => {
-      cancelled = true;
-    };
-  }, [stops, tolls, ready, places, light, sat]);
+    const latlngs = drive?.geometry.length
+      ? drive.geometry
+      : stops.map((s) => [s.lat, s.lon] as [number, number]);
+    const line = L.polyline(latlngs, {
+      color: "#3d8aff",
+      weight: navigating ? 7 : drive ? 6 : 4,
+      opacity: 0.95,
+      dashArray: drive ? undefined : "8 10",
+    }).addTo(map);
+    lineRef.current = line;
+    if (navigating) return;
+    L.circleMarker([start.lat, start.lon], {
+      radius: 8,
+      color: "#fff",
+      weight: 2,
+      fillColor: "#3d8aff",
+      fillOpacity: 1,
+    }).addTo(endsRef.current!);
+    const endPlace = nearestPlace(places, end.lat, end.lon);
+    L.marker([end.lat, end.lon], {
+      icon: pinIcon(endPlace?.types[0] || "hotels", Boolean(endPlace?.bikersFriendly), !light && !sat),
+      interactive: false,
+    }).addTo(endsRef.current!);
+    map.fitBounds(line.getBounds(), { paddingTopLeft: [24, 130], paddingBottomRight: [56, 250] });
+  }, [drive, stops, navigating, ready, places, light, sat]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -403,6 +410,8 @@ export function MapPage() {
       const hit = nearestPlace(places, e.latlng.lat, e.latlng.lng);
       const label = hit?.name || `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
       if (pickMode === "start") {
+        pickGen.current += 1;
+        setLocating(false);
         setStops((cur) => {
           if (!cur) return cur;
           const next = cur.slice();
@@ -438,19 +447,17 @@ export function MapPage() {
     refresh();
     const t = window.setTimeout(refresh, 60);
     const t2 = window.setTimeout(refresh, 280);
+    const t3 = window.setTimeout(refresh, 600);
     return () => {
       window.clearTimeout(t);
       window.clearTimeout(t2);
+      window.clearTimeout(t3);
     };
   }, [navigating, ready]);
 
   useEffect(() => {
-    document.querySelector(".app")?.classList.toggle("no-nav", navigating);
-    document.body.classList.toggle("wb-nav-go", navigating);
-    return () => {
-      document.querySelector(".app")?.classList.remove("no-nav");
-      document.body.classList.remove("wb-nav-go");
-    };
+    setGoChrome(navigating);
+    return () => setGoChrome(false);
   }, [navigating]);
 
   useEffect(() => {
@@ -480,13 +487,18 @@ export function MapPage() {
         look = pointAhead(geom, follow, 80);
         if (br == null) br = (bearingDeg(follow, look) + 360) % 360;
       }
-      if (br != null) setHeading(br);
+      if (br != null) {
+        const needle = meRef.current?.getElement()?.querySelector(".wb-nav-chevron") as HTMLElement | null;
+        if (needle) needle.style.transform = `rotate(${br}deg)`;
+      }
       if (!meRef.current) {
         meRef.current = L.marker([follow.lat, follow.lon], { icon: navArrowIcon(), zIndexOffset: 1200 }).addTo(map);
+        const needle = meRef.current.getElement()?.querySelector(".wb-nav-chevron") as HTMLElement | null;
+        if (needle && br != null) needle.style.transform = `rotate(${br}deg)`;
       } else {
         meRef.current.setLatLng([follow.lat, follow.lon]);
       }
-      map.setView([look.lat, look.lon], Math.max(map.getZoom(), 16), { animate: false });
+      map.setView([follow.lat, follow.lon], Math.max(map.getZoom(), 16), { animate: false });
     };
     getHere().then((p) => {
       if (p) placeMe(p.lat, p.lon);
@@ -506,9 +518,16 @@ export function MapPage() {
   }, [navigating, stops]);
 
   function locate() {
-    navigator.geolocation?.getCurrentPosition((pos) => {
-      mapRef.current?.setView([pos.coords.latitude, pos.coords.longitude], 11);
-    });
+    const map = mapRef.current;
+    if (!map) return;
+    const zoom = navigating ? 16 : Math.max(map.getZoom(), 11);
+    const fallback = meRef.current?.getLatLng() || here || (stops ? { lat: stops[0].lat, lon: stops[0].lon } : null);
+    if (fallback) map.setView([fallback.lat, fallback.lon], zoom, { animate: false });
+    navigator.geolocation?.getCurrentPosition(
+      (pos) => map.setView([pos.coords.latitude, pos.coords.longitude], zoom, { animate: false }),
+      () => {},
+      { timeout: 5000, enableHighAccuracy: true, maximumAge: 5000 },
+    );
   }
 
   function sharePicked() {
@@ -532,11 +551,13 @@ export function MapPage() {
   }
 
   async function useMyLocation() {
+    const gen = ++pickGen.current;
+    setPickMode("start");
+    setLocating(true);
     const geo = await getHere();
-    if (!geo) {
-      setPickMode("start");
-      return;
-    }
+    if (gen !== pickGen.current) return;
+    setLocating(false);
+    if (!geo) return;
     setStops((cur) => {
       if (!cur) return cur;
       const next = cur.slice();
@@ -550,13 +571,12 @@ export function MapPage() {
   const site = picked?.website || (picked ? `https://www.google.com/maps/search/?api=1&query=${picked.lat},${picked.lon}` : "");
   const hudDist = live?.arrived ? 0 : live?.distance ?? drive?.distance ?? 0;
   const hudTime = live?.arrived ? 0 : live?.duration ?? drive?.duration ?? 0;
+  const canGo = Boolean(drive && drive.distance >= MIN_NAV_METERS);
+  const tooShort = Boolean(stops && tripTooShort(stops));
 
   return (
-    <div className={`page map-page${navigating ? " is-nav" : ""}${light || sat ? "" : " is-dark"}`}>
-      <div
-        className="map-nav-stage"
-        style={navigating ? ({ ["--nav-rot"]: `${-(heading ?? 0)}deg` } as CSSProperties) : undefined}
-      >
+    <div className={`page map-page${navigating ? " is-nav" : ""}${light || sat ? "" : " is-dark"}${pickMode ? " is-pick" : ""}`}>
+      <div className="map-nav-stage">
         <div className="map-wrap full" ref={mapEl} />
       </div>
       {!trip && (
@@ -588,14 +608,17 @@ export function MapPage() {
                     key={`${s.role}-${i}-${s.label}`}
                     type="button"
                     className="route-stop"
+                    data-stop={s.role}
                     onClick={() => {
-                      if (s.role === "start") useMyLocation();
+                      if (s.role === "start") void useMyLocation();
                     }}
                   >
                     <span className={`route-dot ${s.role}`}>{s.role === "via" ? i : ""}</span>
                     <div>
                       <b>{s.label}</b>
-                      {s.role === "start" && <span>Tap to change</span>}
+                      {s.role === "start" && (
+                        <span>{locating ? "Locating…" : pickMode === "start" ? "Tap the map or wait for GPS" : "Tap to change"}</span>
+                      )}
                     </div>
                   </button>
                 ))}
@@ -683,19 +706,17 @@ export function MapPage() {
             )}
           </div>
         )}
-        {!navigating && (
-          <button
-            className="map-round"
-            onClick={() => {
-              setDraftOn(on);
-              setDraftFriendly(friendly);
-              setFilters(true);
-            }}
-            aria-label="filters"
-          >
-            <IconFilter />
-          </button>
-        )}
+        <button
+          className="map-round"
+          onClick={() => {
+            setDraftOn(on);
+            setDraftFriendly(friendly);
+            setFilters(true);
+          }}
+          aria-label="filters"
+        >
+          <IconFilter />
+        </button>
         <button
           className="map-round"
           onClick={() => {
@@ -710,31 +731,15 @@ export function MapPage() {
         >
           {light && !sat ? <IconSun /> : <IconMoon />}
         </button>
-        {!trip && (
-          <>
-            <button className="map-round" onClick={() => mapRef.current?.zoomIn()}>
-              +
-            </button>
-            <button className="map-round" onClick={() => mapRef.current?.zoomOut()}>
-              −
-            </button>
-            <button className="map-round" onClick={locate} aria-label="My location">
-              <IconLocate />
-            </button>
-          </>
-        )}
-        {navigating && (
-          <button
-            className="map-round"
-            onClick={() => {
-              const p = meRef.current?.getLatLng();
-              if (p) mapRef.current?.setView(p, 16, { animate: false });
-            }}
-            aria-label="Recenter"
-          >
-            <IconLocate />
-          </button>
-        )}
+        <button className="map-round" onClick={() => mapRef.current?.zoomIn()} aria-label="Zoom in">
+          +
+        </button>
+        <button className="map-round" onClick={() => mapRef.current?.zoomOut()} aria-label="Zoom out">
+          −
+        </button>
+        <button className="map-round" onClick={locate} aria-label="My location">
+          <IconLocate />
+        </button>
       </div>
       {trip && !navigating && drive && (
         <div className="route-sheet">
@@ -758,7 +763,15 @@ export function MapPage() {
             </button>
           </label>
           <div className="route-actions">
-            <button className="btn green route-go" onClick={() => setNavigating(true)}>
+            <button
+              className="btn green route-go"
+              disabled={!canGo}
+              onClick={() => {
+                if (!canGo) return;
+                setGoChrome(true);
+                setNavigating(true);
+              }}
+            >
               <IconGo />
               GO!
             </button>
@@ -769,7 +782,14 @@ export function MapPage() {
           </div>
         </div>
       )}
-      {trip && !navigating && routingErr && !drive && (
+      {trip && !navigating && tooShort && (
+        <div className="route-sheet">
+          <p className="route-meta" style={{ margin: 0 }}>
+            You&apos;re already there. Tap the start field or the map to choose a different starting point.
+          </p>
+        </div>
+      )}
+      {trip && !navigating && routingErr && !drive && !tooShort && (
         <div className="route-sheet">
           <p className="route-meta" style={{ margin: 0 }}>
             Couldn&apos;t snap this trip to roads. Change the start point or try again.
@@ -782,7 +802,13 @@ export function MapPage() {
             <p className="nav-hud-time">{live?.arrived ? "Now" : formatDriveTime(hudTime)}</p>
             <p className="nav-hud-km">{formatMeters(hudDist)}</p>
           </div>
-          <button className="nav-exit" onClick={() => setNavigating(false)}>
+          <button
+            className="nav-exit"
+            onClick={() => {
+              setGoChrome(false);
+              setNavigating(false);
+            }}
+          >
             EXIT
           </button>
         </div>
