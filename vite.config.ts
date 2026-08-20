@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: "autoUpdate",
-        injectRegister: "auto",
+        injectRegister: false,
         includeAssets: ["icons/app-icon.svg"],
         manifest: {
           name: "Welcome Bikers",

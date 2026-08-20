@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { TopBar } from "../components/TopBar";
 import { loadSos } from "../lib/data";
+import { readLocation } from "../lib/location";
 import { store } from "../lib/store";
 import type { SosAlert } from "../types";
 
@@ -15,10 +16,13 @@ export function Help() {
   }, []);
 
   function locate() {
-    navigator.geolocation?.getCurrentPosition(
-      (p) => setCoords(`${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)}`),
-      () => setCoords("location unavailable"),
-    );
+    void readLocation().then((fix) => {
+      if (!fix) {
+        setCoords("location unavailable");
+        return;
+      }
+      setCoords(`${fix.lat.toFixed(5)}, ${fix.lon.toFixed(5)}`);
+    });
   }
 
   return (

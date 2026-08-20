@@ -20,3 +20,12 @@ test-results
 playwright-report
 blob-report
 playwright/.cache
+android/.gradle
+android/app/build
+android/build
+android/captures
+android/local.properties
+android/.idea
+android/app/.cxx
+*.iml
+releases/*.apk

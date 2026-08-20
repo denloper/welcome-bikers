@@ -31,14 +31,21 @@ let webglState: boolean | null = null;
  * fires there, leaving an empty void. Probe once: require a hardware context
  * and verify a clear actually produces the requested color.
  */
+function nativeApp(): boolean {
+  return Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
+}
+
 function webglHealthy(): boolean {
   if (webglState != null) return webglState;
   try {
     const canvas = document.createElement("canvas");
     canvas.width = 2;
     canvas.height = 2;
-    const gl = (canvas.getContext("webgl2", { failIfMajorPerformanceCaveat: true }) ||
-      canvas.getContext("webgl", { failIfMajorPerformanceCaveat: true })) as WebGLRenderingContext | null;
+    const opts = nativeApp()
+      ? { powerPreference: "high-performance" as const }
+      : { failIfMajorPerformanceCaveat: true };
+    const gl = (canvas.getContext("webgl2", opts) ||
+      canvas.getContext("webgl", opts)) as WebGLRenderingContext | null;
     if (!gl) {
       webglState = false;
       return false;

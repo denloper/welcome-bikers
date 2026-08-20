@@ -6,6 +6,7 @@ import { IconEco, IconFilter, IconNear, IconPinStar, IconSearch } from "../compo
 import { CATEGORIES } from "../lib/categories";
 import { byCategory, loadCountries, loadPlaces } from "../lib/data";
 import { haversineKm } from "../lib/geo";
+import { readLocation } from "../lib/location";
 import type { Country, Place, PlaceType } from "../types";
 
 export function CategoryList() {
@@ -31,10 +32,10 @@ export function CategoryList() {
   useEffect(() => {
     loadPlaces().then(setPlaces);
     loadCountries().then(setFlags);
-    navigator.geolocation?.getCurrentPosition(
-      (p) => setHere({ lat: p.coords.latitude, lon: p.coords.longitude }),
-      () => setHere({ lat: 42.43, lon: 19.26 }),
-    );
+    void readLocation().then((fix) => {
+      if (fix) setHere({ lat: fix.lat, lon: fix.lon });
+      else setHere({ lat: 42.43, lon: 19.26 });
+    });
   }, []);
 
   const type = meta?.type as PlaceType | undefined;

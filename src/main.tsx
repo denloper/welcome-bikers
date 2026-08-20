@@ -2,7 +2,15 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { HashRouter } from "react-router-dom";
 import App from "./App";
+import { bootNativeShell, isNativeApp } from "./lib/native";
 import "./index.css";
+
+void bootNativeShell();
+if (!isNativeApp()) {
+  void import("virtual:pwa-register")
+    .then(({ registerSW }) => registerSW({ immediate: true }))
+    .catch(() => undefined);
+}
 
 // Google Maps may rewrite location.hash. HashRouter needs "#/…" or the SPA leaves the map.
 let lastHash = window.location.hash.startsWith("#/") ? window.location.hash : "#/";

@@ -22,6 +22,7 @@ import { PlacePhoto } from "../components/PlacePhoto";
 import { loadPlaces } from "../lib/data";
 import { bearingDeg, closestOnPolyline, haversineKm, pointAhead, validCoords } from "../lib/geo";
 import { filterGpsFix, freshGpsState } from "../lib/gps";
+import { readLocation, watchLocation, type LocationWatch } from "../lib/location";
 import { angleDelta } from "../lib/nav-camera";
 import { freshRerouteState, LOOK_AHEAD_M, MIN_NAV_METERS, OFF_ROUTE_M, remainingAlong, tripTooShort, updateReroute } from "../lib/nav";
 import { freshVoiceState, hushVoice, nextVoice, speakLine, warmVoices } from "../lib/voice";
@@ -67,15 +68,9 @@ function parsePts(raw: string | null) {
     .filter((p) => validCoords(p.lat, p.lon));
 }
 
-function getHere(): Promise<{ lat: number; lon: number } | null> {
-  return new Promise((resolve) => {
-    if (!navigator.geolocation) return resolve(null);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-      () => resolve(null),
-      { timeout: 8000, enableHighAccuracy: true, maximumAge: 15_000 },
-    );
-  });
+async function getHere(): Promise<{ lat: number; lon: number } | null> {
+  const fix = await readLocation({ timeout: 8_000, maximumAge: 15_000 });
+  return fix ? { lat: fix.lat, lon: fix.lon } : null;
 }
 
 function applyGpsStart(stops: Stop[], geo: { lat: number; lon: number }): Stop[] {
@@ -166,7 +161,7 @@ export function MapPage() {
   const [params] = useSearchParams();
   const mapEl = useRef<HTMLDivElement>(null);
   const wbRef = useRef<WbMap | null>(null);
-  const watchRef = useRef<number | null>(null);
+  const watchRef = useRef<LocationWatch | null>(null);
   const pickGen = useRef(0);
   const [places, setPlaces] = useState<Place[]>([]);
   const placesRef = useRef(places);
@@ -562,8 +557,11 @@ export function MapPage() {
       return;
     }
     const onOrientation = (event: DeviceOrientationEvent) => {
-      const iosHeading = (event as DeviceOrientationEvent & { webkitCompassHeading?: number })
-        .webkitCompassHeading;
+      const absolute = event as DeviceOrientationEvent & {
+        webkitCompassHeading?: number;
+        absolute?: boolean;
+      };
+      const iosHeading = absolute.webkitCompassHeading;
       const raw =
         typeof iosHeading === "number"
           ? iosHeading
@@ -577,8 +575,10 @@ export function MapPage() {
       compassHeadingRef.current = heading;
       wbRef.current?.orient(heading);
     };
+    window.addEventListener("deviceorientationabsolute", onOrientation as EventListener, { passive: true });
     window.addEventListener("deviceorientation", onOrientation, { passive: true });
     return () => {
+      window.removeEventListener("deviceorientationabsolute", onOrientation as EventListener);
       window.removeEventListener("deviceorientation", onOrientation);
       compassHeadingRef.current = null;
     };
@@ -588,10 +588,8 @@ export function MapPage() {
     const wb = wbRef.current;
     if (!navigating || !wb) {
       setRerouting(false);
-      if (watchRef.current != null) {
-        navigator.geolocation?.clearWatch(watchRef.current);
-        watchRef.current = null;
-      }
+      watchRef.current?.clear();
+      watchRef.current = null;
       return;
     }
     let gpsState = freshGpsState();
@@ -678,25 +676,14 @@ export function MapPage() {
       if (p) placeMe(p.lat, p.lon, null, null, 25);
       else if (stops?.[0]) placeMe(stops[0].lat, stops[0].lon, null, null, 25);
     });
-    if (navigator.geolocation) {
-      watchRef.current = navigator.geolocation.watchPosition(
-        (pos) =>
-          placeMe(
-            pos.coords.latitude,
-            pos.coords.longitude,
-            pos.coords.heading,
-            pos.coords.speed,
-            pos.coords.accuracy,
-            pos.timestamp,
-          ),
-        () => {},
-        { enableHighAccuracy: true, maximumAge: 500, timeout: 12_000 },
-      );
-    }
+    watchRef.current = watchLocation(
+      (fix) => placeMe(fix.lat, fix.lon, fix.heading, fix.speed, fix.accuracy, fix.timestamp),
+      { timeout: 12_000, maximumAge: 500 },
+    );
     return () => {
       active = false;
       rerouteGeneration += 1;
-      if (watchRef.current != null) navigator.geolocation?.clearWatch(watchRef.current);
+      watchRef.current?.clear();
       watchRef.current = null;
     };
   }, [navigating, stops]);
@@ -737,22 +724,20 @@ export function MapPage() {
 
   function locate() {
     const wb = wbRef.current;
-    navigator.geolocation?.getCurrentPosition(
-      (pos) => {
-        const geo = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        setHere(geo);
-        if (navigatingRef.current) {
-          wb?.resumeFollow();
-          wb?.follow(pos.coords.longitude, pos.coords.latitude, wb.map.getBearing());
-        } else {
-          wb?.flyTo(pos.coords.latitude, pos.coords.longitude, Math.max(wb.map.getZoom(), 11));
-        }
-      },
-      () => {
+    void readLocation({ timeout: 5_000, maximumAge: 5_000 }).then((fix) => {
+      if (!fix) {
         if (here) wb?.flyTo(here.lat, here.lon, navigating ? NAV_ZOOM : 11);
-      },
-      { timeout: 5000, enableHighAccuracy: true, maximumAge: 5000 },
-    );
+        return;
+      }
+      const geo = { lat: fix.lat, lon: fix.lon };
+      setHere(geo);
+      if (navigatingRef.current) {
+        wb?.resumeFollow();
+        wb?.follow(geo.lon, geo.lat, wb.map.getBearing());
+      } else {
+        wb?.flyTo(geo.lat, geo.lon, Math.max(wb.map.getZoom(), 11));
+      }
+    });
   }
 
   function sharePicked() {

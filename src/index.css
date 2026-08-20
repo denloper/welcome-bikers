@@ -72,6 +72,24 @@ body.wb-nav-go .app {
   min-height: 100dvh;
 }
 
+html.native-app,
+html.native-app body,
+html.native-app #root {
+  max-width: none;
+  width: 100%;
+  min-height: 100dvh;
+  box-shadow: none;
+}
+html.native-app .topbar {
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+}
+html.native-app .bottom-nav {
+  width: 100%;
+  max-width: none;
+  left: 0;
+  transform: none;
+}
+
 .topbar {
   display: grid;
   grid-template-columns: 40px 1fr 40px;

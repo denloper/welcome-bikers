@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { invalidatePlaces } from "../lib/data";
+import { readLocation } from "../lib/location";
 import { store } from "../lib/store";
 import type { Place, PlaceType } from "../types";
 
@@ -43,9 +44,10 @@ export function AddPlace() {
   }
 
   function locate() {
-    navigator.geolocation?.getCurrentPosition((p) => {
-      set("lat", String(p.coords.latitude.toFixed(6)));
-      set("lon", String(p.coords.longitude.toFixed(6)));
+    void readLocation().then((fix) => {
+      if (!fix) return;
+      set("lat", String(fix.lat.toFixed(6)));
+      set("lon", String(fix.lon.toFixed(6)));
     });
   }
 
