@@ -271,6 +271,11 @@ textarea { min-height: 96px; resize: vertical; }
   cursor: pointer;
   width: 100%;
 }
+.btn svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
 .btn.blue { background: var(--blue); color: #fff; }
 .btn.green { background: var(--green); color: #fff; }
 .btn.white { background: #fff; color: #111; }
@@ -577,7 +582,12 @@ textarea { min-height: 96px; resize: vertical; }
 }
 .map-mini svg { width: 18px; height: 18px; }
 .map-place-btns { display: flex; gap: 10px; margin: 12px 0; }
-.map-place-btns .btn { flex: 1; }
+.map-place-btns .btn {
+  flex: 1;
+  height: 42px;
+  padding: 0 12px;
+  font-size: 15px;
+}
 .map-place-photos {
   display: grid;
   grid-template-columns: 1fr 1fr;
