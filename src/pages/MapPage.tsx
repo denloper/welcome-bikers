@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -20,7 +20,7 @@ import {
 import { Stars } from "../components/Stars";
 import { PlacePhoto } from "../components/PlacePhoto";
 import { loadPlaces } from "../lib/data";
-import { bearingDeg, haversineKm, nearestIndex, pointAhead, validCoords } from "../lib/geo";
+import { bearingDeg, haversineKm, pointAhead, validCoords } from "../lib/geo";
 import { MIN_NAV_METERS, remainingAlong, tripTooShort } from "../lib/nav";
 import { createWbMap, NAV_ZOOM, type MapKind, type WbMap } from "../lib/wbmap";
 import {
@@ -176,7 +176,7 @@ export function MapPage() {
     loadPlaces().then(setPlaces);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!mapEl.current) return;
     const wb = createWbMap(mapEl.current, {
       onPlace(id) {
@@ -368,22 +368,30 @@ export function MapPage() {
       }
       return;
     }
-    const placeMe = (lat: number, lon: number, gpsHeading?: number | null) => {
+    const lastFix = { lat: NaN, lon: NaN };
+    const placeMe = (lat: number, lon: number, gpsHeading?: number | null, speed?: number | null) => {
       const gps = { lat, lon };
       setHere(gps);
       const geom = driveRef.current?.geometry;
-      let follow = gps;
-      if (geom && geom.length >= 2) {
-        const i = nearestIndex(geom, gps);
-        const dist = haversineKm(gps, { lat: geom[i][0], lon: geom[i][1] });
-        if (dist > 0.8) follow = { lat: geom[0][0], lon: geom[0][1] };
+      let br: number | null = null;
+      if (
+        gpsHeading != null &&
+        Number.isFinite(gpsHeading) &&
+        gpsHeading >= 0 &&
+        (speed == null || speed > 0.5)
+      ) {
+        br = gpsHeading;
+      } else if (Number.isFinite(lastFix.lat)) {
+        const moved = haversineKm(lastFix, gps) * 1000;
+        if (moved > 3) br = (bearingDeg(lastFix, gps) + 360) % 360;
       }
-      let br = gpsHeading != null && Number.isFinite(gpsHeading) && gpsHeading >= 0 ? gpsHeading : null;
-      if (geom && geom.length >= 2) {
-        const look = pointAhead(geom, follow, 80);
-        if (br == null) br = (bearingDeg(follow, look) + 360) % 360;
+      if (br == null && geom && geom.length >= 2) {
+        const look = pointAhead(geom, gps, 80);
+        br = (bearingDeg(gps, look) + 360) % 360;
       }
-      wb.follow(follow.lon, follow.lat, br);
+      lastFix.lat = lat;
+      lastFix.lon = lon;
+      wb.follow(gps.lon, gps.lat, br);
     };
     getHere().then((p) => {
       if (p) placeMe(p.lat, p.lon);
@@ -391,7 +399,8 @@ export function MapPage() {
     });
     if (navigator.geolocation) {
       watchRef.current = navigator.geolocation.watchPosition(
-        (pos) => placeMe(pos.coords.latitude, pos.coords.longitude, pos.coords.heading),
+        (pos) =>
+          placeMe(pos.coords.latitude, pos.coords.longitude, pos.coords.heading, pos.coords.speed),
         () => {},
         { enableHighAccuracy: true, maximumAge: 800 },
       );

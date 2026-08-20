@@ -242,14 +242,21 @@ function addOverlays(map: MapLibreMap, routeDark: boolean) {
       type: "line",
       source: "wb-route",
       layout: { "line-join": "round", "line-cap": "round" },
-      paint: { "line-color": "#000099", "line-width": 10 },
+      paint: {
+        "line-color": "#000099",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 4, 3, 10, 6, 16, 10],
+      },
     });
     map.addLayer({
       id: "wb-route-line",
       type: "line",
       source: "wb-route",
       layout: { "line-join": "round", "line-cap": "round" },
-      paint: { "line-color": "#0033FF", "line-width": 5, "line-opacity": 0.85 },
+      paint: {
+        "line-color": "#0033FF",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 4, 1.5, 10, 3, 16, 5],
+        "line-opacity": 0.85,
+      },
     });
   }
   paintRoute(map, routeDark);
@@ -437,13 +444,19 @@ export function createWbMap(
 
   const resize = () => {
     if (!alive) return;
+    const w = el.clientWidth;
+    const h = el.clientHeight;
+    if (w < 8 || h < 8) return;
     map.resize();
   };
   window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", resize);
   window.visualViewport?.addEventListener("resize", resize);
+  document.addEventListener("visibilitychange", resize);
   const ro = new ResizeObserver(resize);
   ro.observe(el);
-  requestAnimationFrame(resize);
+  if (el.parentElement) ro.observe(el.parentElement);
+  const retries = [0, 50, 200, 500, 1200].map((ms) => window.setTimeout(resize, ms));
 
   const api: WbMap = {
     map,
@@ -488,7 +501,7 @@ export function createWbMap(
       } = {
         center: [lon, lat],
         pitch: NAV_TILT,
-        duration: 280,
+        duration: 180,
         essential: true,
       };
       if (bearing != null && Number.isFinite(bearing)) cam.bearing = bearing;
@@ -522,8 +535,11 @@ export function createWbMap(
     resize,
     remove() {
       alive = false;
+      retries.forEach((id) => window.clearTimeout(id));
       window.removeEventListener("resize", resize);
+      window.removeEventListener("orientationchange", resize);
       window.visualViewport?.removeEventListener("resize", resize);
+      document.removeEventListener("visibilitychange", resize);
       ro.disconnect();
       try {
         marker?.remove();
