@@ -155,6 +155,7 @@ export function MapPage() {
   const [pickMode, setPickMode] = useState<null | "start" | "via">(null);
   const pickModeRef = useRef(pickMode);
   pickModeRef.current = pickMode;
+  const pickPtr = useRef<{ id: number; x: number; y: number; dragged: boolean } | null>(null);
   const [viaOpen, setViaOpen] = useState(false);
   const [here, setHere] = useState<{ lat: number; lon: number } | null>(null);
   const [locating, setLocating] = useState(false);
@@ -497,6 +498,37 @@ export function MapPage() {
       <div className="map-nav-stage">
         <div className="map-wrap full map-gl" ref={mapEl} data-pitch={navigating ? "45" : "0"} />
       </div>
+      {pickMode && !navigating && (
+        <div
+          className="map-hit"
+          onPointerDown={(e) => {
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            pickPtr.current = { id: e.pointerId, x: e.clientX, y: e.clientY, dragged: false };
+          }}
+          onPointerMove={(e) => {
+            const s = pickPtr.current;
+            if (!s || s.id !== e.pointerId) return;
+            const dx = e.clientX - s.x;
+            const dy = e.clientY - s.y;
+            if (dx * dx + dy * dy > 9) s.dragged = true;
+            s.x = e.clientX;
+            s.y = e.clientY;
+            wbRef.current?.panBy(-dx, -dy);
+          }}
+          onPointerUp={(e) => {
+            const s = pickPtr.current;
+            pickPtr.current = null;
+            if (!s || s.dragged) return;
+            const host = mapEl.current;
+            if (!host) return;
+            const r = host.getBoundingClientRect();
+            wbRef.current?.tapAt(e.clientX - r.left, e.clientY - r.top);
+          }}
+          onPointerCancel={() => {
+            pickPtr.current = null;
+          }}
+        />
+      )}
       {!trip && (
         <div className="map-search">
           <button className="map-round" onClick={() => nav(-1)} aria-label="Back">

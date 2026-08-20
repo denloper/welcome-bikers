@@ -68,7 +68,7 @@ test.describe("GO navigation", () => {
     await page.goto("/#/map");
     await expectMapVisible(page);
     await expect(page.locator(".map-gl")).toHaveAttribute("data-kind", "vector-light");
-    await page.getByTestId("map-theme").evaluate((btn) => (btn as HTMLButtonElement).click());
+    await page.getByTestId("map-theme").tap();
     await expect(page.locator(".map-page.is-dark")).toBeVisible();
     await expect(page.locator(".map-gl")).toHaveAttribute("data-kind", "vector-dark", { timeout: 20_000 });
     await expectMapVisible(page);
@@ -166,27 +166,42 @@ test.describe("GO navigation", () => {
     await page.goto(`/#/map?to=${DEST.lat},${DEST.lon}&name=Test%20Place`);
     await expect(page.locator(".route-go")).toBeEnabled();
     await expectMapVisible(page);
-    await page.locator(".route-add").click();
+    await page.locator(".route-add").tap();
     await expect(page.locator(".map-page.is-pick")).toBeVisible();
     await expect(page.locator(".map-gl")).toHaveAttribute("data-pick", "1");
-    await page.evaluate(() => {
-      const el = document.querySelector(".map-gl") as HTMLElement | null;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      const x = r.left + r.width * 0.4;
-      const y = r.top + r.height * 0.45;
-      const opts: PointerEventInit = {
-        bubbles: true,
-        cancelable: true,
-        clientX: x,
-        clientY: y,
-        pointerId: 1,
-        pointerType: "touch",
-      };
-      el.dispatchEvent(new PointerEvent("pointerdown", opts));
-      el.dispatchEvent(new PointerEvent("pointerup", opts));
+    const hit = page.locator(".map-hit");
+    await expect(hit).toBeVisible();
+    const box = await hit.boundingBox();
+    expect(box && box.width > 100 && box.height > 100).toBeTruthy();
+    await hit.tap({
+      position: { x: Math.round((box?.width || 320) * 0.4), y: Math.round((box?.height || 640) * 0.38) },
     });
     await expect(page.getByText(/1 stop/i)).toBeVisible({ timeout: 10_000 });
     await expect(page.locator(".map-page.is-pick")).toHaveCount(0);
+  });
+
+  test("map chrome responds to a finger tap", async ({ page }) => {
+    await page.goto("/#/map");
+    await expectMapVisible(page);
+    await page.getByLabel("Zoom in").tap();
+    await page.getByLabel("filters").tap();
+    await expect(page.locator(".country-sheet.map-overlay")).toBeVisible();
+    await page.locator(".backdrop.map-overlay").click();
+    await expect(page.locator(".country-sheet.map-overlay")).toHaveCount(0);
+  });
+
+  test("clusters and pins accept a finger tap", async ({ page }) => {
+    await page.goto("/#/map");
+    await expectMapVisible(page);
+    const target = page.locator(".wb-gcluster, .wb-gpin-hit").first();
+    await expect(target).toBeVisible({ timeout: 20_000 });
+    const beforeZoom = await page.locator(".map-gl").getAttribute("data-zoom");
+    await target.tap();
+    await expect
+      .poll(async () => {
+        if ((await page.locator(".map-place").count()) > 0) return "place";
+        return page.locator(".map-gl").getAttribute("data-zoom");
+      })
+      .not.toBe(beforeZoom);
   });
 });

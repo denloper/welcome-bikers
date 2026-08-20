@@ -28,6 +28,7 @@ export function createWbMap(
 
   el.dataset.engine = "pending";
   el.dataset.pitch = "0";
+  el.dataset.boot = String(Date.now()) + Math.random().toString(16).slice(2);
 
   const api: WbMap = {
     map: {
@@ -61,6 +62,12 @@ export function createWbMap(
     },
     zoomBy(dir) {
       use((m) => m.zoomBy(dir));
+    },
+    tapAt(x, y) {
+      use((m) => m.tapAt(x, y));
+    },
+    panBy(dx, dy) {
+      use((m) => m.panBy(dx, dy));
     },
     resize() {
       use((m) => m.resize());

@@ -24,6 +24,8 @@ export type WbMap = {
   setKind: (kind: MapKind, overlays?: { places?: Place[]; darkPins?: boolean; route?: [number, number][] }) => void;
   flyTo: (lat: number, lon: number, zoom?: number) => void;
   zoomBy: (dir: 1 | -1) => void;
+  tapAt: (x: number, y: number) => void;
+  panBy: (dx: number, dy: number) => void;
   resize: () => void;
   remove: () => void;
 };

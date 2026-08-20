@@ -467,9 +467,27 @@ export function createLibreMap(
   });
   map.on("click", (e) => {
     const layers = ["wb-pins", "wb-clusters"].filter((id) => map.getLayer(id));
+    const box: [[number, number], [number, number]] = [
+      [e.point.x - 24, e.point.y - 24],
+      [e.point.x + 24, e.point.y + 24],
+    ];
     if (layers.length) {
-      const hits = map.queryRenderedFeatures(e.point, { layers });
-      if (hits.length) return;
+      const hits = map.queryRenderedFeatures(box, { layers });
+      const pin = hits.find((f) => f.layer.id === "wb-pins");
+      const cluster = hits.find((f) => f.layer.id === "wb-clusters");
+      if (pin?.properties?.id) {
+        opts.onPlace?.(String(pin.properties.id));
+        return;
+      }
+      if (cluster?.properties?.cluster_id != null) {
+        const src = map.getSource("wb-places") as GeoJSONSource;
+        const cid = Number(cluster.properties.cluster_id);
+        const geom = cluster.geometry as unknown as { coordinates: [number, number] };
+        void src.getClusterExpansionZoom(cid).then((z) => {
+          map.easeTo({ center: geom.coordinates, zoom: z, duration: 350, pitch: navOn ? NAV_TILT : 0 });
+        });
+        return;
+      }
     }
     opts.onMap?.(e.lngLat.lat, e.lngLat.lng);
   });
@@ -581,6 +599,14 @@ export function createLibreMap(
     },
     zoomBy(dir) {
       map.easeTo({ zoom: map.getZoom() + dir, duration: 200, pitch: navOn ? NAV_TILT : map.getPitch() });
+    },
+    tapAt(x, y) {
+      if (navOn) return;
+      const ll = map.unproject([x, y]);
+      opts.onMap?.(ll.lat, ll.lng);
+    },
+    panBy(dx, dy) {
+      map.panBy([dx, dy], { duration: 0 });
     },
     resize,
     remove() {
