@@ -94,11 +94,23 @@ export function createWbMap(
       impl = await Promise.race([googleMap, timeout]);
     } catch {
       if (el.dataset.engine === "dead" || !el.isConnected) return;
-      el.dataset.engine = "libre";
-      el.replaceChildren();
-      const { createLibreMap } = await import("./wbmap-libre");
-      if (el.dataset.engine === "dead" || !el.isConnected) return;
-      impl = createLibreMap(el, opts);
+      try {
+        el.dataset.engine = "libre";
+        el.replaceChildren();
+        const { createLibreMap } = await import("./wbmap-libre");
+        if (el.dataset.engine === "dead" || !el.isConnected) return;
+        impl = createLibreMap(el, opts);
+      } catch {
+        if (el.dataset.engine === "dead" || !el.isConnected) return;
+        el.dataset.engine = "failed";
+        el.dataset.ready = "1";
+        const note = document.createElement("div");
+        note.className = "map-engine-failed";
+        note.textContent =
+          "The map could not start in this browser. Check the internet connection and reload the page (Ctrl+F5).";
+        el.replaceChildren(note);
+        return;
+      }
     }
     if (el.dataset.engine === "dead") {
       impl?.remove();

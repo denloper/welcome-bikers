@@ -11,6 +11,36 @@ const ARROW = `<span class="wb-gl-me wb-garrow"><svg viewBox="0 0 24 32" width="
 const ME_STAR = USER_PIN_HTML;
 
 let boot: Promise<void> | null = null;
+let webglState: boolean | null = null;
+
+/**
+ * Remote-desktop and software-rendered environments often create a WebGL
+ * context that only paints black. Google's built-in raster fallback never
+ * fires there, leaving an empty void. Probe once: require a hardware context
+ * and verify a clear actually produces the requested color.
+ */
+function webglHealthy(): boolean {
+  if (webglState != null) return webglState;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 2;
+    canvas.height = 2;
+    const gl = (canvas.getContext("webgl2", { failIfMajorPerformanceCaveat: true }) ||
+      canvas.getContext("webgl", { failIfMajorPerformanceCaveat: true })) as WebGLRenderingContext | null;
+    if (!gl) {
+      webglState = false;
+      return false;
+    }
+    gl.clearColor(0, 0.5, 1, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    const px = new Uint8Array(4);
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    webglState = px[2] > 100;
+  } catch {
+    webglState = false;
+  }
+  return webglState;
+}
 
 function mapsKey() {
   return String(import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "").trim();
@@ -101,6 +131,8 @@ export async function createGoogleMap(
     tilt: navOn ? NAV_TILT : gmap.getTilt() || 0,
   });
 
+  const vectorOk = webglHealthy();
+
   const mapOptions = (next: MapKind, view = camera()): google.maps.MapOptions => ({
     center: view.center,
     zoom: view.zoom,
@@ -111,12 +143,12 @@ export async function createGoogleMap(
     clickableIcons: false,
     draggable: true,
     gestureHandling: "greedy",
-    headingInteractionEnabled: navOn,
+    headingInteractionEnabled: navOn && vectorOk,
     tiltInteractionEnabled: false,
     mapId: mapIdFor(next),
     mapTypeId: next === "satellite" ? "hybrid" : "roadmap",
-    renderingType: google.maps.RenderingType.VECTOR,
-    isFractionalZoomEnabled: true,
+    renderingType: vectorOk ? google.maps.RenderingType.VECTOR : google.maps.RenderingType.RASTER,
+    isFractionalZoomEnabled: vectorOk,
     colorScheme: next === "vector-dark" ? google.maps.ColorScheme.DARK : google.maps.ColorScheme.LIGHT,
   });
 
@@ -284,7 +316,7 @@ export async function createGoogleMap(
   };
 
   const applyNavCamera = () => {
-    gmap.setOptions({ headingInteractionEnabled: navOn, tiltInteractionEnabled: false });
+    gmap.setOptions({ headingInteractionEnabled: navOn && vectorOk, tiltInteractionEnabled: false });
     if (navOn) {
       gmap.setTilt(NAV_TILT);
       if ((gmap.getZoom() ?? 0) < NAV_ZOOM) gmap.setZoom(NAV_ZOOM);

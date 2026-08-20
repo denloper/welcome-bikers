@@ -1197,6 +1197,18 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   pointer-events: none;
 }
 
+.map-engine-failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+  color: #9aa3ad;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .route-ab {
   position: absolute;
   left: 12px;
