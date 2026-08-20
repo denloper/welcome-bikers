@@ -134,12 +134,12 @@ html.native-app .bottom-nav {
 .logo-wrap {
   display: flex;
   justify-content: center;
-  padding: 12px 24px 6px;
+  padding: 8px 24px 2px;
 }
 .brand-logo {
-  width: 176px;
+  width: 138px;
   height: auto;
-  max-width: 48%;
+  max-width: 38%;
 }
 .brand-logo.sm {
   width: 110px;
@@ -149,7 +149,7 @@ html.native-app .bottom-nav {
 .banner {
   display: block;
   width: calc(100% - 32px);
-  margin: 4px 16px 20px;
+  margin: 4px 16px 12px;
   padding: 0;
   border: 0;
   background: none;
@@ -167,8 +167,8 @@ html.native-app .bottom-nav {
 .grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 22px 0;
-  padding: 2px 4px 20px;
+  gap: 18px 0;
+  padding: 2px 4px 8px;
 }
 .cat {
   display: flex;
@@ -227,8 +227,15 @@ html.native-app .bottom-nav {
 
 .search-row {
   display: flex;
+  align-items: center;
   gap: 8px;
   padding: 8px 16px 12px;
+}
+.search-row svg {
+  width: 18px;
+  height: 18px;
+  color: #888;
+  flex: 0 0 auto;
 }
 .search-row input, .field, select, textarea {
   width: 100%;
@@ -237,6 +244,10 @@ html.native-app .bottom-nav {
   border-radius: 12px;
   padding: 12px 14px;
   outline: none;
+}
+.search-row input {
+  width: auto;
+  flex: 1;
 }
 textarea { min-height: 96px; resize: vertical; }
 
@@ -1193,13 +1204,13 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  margin: 0 auto 14px;
-  padding: 4px 12px;
+  gap: 8px;
+  margin: 0 auto 6px;
+  padding: 2px 10px;
   background: none;
   border: 0;
   color: #fff;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }

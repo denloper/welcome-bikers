@@ -228,12 +228,14 @@ test("HUD previews upcoming maneuvers, not the road already driven", () => {
 });
 
 test("voice picker prefers natural voices over compact ones", () => {
-  const natural = voiceScore({ name: "Microsoft Ava Online (Natural)", lang: "en-US", localService: false });
+  const guy = voiceScore({ name: "Microsoft Guy Online (Natural)", lang: "en-US", localService: false });
+  const ava = voiceScore({ name: "Microsoft Ava Online (Natural)", lang: "en-US", localService: false });
   const google = voiceScore({ name: "Google US English", lang: "en-US", localService: false });
   const compact = voiceScore({ name: "Samantha (Compact)", lang: "en-US", localService: true });
   const novelty = voiceScore({ name: "Zarvox", lang: "en-US", localService: true });
   const russian = voiceScore({ name: "Milena", lang: "ru-RU", localService: true });
-  expect(natural).toBeGreaterThan(google);
+  expect(guy).toBeGreaterThan(ava);
+  expect(guy).toBeGreaterThan(google);
   expect(google).toBeGreaterThan(compact);
   expect(novelty).toBe(-1);
   expect(russian).toBe(-1);

@@ -53,7 +53,7 @@ function placeCard(p: Place): Card {
   };
 }
 
-export function RealBroAvatar({ phase, size = 46 }: { phase: Phase; size?: number }) {
+export function RealBroAvatar({ phase, size = 32 }: { phase: Phase; size?: number }) {
   return (
     <span className={`rb-ava ${phase}`} style={{ width: size, height: size }} data-phase={phase}>
       <svg viewBox="0 0 64 64" aria-hidden="true">
@@ -328,7 +328,7 @@ export function RealBro() {
           <div className="backdrop" onClick={closeSheet} />
           <div className="rb-sheet" data-testid="assistant-sheet">
             <div className="rb-head">
-              <RealBroAvatar phase={phase} size={52} />
+              <RealBroAvatar phase={phase} size={40} />
               <div>
                 <b>Real Bro</b>
                 <span className="rb-state">{stateLabel}</span>

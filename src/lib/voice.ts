@@ -103,6 +103,20 @@ const NOVELTY = [
   "jester", "organ", "superstar", "trinoids", "whisper", "wobble", "zarvox",
 ];
 
+const MALE =
+  /\b(guy|davis|eric|brian|daniel|david|mark|matthew|ryan|tony|christopher|steffan|andrew|roger|george|james|michael|nathan|tom|alex|fred|geraint|ravi|jason|wayne|eddy)\b/;
+const FEMALE =
+  /\b(ava|aria|jenny|samantha|allison|joanna|emma|zira|susan|hazel|sonia|karen|moira|tessa|fiona|victoria|salli|ivy|kendra|kimberly|nicole|raveena|amy|linda|heera)\b/;
+
+/** Bass-leaning male English — Web Speech cannot do a real gangsta voice. */
+export const BRO_VOICE = { rate: 0.9, pitch: 0.78 };
+
+function genderAdjust(name: string): number {
+  if (FEMALE.test(name) || /\bfemale\b/.test(name)) return -36;
+  if (MALE.test(name) || /\bmale\b/.test(name)) return 28;
+  return 0;
+}
+
 export function voiceScore(voice: { name: string; lang: string; localService?: boolean }): number {
   const lang = voice.lang.toLowerCase().replace("_", "-");
   if (!lang.startsWith("en")) return -1;
@@ -115,7 +129,7 @@ export function voiceScore(voice: { name: string; lang: string; localService?: b
   if (name.includes("siri")) score += 36;
   if (name.includes("google")) score += 30;
   if (name.includes("online")) score += 12;
-  if (/\b(ava|aria|jenny|samantha|allison|nathan|joanna|emma|guy)\b/.test(name)) score += 8;
+  score += genderAdjust(name);
   if (name.includes("compact")) score -= 40;
   if (voice.localService === false) score += 8;
   return score;
@@ -157,6 +171,7 @@ function qualityScoreFor(voice: { name: string; lang: string; localService?: boo
   if (name.includes("siri")) score += 36;
   if (name.includes("google")) score += 30;
   if (name.includes("online")) score += 12;
+  score += genderAdjust(name);
   if (name.includes("compact")) score -= 40;
   if (voice.localService === false) score += 8;
   return score;
@@ -176,8 +191,8 @@ export function speakText(text: string, lang: string, onDone?: () => void): bool
     if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = lang;
-    u.rate = 1;
-    u.pitch = 1;
+    u.rate = BRO_VOICE.rate;
+    u.pitch = BRO_VOICE.pitch;
     u.volume = 1;
     if (!cachedVoices.length) warmVoices();
     let best: SpeechSynthesisVoice | null = null;
@@ -218,8 +233,8 @@ export function speakLine(text: string) {
     if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "en-US";
-    u.rate = 1;
-    u.pitch = 1;
+    u.rate = BRO_VOICE.rate;
+    u.pitch = BRO_VOICE.pitch;
     u.volume = 1;
     const voice = pickVoice();
     if (voice) {

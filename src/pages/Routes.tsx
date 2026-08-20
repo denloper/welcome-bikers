@@ -58,6 +58,15 @@ export function Routes() {
           </button>
         }
       />
+      <label className="search-row">
+        <IconSearch />
+        <input
+          placeholder="Search routes, places, countries..."
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          aria-label="Search routes"
+        />
+      </label>
       {list.map((r) => (
         <article className="card route-card" key={r.id}>
           <div className="card-photo">
