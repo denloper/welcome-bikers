@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import "leaflet.markercluster";
-import "leaflet.markercluster/dist/MarkerCluster.css";
-import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import {
   IconBack,
   IconFilter,
@@ -25,11 +20,9 @@ import {
 import { Stars } from "../components/Stars";
 import { PlacePhoto } from "../components/PlacePhoto";
 import { loadPlaces } from "../lib/data";
-import { asset } from "../lib/assets";
 import { bearingDeg, haversineKm, nearestIndex, pointAhead, validCoords } from "../lib/geo";
 import { MIN_NAV_METERS, remainingAlong, tripTooShort } from "../lib/nav";
-import { createNavMap, followNav, navZoom, setNavTheme } from "../lib/nav3d";
-import { darkTiles, lightTiles, satTiles } from "../lib/osm";
+import { createWbMap, NAV_ZOOM, type MapKind, type WbMap } from "../lib/wbmap";
 import {
   formatArrival,
   formatDriveTime,
@@ -57,25 +50,6 @@ const TYPES: PlaceType[] = [
 ];
 
 type Stop = { lat: number; lon: number; label: string; role: "start" | "via" | "end" };
-
-function pinIcon(type: PlaceType, friendly = false, darkPins = false) {
-  const tone = friendly ? "friendly" : darkPins ? "white" : "black";
-  return L.icon({
-    className: "wb-pin",
-    iconUrl: asset(`pins/${tone}/${type}.svg`),
-    iconSize: [30, 40],
-    iconAnchor: [15, 40],
-  });
-}
-
-function navArrowIcon() {
-  return L.divIcon({
-    className: "wb-me",
-    html: `<span class="wb-nav-chevron"><svg viewBox="0 0 24 32" width="26" height="34"><path d="M12 2 L22 30 L12 23 L2 30 Z" fill="#3d8aff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></span>`,
-    iconSize: [26, 34],
-    iconAnchor: [13, 26],
-  });
-}
 
 function parsePts(raw: string | null) {
   if (!raw) return [];
@@ -131,22 +105,21 @@ function setGoChrome(on: boolean) {
   document.querySelector(".app")?.classList.toggle("no-nav", on);
 }
 
+function mapKind(light: boolean, sat: boolean): MapKind {
+  if (sat) return "satellite";
+  return light ? "vector-light" : "vector-dark";
+}
+
 export function MapPage() {
   const nav = useNavigate();
   const [params] = useSearchParams();
   const mapEl = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
-  const osmRef = useRef<L.TileLayer | null>(null);
-  const lightRef = useRef<L.TileLayer | null>(null);
-  const satRef = useRef<L.TileLayer | null>(null);
-  const lineRef = useRef<L.Polyline | null>(null);
-  const endsRef = useRef<L.LayerGroup | null>(null);
-  const meRef = useRef<L.Marker | null>(null);
+  const wbRef = useRef<WbMap | null>(null);
   const watchRef = useRef<number | null>(null);
-  const glEl = useRef<HTMLDivElement>(null);
-  const glRef = useRef<ReturnType<typeof createNavMap> | null>(null);
+  const pickGen = useRef(0);
   const [places, setPlaces] = useState<Place[]>([]);
+  const placesRef = useRef(places);
+  placesRef.current = places;
   const [q, setQ] = useState("");
   const [on, setOn] = useState<Record<string, boolean>>(Object.fromEntries(TYPES.map((t) => [t, true])));
   const [friendly, setFriendly] = useState(false);
@@ -166,11 +139,19 @@ export function MapPage() {
   driveRef.current = drive;
   const [routingErr, setRoutingErr] = useState(false);
   const [navigating, setNavigating] = useState(false);
+  const navigatingRef = useRef(false);
+  navigatingRef.current = navigating;
   const [pickMode, setPickMode] = useState<null | "start" | "via">(null);
+  const pickModeRef = useRef(pickMode);
+  pickModeRef.current = pickMode;
   const [viaOpen, setViaOpen] = useState(false);
   const [here, setHere] = useState<{ lat: number; lon: number } | null>(null);
   const [locating, setLocating] = useState(false);
-  const pickGen = useRef(0);
+  const kindInit = useRef(true);
+  const overlayRef = useRef<{ filtered: Place[]; darkPins: boolean; geometry?: [number, number][] }>({
+    filtered: [],
+    darkPins: false,
+  });
 
   const filtered = useMemo(() => {
     const s = q.toLowerCase();
@@ -185,6 +166,7 @@ export function MapPage() {
 
   const trip = Boolean(stops && stops.length >= 2);
   const darkPins = !light && !sat;
+  overlayRef.current = { filtered, darkPins, geometry: drive?.geometry };
   const live = navigating && drive ? remainingAlong(drive, here || { lat: stops![0].lat, lon: stops![0].lon }) : null;
   const nowStep: NavStep | undefined = drive?.steps[live?.stepI ?? 0];
   const nextStep: NavStep | undefined = drive?.steps[(live?.stepI ?? 0) + 1];
@@ -196,62 +178,12 @@ export function MapPage() {
 
   useEffect(() => {
     if (!mapEl.current) return;
-    const map = L.map(mapEl.current, { zoomControl: false, attributionControl: false }).setView([45.1, 16.5], 5);
-    const dark = darkTiles(0);
-    const day = lightTiles().addTo(map);
-    const satLayer = satTiles();
-    const cluster = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 48 });
-    map.addLayer(cluster);
-    mapRef.current = map;
-    clusterRef.current = cluster;
-    osmRef.current = dark;
-    lightRef.current = day;
-    satRef.current = satLayer;
-    endsRef.current = L.layerGroup().addTo(map);
-    setReady(true);
-    const resize = () => map.invalidateSize();
-    const t = window.setTimeout(resize, 80);
-    const t2 = window.setTimeout(resize, 400);
-    window.addEventListener("resize", resize);
-    return () => {
-      window.clearTimeout(t);
-      window.clearTimeout(t2);
-      window.removeEventListener("resize", resize);
-      map.remove();
-      mapRef.current = null;
-      clusterRef.current = null;
-      endsRef.current = null;
-      satRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    const dark = osmRef.current;
-    const day = lightRef.current;
-    const satLayer = satRef.current;
-    if (!map || !dark || !day || !satLayer || !ready) return;
-    const show = sat ? satLayer : light ? day : dark;
-    for (const layer of [dark, day, satLayer]) {
-      if (layer === show) {
-        if (!map.hasLayer(layer)) layer.addTo(map);
-      } else if (map.hasLayer(layer)) {
-        map.removeLayer(layer);
-      }
-    }
-  }, [light, sat, ready]);
-
-  useEffect(() => {
-    const cluster = clusterRef.current;
-    if (!cluster || !ready) return;
-    cluster.clearLayers();
-    filtered.forEach((p) => {
-      const marker = L.marker([p.lat, p.lon], {
-        title: p.name,
-        icon: pinIcon(p.types[0], p.bikersFriendly, darkPins),
-      });
-      marker.on("click", () => {
-        if (pickMode === "via") {
+    const wb = createWbMap(mapEl.current, {
+      onPlace(id) {
+        if (navigatingRef.current) return;
+        const p = placesRef.current.find((x) => String(x.id) === String(id));
+        if (!p) return;
+        if (pickModeRef.current === "via") {
           setStops((cur) => {
             if (!cur || cur.length < 2) return cur;
             const next = cur.slice();
@@ -261,7 +193,7 @@ export function MapPage() {
           setPickMode(null);
           return;
         }
-        if (pickMode === "start") {
+        if (pickModeRef.current === "start") {
           pickGen.current += 1;
           setLocating(false);
           setStops((cur) => {
@@ -274,10 +206,44 @@ export function MapPage() {
           return;
         }
         setPicked(p);
-      });
-      cluster.addLayer(marker);
+      },
+      onMap(lat, lon) {
+        if (navigatingRef.current) return;
+        const mode = pickModeRef.current;
+        if (!mode) return;
+        const hit = nearestPlace(placesRef.current, lat, lon);
+        pickGen.current += 1;
+        setLocating(false);
+        if (mode === "start") {
+          setStops((cur) => {
+            if (!cur) return cur;
+            const next = cur.slice();
+            next[0] = { lat, lon, label: hit?.name || "My current location", role: "start" };
+            return next;
+          });
+        } else {
+          setStops((cur) => {
+            if (!cur || cur.length < 2) return cur;
+            const next = cur.slice();
+            const label = hit?.name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+            next.splice(next.length - 1, 0, { lat, lon, label, role: "via" });
+            return next;
+          });
+        }
+        setPickMode(null);
+      },
     });
-  }, [filtered, ready, pickMode, darkPins]);
+    wbRef.current = wb;
+    setReady(true);
+    return () => {
+      wb.remove();
+      wbRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    wbRef.current?.setPlaces(filtered, darkPins);
+  }, [filtered, darkPins, ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -298,7 +264,7 @@ export function MapPage() {
       setNavigating(false);
       if (via.length >= 2) {
         const built: Stop[] = via.map((p, i) => {
-          const hit = nearestPlace(places, p.lat, p.lon);
+          const hit = nearestPlace(placesRef.current, p.lat, p.lon);
           const role: Stop["role"] = i === 0 ? "start" : i === via.length - 1 ? "end" : "via";
           let label = hit?.name || `Stop ${i + 1}`;
           if (i === via.length - 1 && named) label = named;
@@ -308,7 +274,7 @@ export function MapPage() {
         return;
       }
       const dest = to[0];
-      const hit = nearestPlace(places, dest.lat, dest.lon);
+      const hit = nearestPlace(placesRef.current, dest.lat, dest.lon);
       const end: Stop = {
         ...dest,
         label: named || hit?.name || "Destination",
@@ -326,17 +292,20 @@ export function MapPage() {
     return () => {
       cancelled = true;
     };
-  }, [params, ready, places]);
+  }, [params, ready]);
 
   useEffect(() => {
     if (!ready || !stops || stops.length < 2) {
       setDrive(null);
       setRoutingErr(false);
+      wbRef.current?.clearRoute();
       return;
     }
     if (tripTooShort(stops)) {
       setDrive(null);
       setRoutingErr(false);
+      wbRef.current?.clearRoute();
+      wbRef.current?.flyTo(stops[stops.length - 1].lat, stops[stops.length - 1].lon, 16);
       return;
     }
     let cancelled = false;
@@ -351,155 +320,52 @@ export function MapPage() {
   }, [stops, tolls, ready]);
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !ready || !stops || stops.length < 2) {
-      lineRef.current?.remove();
-      lineRef.current = null;
-      endsRef.current?.clearLayers();
+    const wb = wbRef.current;
+    if (!wb || !ready) return;
+    if (!stops || stops.length < 2) {
+      wb.clearRoute();
       return;
     }
-    lineRef.current?.remove();
-    endsRef.current?.clearLayers();
-    const start = stops[0];
-    const end = stops[stops.length - 1];
+    const pts = drive?.geometry.length ? drive.geometry : stops.map((s) => [s.lat, s.lon] as [number, number]);
     if (tripTooShort(stops)) {
-      if (!navigating) {
-        L.circleMarker([start.lat, start.lon], {
-          radius: 8,
-          color: "#fff",
-          weight: 2,
-          fillColor: "#3d8aff",
-          fillOpacity: 1,
-        }).addTo(endsRef.current!);
-        const endPlace = nearestPlace(places, end.lat, end.lon);
-        L.marker([end.lat, end.lon], {
-          icon: pinIcon(endPlace?.types[0] || "hotels", Boolean(endPlace?.bikersFriendly), !light && !sat),
-          interactive: false,
-        }).addTo(endsRef.current!);
-        map.setView([end.lat, end.lon], 16, { animate: false });
-      }
+      wb.clearRoute();
+      wb.flyTo(stops[stops.length - 1].lat, stops[stops.length - 1].lon, 16);
       return;
     }
-    const latlngs = drive?.geometry.length
-      ? drive.geometry
-      : stops.map((s) => [s.lat, s.lon] as [number, number]);
-    const line = L.polyline(latlngs, {
-      color: "#3d8aff",
-      weight: navigating ? 7 : drive ? 6 : 4,
-      opacity: 0.95,
-      dashArray: drive ? undefined : "8 10",
-    }).addTo(map);
-    lineRef.current = line;
-    if (navigating) return;
-    L.circleMarker([start.lat, start.lon], {
-      radius: 8,
-      color: "#fff",
-      weight: 2,
-      fillColor: "#3d8aff",
-      fillOpacity: 1,
-    }).addTo(endsRef.current!);
-    const endPlace = nearestPlace(places, end.lat, end.lon);
-    L.marker([end.lat, end.lon], {
-      icon: pinIcon(endPlace?.types[0] || "hotels", Boolean(endPlace?.bikersFriendly), !light && !sat),
-      interactive: false,
-    }).addTo(endsRef.current!);
-    map.fitBounds(line.getBounds(), { paddingTopLeft: [24, 130], paddingBottomRight: [56, 250] });
-  }, [drive, stops, navigating, ready, places, light, sat]);
+    wb.setRoute(pts, !light && !sat, { fit: !navigating && Boolean(drive) });
+  }, [drive, stops, ready, light, sat, navigating]);
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !ready || !pickMode) return;
-    const onClick = (e: L.LeafletMouseEvent) => {
-      const hit = nearestPlace(places, e.latlng.lat, e.latlng.lng);
-      const label = hit?.name || `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
-      if (pickMode === "start") {
-        pickGen.current += 1;
-        setLocating(false);
-        setStops((cur) => {
-          if (!cur) return cur;
-          const next = cur.slice();
-          next[0] = { lat: e.latlng.lat, lon: e.latlng.lng, label: hit?.name || "My current location", role: "start" };
-          return next;
-        });
-      } else {
-        setStops((cur) => {
-          if (!cur || cur.length < 2) return cur;
-          const next = cur.slice();
-          next.splice(next.length - 1, 0, { lat: e.latlng.lat, lon: e.latlng.lng, label, role: "via" });
-          return next;
-        });
-      }
-      setPickMode(null);
-    };
-    map.on("click", onClick);
-    return () => {
-      map.off("click", onClick);
-    };
-  }, [pickMode, ready, places]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    const cluster = clusterRef.current;
-    if (!map || !ready) return;
-    if (navigating) {
-      if (cluster && map.hasLayer(cluster)) map.removeLayer(cluster);
-    } else {
-      if (cluster && !map.hasLayer(cluster)) map.addLayer(cluster);
+    if (!ready) return;
+    if (kindInit.current) {
+      kindInit.current = false;
+      return;
     }
-    const refresh = () => map.invalidateSize();
-    refresh();
-    const t = window.setTimeout(refresh, 60);
-    const t2 = window.setTimeout(refresh, 280);
-    const t3 = window.setTimeout(refresh, 600);
-    return () => {
-      window.clearTimeout(t);
-      window.clearTimeout(t2);
-      window.clearTimeout(t3);
-    };
-  }, [navigating, ready]);
+    const o = overlayRef.current;
+    wbRef.current?.setKind(mapKind(light, sat), {
+      places: o.filtered,
+      darkPins: o.darkPins,
+      route: o.geometry,
+    });
+  }, [light, sat, ready]);
 
   useEffect(() => {
     setGoChrome(navigating);
-    return () => setGoChrome(false);
-  }, [navigating]);
-
-  useEffect(() => {
-    if (!navigating || !glEl.current) return;
-    const start = stops?.[0];
-    if (!start) return;
-    const map = createNavMap(glEl.current, {
-      lon: start.lon,
-      lat: start.lat,
-      dark: !light && !sat,
-      route: driveRef.current?.geometry || [],
-    });
-    glRef.current = map;
-    const resize = () => map.resize();
-    const t = window.setTimeout(resize, 80);
-    const t2 = window.setTimeout(resize, 400);
+    wbRef.current?.setNav(navigating);
+    const t = window.setTimeout(() => wbRef.current?.resize(), 50);
     return () => {
       window.clearTimeout(t);
-      window.clearTimeout(t2);
-      map.remove();
-      glRef.current = null;
+      setGoChrome(false);
     };
   }, [navigating]);
 
   useEffect(() => {
-    const gl = glRef.current;
-    if (!gl) return;
-    setNavTheme(gl, !light && !sat, driveRef.current?.geometry || []);
-  }, [light, sat]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!navigating || !map) {
+    const wb = wbRef.current;
+    if (!navigating || !wb) {
       if (watchRef.current != null) {
         navigator.geolocation?.clearWatch(watchRef.current);
         watchRef.current = null;
       }
-      meRef.current?.remove();
-      meRef.current = null;
       return;
     }
     const placeMe = (lat: number, lon: number, gpsHeading?: number | null) => {
@@ -513,28 +379,11 @@ export function MapPage() {
         if (dist > 0.8) follow = { lat: geom[0][0], lon: geom[0][1] };
       }
       let br = gpsHeading != null && Number.isFinite(gpsHeading) && gpsHeading >= 0 ? gpsHeading : null;
-      let look = follow;
       if (geom && geom.length >= 2) {
-        look = pointAhead(geom, follow, 80);
+        const look = pointAhead(geom, follow, 80);
         if (br == null) br = (bearingDeg(follow, look) + 360) % 360;
       }
-      if (br != null) {
-        const needle = meRef.current?.getElement()?.querySelector(".wb-nav-chevron") as HTMLElement | null;
-        if (needle) needle.style.transform = `rotate(${br}deg)`;
-      }
-      const gl = glRef.current;
-      if (gl) {
-        followNav(gl, { lon: follow.lon, lat: follow.lat, bearing: br });
-        return;
-      }
-      if (!meRef.current) {
-        meRef.current = L.marker([follow.lat, follow.lon], { icon: navArrowIcon(), zIndexOffset: 1200 }).addTo(map);
-        const needle = meRef.current.getElement()?.querySelector(".wb-nav-chevron") as HTMLElement | null;
-        if (needle && br != null) needle.style.transform = `rotate(${br}deg)`;
-      } else {
-        meRef.current.setLatLng([follow.lat, follow.lon]);
-      }
-      map.setView([follow.lat, follow.lon], Math.max(map.getZoom(), 16), { animate: false });
+      wb.follow(follow.lon, follow.lat, br);
     };
     getHere().then((p) => {
       if (p) placeMe(p.lat, p.lon);
@@ -554,26 +403,17 @@ export function MapPage() {
   }, [navigating, stops]);
 
   function locate() {
-    const gl = glRef.current;
+    const wb = wbRef.current;
     navigator.geolocation?.getCurrentPosition(
       (pos) => {
-        if (glRef.current) {
-          followNav(glRef.current, {
-            lon: pos.coords.longitude,
-            lat: pos.coords.latitude,
-            bearing: glRef.current.getBearing(),
-          });
+        if (navigatingRef.current) {
+          wb?.follow(pos.coords.longitude, pos.coords.latitude, wb.map.getBearing());
         } else {
-          mapRef.current?.setView([pos.coords.latitude, pos.coords.longitude], Math.max(mapRef.current.getZoom(), 11));
+          wb?.flyTo(pos.coords.latitude, pos.coords.longitude, Math.max(wb.map.getZoom(), 11));
         }
       },
       () => {
-        if (gl) {
-          const c = gl.getCenter();
-          followNav(gl, { lon: c.lng, lat: c.lat, bearing: gl.getBearing() });
-        } else if (here) {
-          mapRef.current?.setView([here.lat, here.lon], 11);
-        }
+        if (here) wb?.flyTo(here.lat, here.lon, navigating ? NAV_ZOOM : 11);
       },
       { timeout: 5000, enableHighAccuracy: true, maximumAge: 5000 },
     );
@@ -626,8 +466,7 @@ export function MapPage() {
   return (
     <div className={`page map-page${navigating ? " is-nav" : ""}${light || sat ? "" : " is-dark"}${pickMode ? " is-pick" : ""}`}>
       <div className="map-nav-stage">
-        <div className="map-wrap full" ref={mapEl} />
-        {navigating && <div className="map-gl" ref={glEl} data-pitch="45" />}
+        <div className="map-wrap full map-gl" ref={mapEl} data-pitch={navigating ? "45" : "0"} />
       </div>
       {!trip && (
         <div className="map-search">
@@ -682,7 +521,7 @@ export function MapPage() {
                     </div>
                   </button>
                 )}
-                {(!viaOpen && vias.length > 0) && (
+                {!viaOpen && vias.length > 0 && (
                   <button type="button" className="route-stop" onClick={() => setViaOpen(true)}>
                     <span className="route-dot end" />
                     <div>
@@ -781,24 +620,10 @@ export function MapPage() {
         >
           {light && !sat ? <IconSun /> : <IconMoon />}
         </button>
-        <button
-          className="map-round"
-          onClick={() => {
-            if (glRef.current) navZoom(glRef.current, 1);
-            else mapRef.current?.zoomIn();
-          }}
-          aria-label="Zoom in"
-        >
+        <button className="map-round" onClick={() => wbRef.current?.zoomBy(1)} aria-label="Zoom in">
           +
         </button>
-        <button
-          className="map-round"
-          onClick={() => {
-            if (glRef.current) navZoom(glRef.current, -1);
-            else mapRef.current?.zoomOut();
-          }}
-          aria-label="Zoom out"
-        >
+        <button className="map-round" onClick={() => wbRef.current?.zoomBy(-1)} aria-label="Zoom out">
           −
         </button>
         <button className="map-round" onClick={locate} aria-label="My location">

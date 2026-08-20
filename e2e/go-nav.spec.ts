@@ -52,6 +52,13 @@ async function mockRouting(page: Page) {
 }
 
 test.describe("GO navigation", () => {
+  test("browse map stays visible with a canvas", async ({ page }) => {
+    await page.goto("/#/map");
+    await expect(page.locator(".map-gl canvas")).toBeVisible();
+    await expect(page.locator(".map-page.is-nav")).toHaveCount(0);
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-pitch", "0");
+  });
+
   test("uses a 45-degree 3D camera like the original, with side tools", async ({ page, context }) => {
     await context.grantPermissions(["geolocation"]);
     await context.setGeolocation(START);
@@ -78,11 +85,19 @@ test.describe("GO navigation", () => {
     await expect(page.getByLabel("My location")).toBeVisible();
 
     await expect(page.locator(".map-gl")).toHaveAttribute("data-ready", "1", { timeout: 20_000 });
-    await page.waitForTimeout(2500);
-    const pitch = await page.locator(".map-gl").getAttribute("data-pitch");
-    expect(pitch).toBe("45");
-
+    await page.waitForTimeout(1500);
+    expect(await page.locator(".map-gl").getAttribute("data-pitch")).toBe("45");
+    const box = await page.locator(".map-gl canvas").boundingBox();
+    expect(box && box.width > 100 && box.height > 100).toBeTruthy();
     await page.screenshot({ path: "test-results/go-nav.png", fullPage: true });
+
+    await page.locator(".nav-exit").click();
+    await expect(page.locator(".map-page.is-nav")).toHaveCount(0);
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-pitch", "0");
+    await expect(page.locator(".map-gl canvas")).toBeVisible();
+    await expect(page.locator(".route-go")).toBeEnabled();
+
+    await page.screenshot({ path: "test-results/go-exit.png", fullPage: true });
   });
 
   test("does not start GO when GPS is already at the destination", async ({ page, context }) => {

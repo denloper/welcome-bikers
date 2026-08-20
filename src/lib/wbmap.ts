@@ -1,0 +1,538 @@
+import { GeoJSONSource, Map as MapLibreMap, Marker, setWorkerUrl } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import { asset } from "./assets";
+import type { Place, PlaceType } from "../types";
+
+setWorkerUrl(workerUrl);
+
+export const NAV_TILT = 45;
+export const NAV_ZOOM = 17;
+
+const PIN_TYPES: PlaceType[] = [
+  "hotels",
+  "shops",
+  "bars",
+  "restaurants",
+  "services",
+  "rent",
+  "festivals",
+  "viewpoints",
+  "historical",
+];
+const TONES = ["friendly", "black", "white"] as const;
+const pinCache: Record<string, ImageData> = {};
+
+const ARROW = `<span class="wb-gl-me"><svg viewBox="0 0 24 32" width="28" height="36"><path d="M12 2 L22 30 L12 23 L2 30 Z" fill="#3DADF3" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></span>`;
+
+export type MapKind = "vector-light" | "vector-dark" | "satellite";
+
+export type WbMap = {
+  map: MapLibreMap;
+  el: HTMLElement;
+  setPlaces: (places: Place[], darkPins: boolean) => void;
+  setRoute: (pts: [number, number][], dark: boolean, opts?: { fit?: boolean }) => void;
+  clearRoute: () => void;
+  setNav: (on: boolean) => void;
+  follow: (lon: number, lat: number, bearing?: number | null) => void;
+  setKind: (kind: MapKind, overlays?: { places?: Place[]; darkPins?: boolean; route?: [number, number][] }) => void;
+  flyTo: (lat: number, lon: number, zoom?: number) => void;
+  zoomBy: (dir: 1 | -1) => void;
+  resize: () => void;
+  remove: () => void;
+};
+
+function vectorStyle(dark: boolean) {
+  return dark ? "https://tiles.openfreemap.org/styles/dark" : "https://tiles.openfreemap.org/styles/liberty";
+}
+
+function rasterStyle(dark: boolean) {
+  const url = dark
+    ? "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
+    : "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
+  return {
+    version: 8 as const,
+    glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+    sources: {
+      carto: { type: "raster" as const, tiles: [url], tileSize: 256 },
+    },
+    layers: [{ id: "carto", type: "raster" as const, source: "carto" }],
+  };
+}
+
+function satStyle() {
+  return {
+    version: 8 as const,
+    glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+    sources: {
+      sat: {
+        type: "raster" as const,
+        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+        tileSize: 256,
+      },
+    },
+    layers: [{ id: "sat", type: "raster" as const, source: "sat" }],
+  };
+}
+
+function kindStyle(kind: MapKind) {
+  if (kind === "satellite") return satStyle();
+  if (kind === "vector-dark") return vectorStyle(true);
+  return vectorStyle(false);
+}
+
+function placesFc(places: Place[], darkPins: boolean) {
+  return {
+    type: "FeatureCollection" as const,
+    features: places
+      .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon))
+      .map((p) => ({
+        type: "Feature" as const,
+        geometry: { type: "Point" as const, coordinates: [p.lon, p.lat] },
+        properties: {
+          id: String(p.id),
+          name: p.name,
+          type: p.types[0] || "hotels",
+          icon: `pin-${p.bikersFriendly ? "friendly" : darkPins ? "white" : "black"}-${p.types[0] || "hotels"}`,
+        },
+      })),
+  };
+}
+
+function routeFc(pts: [number, number][]) {
+  return {
+    type: "FeatureCollection" as const,
+    features: [
+      {
+        type: "Feature" as const,
+        properties: {},
+        geometry: {
+          type: "LineString" as const,
+          coordinates: pts.map(([lat, lon]) => [lon, lat]),
+        },
+      },
+    ],
+  };
+}
+
+async function rasterize(url: string, w: number, h: number) {
+  const hit = pinCache[url];
+  if (hit) return hit;
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error(url));
+    el.src = url;
+  });
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext("2d");
+  if (!ctx) throw new Error("canvas");
+  ctx.drawImage(img, 0, 0, w, h);
+  const data = ctx.getImageData(0, 0, w, h);
+  pinCache[url] = data;
+  return data;
+}
+
+async function loadPins(map: MapLibreMap) {
+  await Promise.all(
+    TONES.flatMap((tone) =>
+      PIN_TYPES.map(async (type) => {
+        const id = `pin-${tone}-${type}`;
+        if (map.hasImage(id)) return;
+        try {
+          const data = await rasterize(asset(`pins/${tone}/${type}.svg`), 60, 80);
+          if (!map.hasImage(id)) map.addImage(id, data, { pixelRatio: 2 });
+        } catch {
+          /* skip missing pin */
+        }
+      }),
+    ),
+  );
+}
+
+function addBuildings(map: MapLibreMap) {
+  if (map.getLayer("wb-3d-buildings") || !map.getSource("openmaptiles")) return;
+  try {
+    for (const layer of map.getStyle().layers || []) {
+      if (layer.type === "fill" && /building/i.test(layer.id)) {
+        map.setLayoutProperty(layer.id, "visibility", "none");
+      }
+    }
+    map.addLayer({
+      id: "wb-3d-buildings",
+      source: "openmaptiles",
+      "source-layer": "building",
+      type: "fill-extrusion",
+      minzoom: 14,
+      paint: {
+        "fill-extrusion-color": "#c4c1b6",
+        "fill-extrusion-height": ["coalesce", ["get", "render_height"], ["get", "height"], 8],
+        "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], ["get", "min_height"], 0],
+        "fill-extrusion-opacity": 0.82,
+      },
+    });
+  } catch {
+    /* no buildings */
+  }
+}
+
+function paintRoute(map: MapLibreMap, dark: boolean) {
+  if (!map.getLayer("wb-route-line")) return;
+  map.setPaintProperty("wb-route-line", "line-color", dark ? "#FFFF00" : "#0033FF");
+  map.setPaintProperty("wb-route-border", "line-color", dark ? "#FFCC00" : "#000099");
+}
+
+function addOverlays(map: MapLibreMap, routeDark: boolean) {
+  if (!map.getSource("wb-places")) {
+    map.addSource("wb-places", {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+      cluster: true,
+      clusterMaxZoom: 14,
+      clusterRadius: 48,
+    });
+    map.addLayer({
+      id: "wb-clusters",
+      type: "circle",
+      source: "wb-places",
+      filter: ["has", "point_count"],
+      paint: {
+        "circle-color": ["step", ["get", "point_count"], "#4da3ff", 20, "#e10600"],
+        "circle-radius": ["step", ["get", "point_count"], 16, 20, 22, 50, 28],
+        "circle-stroke-width": 3,
+        "circle-stroke-color": ["step", ["get", "point_count"], "rgba(77,163,255,.35)", 20, "rgba(225,6,0,.35)"],
+      },
+    });
+    try {
+      map.addLayer({
+        id: "wb-cluster-count",
+        type: "symbol",
+        source: "wb-places",
+        filter: ["has", "point_count"],
+        layout: {
+          "text-field": ["get", "point_count_abbreviated"],
+          "text-size": 12,
+          "text-font": ["Noto Sans Regular"],
+        },
+        paint: { "text-color": "#fff" },
+      });
+    } catch {
+      /* glyphs unavailable */
+    }
+    map.addLayer({
+      id: "wb-pins",
+      type: "symbol",
+      source: "wb-places",
+      filter: ["!", ["has", "point_count"]],
+      layout: {
+        "icon-image": ["get", "icon"],
+        "icon-size": 1,
+        "icon-anchor": "bottom",
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+    });
+  }
+  if (!map.getSource("wb-route")) {
+    map.addSource("wb-route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    map.addLayer({
+      id: "wb-route-border",
+      type: "line",
+      source: "wb-route",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": "#000099", "line-width": 10 },
+    });
+    map.addLayer({
+      id: "wb-route-line",
+      type: "line",
+      source: "wb-route",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": "#0033FF", "line-width": 5, "line-opacity": 0.85 },
+    });
+  }
+  paintRoute(map, routeDark);
+  addBuildings(map);
+}
+
+function setPinVisibility(map: MapLibreMap, show: boolean) {
+  const vis = show ? "visible" : "none";
+  for (const id of ["wb-clusters", "wb-cluster-count", "wb-pins"]) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis);
+  }
+}
+
+export function createWbMap(
+  el: HTMLElement,
+  opts: {
+    onPlace?: (id: string) => void;
+    onMap?: (lat: number, lon: number) => void;
+  },
+): WbMap {
+  el.dataset.pitch = "0";
+  const map = new MapLibreMap({
+    container: el,
+    style: kindStyle("vector-light"),
+    center: [16.5, 45.1],
+    zoom: 5,
+    pitch: 0,
+    bearing: 0,
+    attributionControl: false,
+    maplibreLogo: false,
+    fadeDuration: 0,
+    dragRotate: false,
+    pitchWithRotate: false,
+    touchPitch: false,
+    minPitch: 0,
+    maxPitch: 60,
+    hash: false,
+  });
+  try {
+    map.touchZoomRotate.disableRotation();
+  } catch {
+    /* handler not ready */
+  }
+
+  let alive = true;
+  let booted = false;
+  let navOn = false;
+  let kind: MapKind = "vector-light";
+  let marker: Marker | null = null;
+  let lastPlaces: Place[] = [];
+  let lastDarkPins = false;
+  let lastRoute: [number, number][] = [];
+  let lastRouteDark = false;
+  let pendingFit = false;
+
+  const arrow = () => {
+    if (marker) return marker;
+    const node = document.createElement("div");
+    node.innerHTML = ARROW;
+    marker = new Marker({ element: node.firstElementChild as HTMLElement, anchor: "center" });
+    return marker;
+  };
+
+  const applyCamera = () => {
+    if (navOn) {
+      map.setMinPitch(0);
+      map.setMaxPitch(60);
+      try {
+        map.dragRotate.enable();
+        map.touchZoomRotate.enableRotation();
+      } catch {
+        /* ignore */
+      }
+      map.jumpTo({ pitch: NAV_TILT, zoom: Math.max(map.getZoom(), NAV_ZOOM) });
+      el.dataset.pitch = String(NAV_TILT);
+    } else {
+      try {
+        map.dragRotate.disable();
+        map.touchZoomRotate.disableRotation();
+      } catch {
+        /* ignore */
+      }
+      map.jumpTo({ pitch: 0, bearing: 0 });
+      el.dataset.pitch = "0";
+    }
+  };
+
+  const fitRoute = (pts: [number, number][]) => {
+    if (pts.length < 2 || navOn) return;
+    const b = pts.reduce(
+      (acc, [lat, lon]) => {
+        acc.minLat = Math.min(acc.minLat, lat);
+        acc.maxLat = Math.max(acc.maxLat, lat);
+        acc.minLon = Math.min(acc.minLon, lon);
+        acc.maxLon = Math.max(acc.maxLon, lon);
+        return acc;
+      },
+      { minLat: 90, maxLat: -90, minLon: 180, maxLon: -180 },
+    );
+    try {
+      map.fitBounds(
+        [
+          [b.minLon, b.minLat],
+          [b.maxLon, b.maxLat],
+        ],
+        { padding: { top: 130, bottom: 240, left: 28, right: 56 }, duration: 400, pitch: 0, bearing: 0 },
+      );
+      pendingFit = false;
+    } catch {
+      pendingFit = true;
+    }
+  };
+
+  const paint = async () => {
+    if (!alive) return;
+    try {
+      await loadPins(map);
+    } catch {
+      /* pins optional */
+    }
+    if (!alive) return;
+    try {
+      addOverlays(map, lastRouteDark);
+      if (lastPlaces.length) {
+        (map.getSource("wb-places") as GeoJSONSource | undefined)?.setData(placesFc(lastPlaces, lastDarkPins));
+      }
+      if (lastRoute.length >= 2) {
+        (map.getSource("wb-route") as GeoJSONSource | undefined)?.setData(routeFc(lastRoute));
+        paintRoute(map, lastRouteDark);
+      }
+      setPinVisibility(map, !navOn);
+      if (pendingFit && lastRoute.length >= 2) fitRoute(lastRoute);
+    } catch {
+      /* style not ready */
+    }
+    booted = true;
+    el.dataset.ready = "1";
+    if (navOn) applyCamera();
+    else el.dataset.pitch = "0";
+    map.resize();
+  };
+
+  map.on("load", () => {
+    void paint();
+  });
+  window.setTimeout(() => {
+    if (!alive || booted || !el.isConnected || kind === "satellite") return;
+    map.setStyle(rasterStyle(kind === "vector-dark"));
+  }, 8000);
+
+  map.on("click", "wb-clusters", (e) => {
+    const f = e.features?.[0];
+    if (!f || f.properties?.cluster_id == null) return;
+    const src = map.getSource("wb-places") as GeoJSONSource;
+    const cid = Number(f.properties.cluster_id);
+    src.getClusterExpansionZoom(cid).then((z) => {
+      const coords = (f.geometry as { coordinates: [number, number] }).coordinates;
+      map.easeTo({ center: coords, zoom: z, duration: 350, pitch: navOn ? NAV_TILT : 0 });
+    });
+  });
+  map.on("click", "wb-pins", (e) => {
+    const id = e.features?.[0]?.properties?.id as string | undefined;
+    if (id) opts.onPlace?.(String(id));
+  });
+  map.on("click", (e) => {
+    const layers = ["wb-pins", "wb-clusters"].filter((id) => map.getLayer(id));
+    if (layers.length) {
+      const hits = map.queryRenderedFeatures(e.point, { layers });
+      if (hits.length) return;
+    }
+    opts.onMap?.(e.lngLat.lat, e.lngLat.lng);
+  });
+  map.on("mouseenter", "wb-pins", () => {
+    map.getCanvas().style.cursor = "pointer";
+  });
+  map.on("mouseleave", "wb-pins", () => {
+    map.getCanvas().style.cursor = "";
+  });
+  map.on("mouseenter", "wb-clusters", () => {
+    map.getCanvas().style.cursor = "pointer";
+  });
+  map.on("mouseleave", "wb-clusters", () => {
+    map.getCanvas().style.cursor = "";
+  });
+
+  const resize = () => {
+    if (!alive) return;
+    map.resize();
+  };
+  window.addEventListener("resize", resize);
+  window.visualViewport?.addEventListener("resize", resize);
+  const ro = new ResizeObserver(resize);
+  ro.observe(el);
+  requestAnimationFrame(resize);
+
+  const api: WbMap = {
+    map,
+    el,
+    setPlaces(places, darkPins) {
+      lastPlaces = places;
+      lastDarkPins = darkPins;
+      (map.getSource("wb-places") as GeoJSONSource | undefined)?.setData(placesFc(places, darkPins));
+    },
+    setRoute(pts, dark, extra) {
+      lastRoute = pts;
+      lastRouteDark = dark;
+      (map.getSource("wb-route") as GeoJSONSource | undefined)?.setData(routeFc(pts));
+      paintRoute(map, dark);
+      if (extra?.fit && pts.length >= 2 && !navOn) {
+        pendingFit = true;
+        fitRoute(pts);
+      }
+    },
+    clearRoute() {
+      lastRoute = [];
+      pendingFit = false;
+      (map.getSource("wb-route") as GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: [] });
+    },
+    setNav(on) {
+      navOn = on;
+      setPinVisibility(map, !on);
+      if (!on) marker?.remove();
+      requestAnimationFrame(() => {
+        resize();
+        applyCamera();
+      });
+    },
+    follow(lon, lat, bearing) {
+      const cam: {
+        center: [number, number];
+        pitch: number;
+        zoom?: number;
+        bearing?: number;
+        duration: number;
+        essential: boolean;
+      } = {
+        center: [lon, lat],
+        pitch: NAV_TILT,
+        duration: 280,
+        essential: true,
+      };
+      if (bearing != null && Number.isFinite(bearing)) cam.bearing = bearing;
+      if (map.getZoom() < NAV_ZOOM) cam.zoom = NAV_ZOOM;
+      map.easeTo(cam);
+      arrow().setLngLat([lon, lat]).addTo(map);
+      el.dataset.pitch = String(NAV_TILT);
+    },
+    setKind(next, overlays) {
+      kind = next;
+      const center = map.getCenter();
+      const zoom = map.getZoom();
+      const bearing = map.getBearing();
+      const pitch = navOn ? NAV_TILT : 0;
+      if (overlays?.places) lastPlaces = overlays.places;
+      if (overlays?.darkPins != null) lastDarkPins = overlays.darkPins;
+      if (overlays?.route) lastRoute = overlays.route;
+      map.setStyle(kindStyle(next));
+      map.once("idle", () => {
+        if (!alive) return;
+        map.jumpTo({ center, zoom, bearing, pitch });
+        map.resize();
+      });
+    },
+    flyTo(lat, lon, zoom = 11) {
+      map.easeTo({ center: [lon, lat], zoom, duration: 500, pitch: navOn ? NAV_TILT : 0 });
+    },
+    zoomBy(dir) {
+      map.easeTo({ zoom: map.getZoom() + dir, duration: 200, pitch: navOn ? NAV_TILT : map.getPitch() });
+    },
+    resize,
+    remove() {
+      alive = false;
+      window.removeEventListener("resize", resize);
+      window.visualViewport?.removeEventListener("resize", resize);
+      ro.disconnect();
+      try {
+        marker?.remove();
+        map.remove();
+      } catch {
+        /* already torn down */
+      }
+    },
+  };
+
+  return api;
+}
