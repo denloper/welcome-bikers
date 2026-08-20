@@ -1,5 +1,5 @@
 export const NAV_MOVE_MS = 480;
-export const NAV_FLAT_ENTRY_MS = 900;
+export const NAV_FLAT_ENTRY_MS = 600;
 export const NAV_ENTER_MS = 650;
 export const NAV_HEADING_MS = 240;
 export const NAV_FOLLOW_RESUME_MS = 10_000;

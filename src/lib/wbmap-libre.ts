@@ -413,7 +413,7 @@ export function createLibreMap(
     map.easeTo({
       center: [target.lon, target.lat],
       pitch: entering ? 0 : NAV_TILT,
-      zoom: map.getZoom() < NAV_ZOOM ? NAV_ZOOM : map.getZoom(),
+      zoom: entering || map.getZoom() < NAV_ZOOM ? NAV_ZOOM : map.getZoom(),
       bearing: entering ? 0 : target.bearing ?? map.getBearing(),
       duration,
       easing: easeInOutCubic,
@@ -479,7 +479,7 @@ export function createLibreMap(
       else {
         map.easeTo({
           pitch: navPhase === "entering" ? 0 : NAV_TILT,
-          zoom: Math.max(map.getZoom(), NAV_ZOOM),
+          zoom: navPhase === "entering" ? NAV_ZOOM : Math.max(map.getZoom(), NAV_ZOOM),
           bearing: navPhase === "entering" ? 0 : map.getBearing(),
           duration: NAV_ENTER_MS,
           easing: easeInOutCubic,
@@ -699,6 +699,7 @@ export function createLibreMap(
         el.dataset.cameraPhase = "entering";
         el.dataset.navEntry = "flat-to-3d";
         el.dataset.pitch = "0";
+        el.dataset.zoom = String(NAV_ZOOM);
         navPhaseTimer = window.setTimeout(activateNavigationPhase, NAV_FLAT_ENTRY_MS);
       } else {
         navPhase = "off";

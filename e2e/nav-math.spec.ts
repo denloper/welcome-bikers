@@ -10,6 +10,7 @@ import {
   NAV_FOLLOW_RESUME_MS,
   NAV_MOVE_MS,
 } from "../src/lib/nav-camera";
+import { NAV_ZOOM } from "../src/lib/wbmap-types";
 import { freshRerouteState, remainingAlong, tripTooShort, updateReroute } from "../src/lib/nav";
 import { formatDriveTime, formatMeters, maneuverPreviews, type DriveRoute } from "../src/lib/osrm";
 import { nextVoice, voiceLine, voiceScore } from "../src/lib/voice";
@@ -157,7 +158,8 @@ test("heading smoothing takes the short path across north", () => {
 
 test("navigation camera interpolates GPS and heading without jumps", () => {
   expect(NAV_MOVE_MS).toBe(480);
-  expect(NAV_FLAT_ENTRY_MS).toBe(900);
+  expect(NAV_FLAT_ENTRY_MS).toBe(600);
+  expect(NAV_ZOOM).toBe(18);
   expect(NAV_FOLLOW_RESUME_MS).toBe(10_000);
   expect(easeInOutCubic(0)).toBe(0);
   expect(easeInOutCubic(0.5)).toBe(0.5);

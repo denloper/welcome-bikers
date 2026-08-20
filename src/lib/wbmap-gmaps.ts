@@ -348,7 +348,7 @@ export async function createGoogleMap(
     const startTilt = gmap.getTilt() || 0;
     const targetTilt = entering ? 0 : NAV_TILT;
     const startZoom = gmap.getZoom() ?? NAV_ZOOM;
-    const targetZoom = startZoom < NAV_ZOOM ? NAV_ZOOM : startZoom;
+    const targetZoom = entering || startZoom < NAV_ZOOM ? NAV_ZOOM : startZoom;
     const markerJump = shownPoint ? haversineKm(shownPoint, target) * 1000 > 100 : false;
     const markerDuration = markerJump ? 0 : requestedDuration;
     const cameraDuration = requestedDuration;
@@ -657,6 +657,7 @@ export async function createGoogleMap(
         el.dataset.cameraPhase = "entering";
         el.dataset.navEntry = "flat-to-3d";
         el.dataset.pitch = "0";
+        el.dataset.zoom = String(NAV_ZOOM);
         navPhaseTimer = window.setTimeout(activateNavigationPhase, NAV_FLAT_ENTRY_MS);
       } else {
         navPhase = "off";

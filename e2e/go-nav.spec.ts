@@ -135,6 +135,7 @@ test.describe("GO navigation", () => {
     await expect(page.locator(".map-gl")).toBeVisible();
     await expect(page.locator(".map-gl")).toHaveAttribute("data-nav-entry", "flat-to-3d");
     await expect(page.locator(".map-gl")).toHaveAttribute("data-pitch", "45");
+    await expect.poll(async () => Number(await page.locator(".map-gl").getAttribute("data-zoom") || "0")).toBeGreaterThanOrEqual(17.5);
     await expect(page.locator(".map-gl")).toHaveAttribute("data-follow", "on");
     await expectMapVisible(page);
     await expect(page.locator(".nav-hud")).toBeVisible();

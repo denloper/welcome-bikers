@@ -1,7 +1,7 @@
 import type { Place } from "../types";
 
 export const NAV_TILT = 45;
-export const NAV_ZOOM = 17;
+export const NAV_ZOOM = 18;
 export const HOME = { lat: 48.2, lng: 16.4 };
 export const HOME_ZOOM = 5;
 
