@@ -23,9 +23,13 @@ type Msg = { id: number; role: "user" | "bro"; text: string; cards?: Card[] };
 
 type SpeechRecognitionLike = {
   lang: string;
+  continuous: boolean;
   interimResults: boolean;
   maxAlternatives: number;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onresult: ((e: {
+    resultIndex?: number;
+    results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal?: boolean }>;
+  }) => void) | null;
   onerror: ((e: { error?: string }) => void) | null;
   onend: (() => void) | null;
   start: () => void;
@@ -53,7 +57,7 @@ function placeCard(p: Place): Card {
   };
 }
 
-export function RealBroAvatar({ phase, size = 32 }: { phase: Phase; size?: number }) {
+export function RealBroAvatar({ phase, size = 46 }: { phase: Phase; size?: number }) {
   return (
     <span className={`rb-ava ${phase}`} style={{ width: size, height: size }} data-phase={phase}>
       <svg viewBox="0 0 64 64" aria-hidden="true">
@@ -80,13 +84,6 @@ function VoiceWaveform({ active }: { active: boolean }) {
     if (!canvas || !draw) return;
 
     let frame = 0;
-    let stopped = false;
-    let stream: MediaStream | null = null;
-    let audio: AudioContext | null = null;
-    let source: MediaStreamAudioSourceNode | null = null;
-    let analyser: AnalyserNode | null = null;
-    let levels: Uint8Array<ArrayBuffer> | null = null;
-
     const fit = () => {
       const ratio = Math.min(2, window.devicePixelRatio || 1);
       canvas.width = Math.max(1, Math.round(canvas.clientWidth * ratio));
@@ -109,11 +106,8 @@ function VoiceWaveform({ active }: { active: boolean }) {
       gradient.addColorStop(0.55, "#3d8aff");
       gradient.addColorStop(1, "#e10600");
       draw.fillStyle = gradient;
-      if (analyser && levels) analyser.getByteFrequencyData(levels);
       for (let i = 0; i < bars; i++) {
-        const sample = levels
-          ? levels[Math.min(levels.length - 1, Math.floor((i / bars) * Math.min(72, levels.length)))] / 255
-          : 0.12 + Math.abs(Math.sin(now / 170 + i * 0.62)) * 0.16;
+        const sample = 0.18 + Math.abs(Math.sin(now / 170 + i * 0.62)) * 0.72;
         const barHeight = Math.max(3, sample * (height - 2));
         draw.beginPath();
         draw.roundRect(i * (barWidth + gap), (height - barHeight) / 2, barWidth, barHeight, barWidth / 2);
@@ -123,38 +117,9 @@ function VoiceWaveform({ active }: { active: boolean }) {
     };
     frame = window.requestAnimationFrame(paint);
 
-    void navigator.mediaDevices
-      ?.getUserMedia({ audio: true })
-      .then((nextStream) => {
-        if (stopped) {
-          nextStream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        stream = nextStream;
-        const AudioCtor =
-          window.AudioContext ||
-          (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-        if (!AudioCtor) return;
-        audio = new AudioCtor();
-        analyser = audio.createAnalyser();
-        analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = 0.82;
-        levels = new Uint8Array(analyser.frequencyBinCount);
-        source = audio.createMediaStreamSource(stream);
-        source.connect(analyser);
-        void audio.resume();
-      })
-      .catch(() => {
-        // SpeechRecognition can still work when raw microphone access is unavailable.
-      });
-
     return () => {
-      stopped = true;
       window.cancelAnimationFrame(frame);
       resize?.disconnect();
-      source?.disconnect();
-      stream?.getTracks().forEach((track) => track.stop());
-      void audio?.close();
     };
   }, [active]);
 
@@ -181,11 +146,113 @@ export function RealBro() {
   const [busy, setBusy] = useState(false);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
   const speakToken = useRef(0);
+  const wantListen = useRef(false);
+  const heardRef = useRef("");
+  const restartTimer = useRef(0);
+  const silenceTimer = useRef(0);
+  const handleQueryRef = useRef<(raw: string) => Promise<void>>(async () => undefined);
   const listRef = useRef<HTMLDivElement>(null);
   const hasMic = recognizerCtor() !== null;
 
+  function clearListenTimers() {
+    window.clearTimeout(restartTimer.current);
+    window.clearTimeout(silenceTimer.current);
+  }
+
+  function stopListening(submit: boolean) {
+    const text = heardRef.current.trim();
+    wantListen.current = false;
+    heardRef.current = "";
+    clearListenTimers();
+    try {
+      recRef.current?.stop();
+    } catch {
+      /* already ended */
+    }
+    recRef.current = null;
+    setPhase("idle");
+    if (submit && text) {
+      setInput("");
+      void handleQueryRef.current(text);
+    }
+  }
+
+  function beginRec() {
+    const Ctor = recognizerCtor();
+    if (!Ctor || !wantListen.current) return;
+    const prev = recRef.current;
+    recRef.current = null;
+    try {
+      prev?.stop();
+    } catch {
+      /* ignore */
+    }
+    const rec = new Ctor();
+    rec.lang = "en-US";
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+    rec.onresult = (e) => {
+      if (!wantListen.current) return;
+      const start = e.resultIndex ?? 0;
+      let interim = "";
+      for (let i = start; i < e.results.length; i++) {
+        const row = e.results[i];
+        const piece = row[0]?.transcript ?? "";
+        if (row.isFinal) heardRef.current = `${heardRef.current} ${piece}`.trim();
+        else interim += piece;
+      }
+      setInput([heardRef.current, interim].filter(Boolean).join(" "));
+      window.clearTimeout(silenceTimer.current);
+      if (heardRef.current) {
+        silenceTimer.current = window.setTimeout(() => {
+          if (wantListen.current && heardRef.current.trim()) stopListening(true);
+        }, 1600);
+      }
+    };
+    rec.onerror = (err) => {
+      const code = err.error || "";
+      if (!wantListen.current || code === "not-allowed" || code === "service-not-allowed") {
+        if (code === "not-allowed" || code === "service-not-allowed") stopListening(false);
+        return;
+      }
+      window.clearTimeout(restartTimer.current);
+      restartTimer.current = window.setTimeout(() => {
+        if (wantListen.current) beginRec();
+      }, 220);
+    };
+    rec.onend = () => {
+      if (recRef.current !== rec || !wantListen.current) return;
+      window.clearTimeout(restartTimer.current);
+      restartTimer.current = window.setTimeout(() => {
+        if (wantListen.current) beginRec();
+      }, 180);
+    };
+    recRef.current = rec;
+    setPhase("listening");
+    try {
+      rec.start();
+    } catch {
+      window.clearTimeout(restartTimer.current);
+      restartTimer.current = window.setTimeout(() => {
+        if (wantListen.current) beginRec();
+      }, 280);
+    }
+  }
+
   useEffect(() => {
     warmVoices();
+  }, []);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible" && wantListen.current) beginRec();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      clearListenTimers();
+    };
   }, []);
 
   useEffect(() => {
@@ -221,9 +288,8 @@ export function RealBro() {
   function closeSheet() {
     setOpen(false);
     hushVoice();
-    recRef.current?.stop();
+    stopListening(false);
     speakToken.current++;
-    setPhase("idle");
   }
 
   async function handleQuery(raw: string) {
@@ -271,6 +337,7 @@ export function RealBro() {
       setBusy(false);
     }
   }
+  handleQueryRef.current = handleQuery;
 
   function handleSend() {
     const text = input;
@@ -279,33 +346,17 @@ export function RealBro() {
   }
 
   function startListening() {
-    const Ctor = recognizerCtor();
-    if (!Ctor) return;
-    if (phase === "listening") {
-      recRef.current?.stop();
-      setPhase("idle");
+    if (!recognizerCtor()) return;
+    if (wantListen.current || phase === "listening") {
+      stopListening(true);
       return;
     }
     hushVoice();
     speakToken.current++;
-    const rec = new Ctor();
-    rec.lang = "en-US";
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    rec.onresult = (e) => {
-      const transcript = e.results[0]?.[0]?.transcript ?? "";
-      setPhase("idle");
-      if (transcript) void handleQuery(transcript);
-    };
-    rec.onerror = () => setPhase("idle");
-    rec.onend = () => setPhase((p) => (p === "listening" ? "idle" : p));
-    recRef.current = rec;
-    setPhase("listening");
-    try {
-      rec.start();
-    } catch {
-      setPhase("idle");
-    }
+    heardRef.current = "";
+    wantListen.current = true;
+    setInput("");
+    beginRec();
   }
 
   function rideTo(card: Card) {
@@ -328,7 +379,7 @@ export function RealBro() {
           <div className="backdrop" onClick={closeSheet} />
           <div className="rb-sheet" data-testid="assistant-sheet">
             <div className="rb-head">
-              <RealBroAvatar phase={phase} size={40} />
+              <RealBroAvatar phase={phase} size={52} />
               <div>
                 <b>Real Bro</b>
                 <span className="rb-state">{stateLabel}</span>

@@ -55,13 +55,21 @@ test.describe("Real Bro assistant", () => {
     await page.addInitScript(() => {
       class FakeRecognition {
         lang = "";
+        continuous = false;
         interimResults = false;
         maxAlternatives = 1;
         onresult = null;
         onerror = null;
         onend: (() => void) | null = null;
         start() {
-          (window as unknown as { __recognitionLang?: string }).__recognitionLang = this.lang;
+          const w = window as unknown as {
+            __recognitionLang?: string;
+            __recognitionContinuous?: boolean;
+            __recognitionInterim?: boolean;
+          };
+          w.__recognitionLang = this.lang;
+          w.__recognitionContinuous = this.continuous;
+          w.__recognitionInterim = this.interimResults;
         }
         stop() {
           this.onend?.();
@@ -77,5 +85,14 @@ test.describe("Real Bro assistant", () => {
     expect(
       await page.evaluate(() => (window as unknown as { __recognitionLang?: string }).__recognitionLang),
     ).toBe("en-US");
+    expect(
+      await page.evaluate(() => (window as unknown as { __recognitionContinuous?: boolean }).__recognitionContinuous),
+    ).toBe(true);
+    expect(
+      await page.evaluate(() => (window as unknown as { __recognitionInterim?: boolean }).__recognitionInterim),
+    ).toBe(true);
+
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await expect(page.locator(".rb-state")).toHaveText("Listening…");
   });
 });
