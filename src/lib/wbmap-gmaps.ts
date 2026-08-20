@@ -19,7 +19,7 @@ function loadGoogle() {
   const key = mapsKey();
   if (!key) return Promise.reject(new Error("no-gmaps-key"));
   if (!boot) {
-    setOptions({ key, v: "weekly" });
+    setOptions({ key, v: "weekly", mapIds: [LIGHT_MAP_ID, DARK_MAP_ID] });
     boot = Promise.all([importLibrary("maps"), importLibrary("marker")]).then(() => undefined);
   }
   return boot;
@@ -82,6 +82,7 @@ export async function createGoogleMap(
     mapTypeId: next === "satellite" ? "hybrid" : "roadmap",
     renderingType: google.maps.RenderingType.VECTOR,
     isFractionalZoomEnabled: true,
+    colorScheme: next === "vector-dark" ? google.maps.ColorScheme.DARK : google.maps.ColorScheme.LIGHT,
   });
 
   const clearOverlays = () => {
@@ -210,12 +211,32 @@ export async function createGoogleMap(
     );
   };
 
+  const keepHost = () => {
+    el.classList.add("map-wrap", "full", "map-gl");
+  };
+
+  const blockGoogleNav = (ev: Event) => {
+    const node = ev.target as Element | null;
+    if (node?.closest?.(".map-place")) return;
+    const a = node?.closest?.("a");
+    const href = a instanceof HTMLAnchorElement ? a.href : "";
+    if (href && /google\.(com|ru|by|kz)/i.test(href)) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    }
+  };
+
   const resize = () => {
     if (!alive) return;
+    keepHost();
     google.maps.event.trigger(gmap, "resize");
   };
 
+  document.addEventListener("click", blockGoogleNav, true);
+  el.addEventListener("click", blockGoogleNav, true);
+
   gmap = new google.maps.Map(el, mapOptions("vector-light", { center: HOME, zoom: HOME_ZOOM, heading: 0, tilt: 0 }));
+  keepHost();
   el.dataset.engine = "google";
   bind();
 
@@ -291,28 +312,22 @@ export async function createGoogleMap(
       el.dataset.pitch = String(NAV_TILT);
     },
     setKind(next, overlays) {
-      const view = camera();
       if (overlays?.places) lastPlaces = overlays.places;
       if (overlays?.darkPins != null) {
         lastDarkPins = overlays.darkPins;
         lastRouteDark = overlays.darkPins;
       }
       if (overlays?.route) lastRoute = overlays.route;
-      el.dataset.ready = "0";
-      clearOverlays();
-      gmap = new google.maps.Map(el, mapOptions(next, view));
-      bind();
-      const finish = () => {
-        if (!alive || el.dataset.ready === "1") return;
-        paintPlaces();
-        paintRoute();
-        if (pendingFit) fitRoute();
-        if (navOn) applyNavCamera();
-        el.dataset.ready = "1";
-        resize();
-      };
-      google.maps.event.addListenerOnce(gmap, "idle", finish);
-      window.setTimeout(finish, 4000);
+      gmap.setOptions({
+        mapTypeId: next === "satellite" ? "hybrid" : "roadmap",
+        colorScheme: next === "vector-dark" ? google.maps.ColorScheme.DARK : google.maps.ColorScheme.LIGHT,
+      });
+      paintPlaces();
+      paintRoute();
+      if (pendingFit) fitRoute();
+      if (navOn) applyNavCamera();
+      el.dataset.ready = "1";
+      resize();
     },
     flyTo(lat, lon, zoom = 11) {
       gmap.panTo({ lat, lng: lon });
@@ -327,6 +342,8 @@ export async function createGoogleMap(
     remove() {
       alive = false;
       listeners.splice(0).forEach((l) => l.remove());
+      document.removeEventListener("click", blockGoogleNav, true);
+      el.removeEventListener("click", blockGoogleNav, true);
       window.removeEventListener("resize", resize);
       window.removeEventListener("orientationchange", resize);
       window.visualViewport?.removeEventListener("resize", resize);

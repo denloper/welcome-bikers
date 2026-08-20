@@ -67,7 +67,7 @@ test.describe("GO navigation", () => {
   test("dark theme reloads the map style and keeps the canvas", async ({ page }) => {
     await page.goto("/#/map");
     await expectMapVisible(page);
-    await page.getByLabel("map theme").click();
+    await page.getByTestId("map-theme").evaluate((btn) => (btn as HTMLButtonElement).click());
     await expect(page.locator(".map-page.is-dark")).toBeVisible();
     await expectMapVisible(page);
     const box = await page.locator(".map-gl").boundingBox();
@@ -106,8 +106,9 @@ test.describe("GO navigation", () => {
     expect(box && box.width > 100 && box.height > 100).toBeTruthy();
     await page.screenshot({ path: "test-results/go-nav.png", fullPage: true });
 
-    await page.locator(".nav-exit").click();
+    await page.getByTestId("nav-exit").evaluate((btn) => (btn as HTMLButtonElement).click());
     await expect(page.locator(".map-page.is-nav")).toHaveCount(0);
+    await expect(page.locator(".map-page")).toBeVisible();
     await expect(page.locator(".map-gl")).toHaveAttribute("data-pitch", "0");
     await expectMapVisible(page);
     await expect(page.locator(".route-go")).toBeEnabled();
@@ -134,6 +135,15 @@ test.describe("GO navigation", () => {
     await expect(page.locator(".route-go")).toBeEnabled();
     await page.locator('[data-stop="start"]').click();
     await expect(page.locator('[data-stop="start"]')).toContainText(/Locating|Tap to change|Tap the map/i);
+    await expect(page.locator(".route-go")).toBeEnabled();
+  });
+
+  test("a multi-stop trip starts from current GPS, not the first waypoint", async ({ page, context }) => {
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation(START);
+    await mockRouting(page);
+    await page.goto(`/#/map?via=42.11,19.25|42.44,19.27&name=Podgorica`);
+    await expect(page.locator('[data-stop="start"]')).toContainText(/My current location/i);
     await expect(page.locator(".route-go")).toBeEnabled();
   });
 });

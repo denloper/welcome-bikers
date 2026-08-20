@@ -73,6 +73,17 @@ function getHere(): Promise<{ lat: number; lon: number } | null> {
   });
 }
 
+function applyGpsStart(stops: Stop[], geo: { lat: number; lon: number }): Stop[] {
+  if (!stops.length) return stops;
+  const start: Stop = { lat: geo.lat, lon: geo.lon, label: "My current location", role: "start" };
+  const nearFirst = haversineKm(geo, stops[0]) < 0.35;
+  const tail = nearFirst ? stops.slice(1) : stops;
+  if (!tail.length) return [start, stops[stops.length - 1]];
+  const last = { ...tail[tail.length - 1], role: "end" as const };
+  const mid = tail.slice(0, -1).map((s) => ({ ...s, role: "via" as const }));
+  return [start, ...mid, last];
+}
+
 function nearestPlace(places: Place[], lat: number, lon: number): Place | null {
   let best: Place | null = null;
   let d = 0.25;
@@ -262,6 +273,8 @@ export function MapPage() {
       }
       setPicked(null);
       setNavigating(false);
+      const geo = await getHere();
+      if (cancelled) return;
       if (via.length >= 2) {
         const built: Stop[] = via.map((p, i) => {
           const hit = nearestPlace(placesRef.current, p.lat, p.lon);
@@ -270,7 +283,11 @@ export function MapPage() {
           if (i === via.length - 1 && named) label = named;
           return { ...p, label, role };
         });
-        if (!cancelled) setStops(built);
+        if (geo) setStops(applyGpsStart(built, geo));
+        else {
+          setPickMode("start");
+          setStops(built);
+        }
         return;
       }
       const dest = to[0];
@@ -280,13 +297,11 @@ export function MapPage() {
         label: named || hit?.name || "Destination",
         role: "end",
       };
-      const geo = await getHere();
-      if (cancelled) return;
-      const start: Stop = geo
-        ? { ...geo, label: "My current location", role: "start" }
-        : { ...dest, label: "My current location", role: "start" };
-      if (!geo) setPickMode("start");
-      setStops([start, end]);
+      if (geo) setStops(applyGpsStart([end], geo));
+      else {
+        setPickMode("start");
+        setStops([{ ...dest, label: "My current location", role: "start" }, end]);
+      }
     }
     init();
     return () => {
@@ -617,7 +632,9 @@ export function MapPage() {
           <IconFilter />
         </button>
         <button
+          type="button"
           className="map-round"
+          data-testid="map-theme"
           onClick={() => {
             if (sat) {
               setSat(false);
@@ -667,8 +684,14 @@ export function MapPage() {
               disabled={!canGo}
               onClick={() => {
                 if (!canGo) return;
-                setGoChrome(true);
-                setNavigating(true);
+                void (async () => {
+                  const geo = await getHere();
+                  if (geo && stops && haversineKm(geo, stops[0]) > 0.25) {
+                    setStops(applyGpsStart(stops, geo));
+                  }
+                  setGoChrome(true);
+                  setNavigating(true);
+                })();
               }}
             >
               <IconGo />
@@ -702,7 +725,9 @@ export function MapPage() {
             <p className="nav-hud-km">{formatMeters(hudDist)}</p>
           </div>
           <button
+            type="button"
             className="nav-exit"
+            data-testid="nav-exit"
             onClick={() => {
               setGoChrome(false);
               setNavigating(false);

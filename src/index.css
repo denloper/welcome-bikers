@@ -554,7 +554,7 @@ textarea { min-height: 96px; resize: vertical; }
   position: absolute;
   left: 10px;
   right: 10px;
-  bottom: calc(var(--nav) + 10px);
+  bottom: 10px;
   z-index: 520;
   background: #d4d4d4;
   color: #111;
@@ -640,12 +640,12 @@ textarea { min-height: 96px; resize: vertical; }
   border-radius: 0;
 }
 .route-card .card-photo {
-  height: 220px;
+  height: 240px;
   border-radius: 0;
 }
-.route-card .card-body { padding: 14px 16px 18px; }
-.route-card .muted { margin: 0; }
-.route-card .place-name { margin: 8px 0 16px; }
+.route-card .card-body { padding: 12px 16px 20px; }
+.route-card .muted { margin: 0; font-size: 14px; }
+.route-card .place-name { margin: 8px 0 16px; font-size: 26px; }
 
 .section { padding: 8px 16px 0; }
 .section h3 { margin: 18px 0 10px; font-size: 20px; }
@@ -803,10 +803,24 @@ textarea { min-height: 96px; resize: vertical; }
   height: 100%;
   background: #e8e4d8;
   z-index: 0;
+  overflow: hidden;
 }
 .map-gl .gm-style {
   width: 100% !important;
   height: 100% !important;
+}
+.map-gl .gm-style-cc,
+.map-gl .gm-err-container,
+.map-gl .gm-err-message,
+.map-gl button.dismissButton,
+.map-gl a[href*="google.com"] {
+  pointer-events: none !important;
+}
+.map-gl .gm-style-cc,
+.map-gl .gm-err-container,
+.map-gl .gm-err-message,
+.map-gl button.dismissButton {
+  display: none !important;
 }
 .wb-gpin {
   display: block;
@@ -899,10 +913,11 @@ textarea { min-height: 96px; resize: vertical; }
   position: absolute;
   right: 12px;
   top: 64px;
-  z-index: 500;
+  z-index: 1200;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  pointer-events: auto;
 }
 .wb-pin { background: none !important; border: 0 !important; }
 .wb-pin-wrap {
@@ -1158,13 +1173,13 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
 .route-dot.end { background: #e10600; }
 .route-sheet {
   position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 530;
   background: #d4d4d4;
   color: #111;
-  border-radius: 18px;
+  border-radius: 18px 18px 0 0;
   padding: 12px 14px 12px;
   box-shadow: 0 8px 30px #0007;
 }
@@ -1284,14 +1299,14 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
 .nav-then svg { width: 18px; height: 18px; }
 .nav-hud {
   position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
-  z-index: 540;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2000;
   background: #d8d8d8;
   color: #111;
-  border-radius: 18px;
-  padding: 10px 12px;
+  border-radius: 18px 18px 0 0;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
   display: flex;
   align-items: center;
   justify-content: space-between;
