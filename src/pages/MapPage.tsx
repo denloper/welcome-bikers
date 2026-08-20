@@ -7,11 +7,11 @@ import {
   IconGlobe,
   IconGo,
   IconInfo,
-  IconLayers,
   IconLocate,
   IconMenu,
   IconMoon,
   IconPlus,
+  IconRouteBuild,
   IconSearch,
   IconShare,
   IconSun,
@@ -156,8 +156,7 @@ export function MapPage() {
   const [filters, setFilters] = useState(false);
   const [info, setInfo] = useState(false);
   const [light, setLight] = useState(true);
-  const [sat, setSat] = useState(false);
-  const [layersOpen, setLayersOpen] = useState(false);
+  const [sat] = useState(false);
   const [picked, setPicked] = useState<Place | null>(null);
   const [ready, setReady] = useState(false);
   const [stops, setStops] = useState<Stop[] | null>(null);
@@ -175,10 +174,12 @@ export function MapPage() {
   navigatingRef.current = navigating;
   const voiceRef = useRef(freshVoiceState());
   const voiceRouteRef = useRef(0);
-  const [pickMode, setPickMode] = useState<null | "start" | "via">(null);
+  const [pickMode, setPickMode] = useState<null | "start" | "via" | "to">(null);
   const pickModeRef = useRef(pickMode);
   pickModeRef.current = pickMode;
   const pickPtr = useRef<{ id: number; x: number; y: number; dragged: boolean } | null>(null);
+  const [buildOpen, setBuildOpen] = useState(false);
+  const [buildTo, setBuildTo] = useState<Stop | null>(null);
   const [viaOpen, setViaOpen] = useState(false);
   const [here, setHere] = useState<{ lat: number; lon: number } | null>(null);
   const [locating, setLocating] = useState(false);
@@ -251,6 +252,10 @@ export function MapPage() {
           setPickMode(null);
           return;
         }
+        if (pickModeRef.current === "to") {
+          setBuildTo({ lat: p.lat, lon: p.lon, label: p.name, role: "end" });
+          return;
+        }
         if (pickModeRef.current === "start") {
           pickGen.current += 1;
           setLocating(false);
@@ -279,6 +284,14 @@ export function MapPage() {
             next[0] = { lat, lon, label: hit?.name || "My current location", role: "start" };
             return next;
           });
+          setPickMode(null);
+        } else if (mode === "to") {
+          setBuildTo({
+            lat,
+            lon,
+            label: hit?.name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+            role: "end",
+          });
         } else {
           setStops((cur) => {
             if (!cur || cur.length < 2) return cur;
@@ -287,8 +300,8 @@ export function MapPage() {
             next.splice(next.length - 1, 0, { lat, lon, label, role: "via" });
             return next;
           });
+          setPickMode(null);
         }
-        setPickMode(null);
       },
     });
     wbRef.current = wb;
@@ -306,6 +319,10 @@ export function MapPage() {
   useEffect(() => {
     wbRef.current?.setPick(Boolean(pickMode) && !navigating);
   }, [pickMode, navigating, ready]);
+
+  useEffect(() => {
+    wbRef.current?.setMe(!navigating && here ? here : null);
+  }, [here, navigating, ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -326,6 +343,7 @@ export function MapPage() {
       setNavigating(false);
       const geo = await getHere();
       if (cancelled) return;
+      if (geo) setHere(geo);
       if (via.length >= 2) {
         const built: Stop[] = via.map((p, i) => {
           const hit = nearestPlace(placesRef.current, p.lat, p.lon);
@@ -513,6 +531,8 @@ export function MapPage() {
     const wb = wbRef.current;
     navigator.geolocation?.getCurrentPosition(
       (pos) => {
+        const geo = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        setHere(geo);
         if (navigatingRef.current) {
           wb?.follow(pos.coords.longitude, pos.coords.latitude, wb.map.getBearing());
         } else {
@@ -548,18 +568,57 @@ export function MapPage() {
 
   async function useMyLocation() {
     const gen = ++pickGen.current;
-    setPickMode("start");
+    const inBuild = buildOpen;
+    if (!inBuild) setPickMode("start");
     setLocating(true);
     const geo = await getHere();
     if (gen !== pickGen.current) return;
     setLocating(false);
     if (!geo) return;
+    setHere(geo);
+    wbRef.current?.flyTo(geo.lat, geo.lon, Math.max(wbRef.current.map.getZoom(), 13));
+    if (inBuild) {
+      setPickMode("to");
+      return;
+    }
     setStops((cur) => {
       if (!cur) return cur;
       const next = cur.slice();
       next[0] = { ...geo, label: "My current location", role: "start" };
       return next;
     });
+    setPickMode(null);
+  }
+
+  function openBuild() {
+    setStops(null);
+    setDrive(null);
+    setPicked(null);
+    setBuildTo(null);
+    setBuildOpen(true);
+    setPickMode("to");
+    void getHere().then((geo) => {
+      if (!geo || navigatingRef.current) return;
+      setHere(geo);
+      wbRef.current?.flyTo(geo.lat, geo.lon, Math.max(wbRef.current.map.getZoom(), 13));
+    });
+  }
+
+  function closeBuild() {
+    setBuildOpen(false);
+    setBuildTo(null);
+    if (pickModeRef.current === "to") setPickMode(null);
+  }
+
+  async function confirmBuild() {
+    if (!buildTo) return;
+    const geo = here || (await getHere());
+    const start = geo || buildTo;
+    setStops([
+      { lat: start.lat, lon: start.lon, label: geo ? "My current location" : "Start", role: "start" },
+      { ...buildTo, role: "end" },
+    ]);
+    setBuildOpen(false);
     setPickMode(null);
   }
 
@@ -680,8 +739,14 @@ export function MapPage() {
           })()}
         </div>
       )}
-      {pickMode && !navigating && (
-        <div className="route-hint">{pickMode === "start" ? "Tap the map to set start" : "Tap the map to add a waypoint"}</div>
+      {pickMode && !navigating && !buildOpen && (
+        <div className="route-hint">
+          {pickMode === "start"
+            ? "Tap the map to set start"
+            : pickMode === "to"
+              ? "Tap the map to set destination"
+              : "Tap the map to add a waypoint"}
+        </div>
       )}
       {navigating && drive && (
         <>
@@ -698,40 +763,10 @@ export function MapPage() {
         </>
       )}
       <div className={`map-tools${trip && !navigating ? " route-tools" : ""}`}>
-        {!trip && (
-          <div className="map-tool-wrap">
-            <button
-              className={`map-round${sat ? " on" : ""}`}
-              onClick={() => setLayersOpen((v) => !v)}
-              aria-label="Map layers"
-            >
-              <IconLayers />
-            </button>
-            {layersOpen && (
-              <div className="map-layer-menu">
-                <button
-                  type="button"
-                  className={!sat ? "on" : ""}
-                  onClick={() => {
-                    setSat(false);
-                    setLayersOpen(false);
-                  }}
-                >
-                  Map
-                </button>
-                <button
-                  type="button"
-                  className={sat ? "on" : ""}
-                  onClick={() => {
-                    setSat(true);
-                    setLayersOpen(false);
-                  }}
-                >
-                  Satellite
-                </button>
-              </div>
-            )}
-          </div>
+        {!trip && !navigating && (
+          <button type="button" className={`map-round${buildOpen ? " on" : ""}`} onClick={openBuild} aria-label="Build route">
+            <IconRouteBuild />
+          </button>
         )}
         <button
           className="map-round"
@@ -748,17 +783,10 @@ export function MapPage() {
           type="button"
           className="map-round"
           data-testid="map-theme"
-          onClick={() => {
-            if (sat) {
-              setSat(false);
-              setLight(true);
-            } else {
-              setLight((v) => !v);
-            }
-          }}
+          onClick={() => setLight((v) => !v)}
           aria-label="map theme"
         >
-          {light && !sat ? <IconSun /> : <IconMoon />}
+          {light ? <IconSun /> : <IconMoon />}
         </button>
         <button className="map-round" onClick={() => wbRef.current?.zoomBy(1)} aria-label="Zoom in">
           +
@@ -770,6 +798,37 @@ export function MapPage() {
           <IconLocate />
         </button>
       </div>
+      {buildOpen && !trip && !navigating && (
+        <div className="build-sheet">
+          <div className="build-sheet-top">
+            <div>
+              <h3>Build route</h3>
+              <p>Tap map or place</p>
+            </div>
+            <button type="button" className="route-share" onClick={closeBuild} aria-label="Close">
+              ×
+            </button>
+          </div>
+          <button type="button" className="build-stop" onClick={() => void useMyLocation()}>
+            <span className="build-pin from" />
+            <div>
+              <b>My current location</b>
+              <span>{locating || !here ? "Locating…" : "From"}</span>
+            </div>
+          </button>
+          <button type="button" className="build-stop" onClick={() => setPickMode("to")}>
+            <span className="build-pin to" />
+            <div>
+              <b>{buildTo?.label || "Destination"}</b>
+              <span>{buildTo ? "Tap to change" : "Tap a place or press on map"}</span>
+            </div>
+          </button>
+          <button type="button" className="btn green build-go" disabled={!buildTo} onClick={() => void confirmBuild()}>
+            <IconTurn />
+            Build route
+          </button>
+        </div>
+      )}
       {trip && !navigating && drive && (
         <div className="route-sheet">
           <div className="route-sheet-top">

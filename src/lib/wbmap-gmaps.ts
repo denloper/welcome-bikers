@@ -8,6 +8,7 @@ const LIGHT_MAP_ID = "a7dbf0e5d7ceea8629f41e1e";
 const DARK_MAP_ID = "a7dbf0e5d7ceea8614b0b9ae";
 
 const ARROW = `<span class="wb-gl-me wb-garrow"><svg viewBox="0 0 24 32" width="28" height="36"><path d="M12 2 L22 30 L12 23 L2 30 Z" fill="#3DADF3" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></span>`;
+const ME_STAR = `<span class="wb-me-star"><svg viewBox="0 0 30 40" width="30" height="40"><path d="M15 1.4c-6.7 0-12.2 5.3-12.2 12.4C2.8 22.4 15 38.6 15 38.6s12.2-16.2 12.2-24.8C27.2 6.7 21.7 1.4 15 1.4z" fill="#3D8AFF" stroke="#fff" stroke-width="1.5"/><path d="M15 9.1 16.8 12.8l4.1.6-3 2.9.7 4-3.6-1.9-3.6 1.9.7-4-3-2.9 4.1-.6z" fill="#fff"/></svg></span>`;
 
 let boot: Promise<void> | null = null;
 
@@ -83,6 +84,8 @@ export async function createGoogleMap(
   let routeLine: google.maps.Polyline | null = null;
   let routeBorder: google.maps.Polyline | null = null;
   let arrow: google.maps.marker.AdvancedMarkerElement | null = null;
+  let meMark: google.maps.marker.AdvancedMarkerElement | null = null;
+  let lastMe: { lat: number; lon: number } | null = null;
   const listeners: google.maps.MapsEventListener[] = [];
   let lastPickAt = 0;
   let lastPlaceAt = 0;
@@ -248,6 +251,24 @@ export async function createGoogleMap(
     return arrow;
   };
 
+  const paintMe = () => {
+    if (navOn || !lastMe) {
+      if (meMark) meMark.map = null;
+      return;
+    }
+    if (!meMark) {
+      const node = document.createElement("div");
+      node.innerHTML = ME_STAR;
+      meMark = new google.maps.marker.AdvancedMarkerElement({
+        content: node.firstElementChild as HTMLElement,
+        zIndex: 500000,
+        gmpClickable: false,
+      });
+    }
+    meMark.position = { lat: lastMe.lat, lng: lastMe.lon };
+    meMark.map = gmap;
+  };
+
   const applyNavCamera = () => {
     gmap.setOptions({ headingInteractionEnabled: navOn, tiltInteractionEnabled: false });
     if (navOn) {
@@ -350,6 +371,7 @@ export async function createGoogleMap(
       keepHost();
       paintPlaces();
       paintRoute();
+      paintMe();
       if (pendingFit) fitRoute();
       if (navOn) applyNavCamera();
       resize();
@@ -364,6 +386,8 @@ export async function createGoogleMap(
   const rebuild = (next: MapKind) => {
     const view = camera();
     clearOverlays();
+    meMark = null;
+    arrow = null;
     listeners.splice(0).forEach((l) => l.remove());
     kind = next;
     el.dataset.ready = "0";
@@ -374,6 +398,7 @@ export async function createGoogleMap(
     waitIdle();
     paintPlaces();
     paintRoute();
+    paintMe();
     if (navOn) applyNavCamera();
     resize();
   };
@@ -443,6 +468,7 @@ export async function createGoogleMap(
       navOn = on;
       if (!on && arrow) arrow.map = null;
       paintPlaces();
+      paintMe();
       requestAnimationFrame(() => {
         resize();
         applyNavCamera();
@@ -452,6 +478,10 @@ export async function createGoogleMap(
       pickOn = on;
       el.dataset.pick = on ? "1" : "0";
       paintPlaces();
+    },
+    setMe(pt) {
+      lastMe = pt;
+      paintMe();
     },
     follow(lon, lat, bearing, look) {
       const next: google.maps.CameraOptions = {

@@ -22,6 +22,7 @@ const TONES = ["friendly", "black", "white"] as const;
 const pinCache: Record<string, ImageData> = {};
 
 const ARROW = `<span class="wb-gl-me"><svg viewBox="0 0 24 32" width="28" height="36"><path d="M12 2 L22 30 L12 23 L2 30 Z" fill="#3DADF3" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></span>`;
+const ME_STAR = `<span class="wb-me-star"><svg viewBox="0 0 30 40" width="30" height="40"><path d="M15 1.4c-6.7 0-12.2 5.3-12.2 12.4C2.8 22.4 15 38.6 15 38.6s12.2-16.2 12.2-24.8C27.2 6.7 21.7 1.4 15 1.4z" fill="#3D8AFF" stroke="#fff" stroke-width="1.5"/><path d="M15 9.1 16.8 12.8l4.1.6-3 2.9.7 4-3.6-1.9-3.6 1.9.7-4-3-2.9 4.1-.6z" fill="#fff"/></svg></span>`;
 
 function vectorStyle(dark: boolean) {
   return dark ? "https://tiles.openfreemap.org/styles/dark" : "https://tiles.openfreemap.org/styles/liberty";
@@ -307,6 +308,8 @@ export function createLibreMap(
   let pickOn = false;
   let kind: MapKind = "vector-light";
   let marker: Marker | null = null;
+  let meMark: Marker | null = null;
+  let lastMe: { lat: number; lon: number } | null = null;
   let lastPlaces: Place[] = [];
   let lastDarkPins = false;
   let lastRoute: [number, number][] = [];
@@ -345,6 +348,19 @@ export function createLibreMap(
     node.innerHTML = ARROW;
     marker = new Marker({ element: node.firstElementChild as HTMLElement, anchor: "center" });
     return marker;
+  };
+
+  const paintMe = () => {
+    if (navOn || !lastMe) {
+      meMark?.remove();
+      return;
+    }
+    if (!meMark) {
+      const node = document.createElement("div");
+      node.innerHTML = ME_STAR;
+      meMark = new Marker({ element: node.firstElementChild as HTMLElement, anchor: "bottom" });
+    }
+    meMark.setLngLat([lastMe.lon, lastMe.lat]).addTo(map);
   };
 
   const applyCamera = () => {
@@ -547,6 +563,7 @@ export function createLibreMap(
       navOn = on;
       setPinVisibility(map, !on && !pickOn);
       if (!on) marker?.remove();
+      paintMe();
       requestAnimationFrame(() => {
         resize();
         applyCamera();
@@ -556,6 +573,10 @@ export function createLibreMap(
       pickOn = on;
       el.dataset.pick = on ? "1" : "0";
       setPinVisibility(map, !navOn && !on);
+    },
+    setMe(pt) {
+      lastMe = pt;
+      paintMe();
     },
     follow(lon, lat, bearing, look) {
       const cam: {

@@ -124,6 +124,15 @@ export function IconTurn({ className }: P) {
     </svg>
   );
 }
+export function IconRouteBuild({ className }: P) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round">
+      <path d="M12 3.2 20.2 12 12 20.8 3.8 12z" />
+      <path d="M9.2 14.2V11a2 2 0 0 1 2-2h5" />
+      <path d="m14.2 7.2 2.6 1.8-2.6 1.8" />
+    </svg>
+  );
+}
 export function IconLocate({ className }: P) {
   return (
     <svg className={className} viewBox="0 -960 960 960" fill="currentColor">

@@ -51,6 +51,9 @@ export function createWbMap(
     setPick(on) {
       use((m) => m.setPick(on));
     },
+    setMe(pt) {
+      use((m) => m.setMe(pt));
+    },
     follow(lon, lat, bearing, look) {
       use((m) => m.follow(lon, lat, bearing, look));
     },

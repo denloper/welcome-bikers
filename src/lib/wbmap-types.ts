@@ -20,6 +20,7 @@ export type WbMap = {
   clearRoute: () => void;
   setNav: (on: boolean) => void;
   setPick: (on: boolean) => void;
+  setMe: (pt: { lat: number; lon: number } | null) => void;
   follow: (lon: number, lat: number, bearing?: number | null, look?: { lon: number; lat: number }) => void;
   setKind: (kind: MapKind, overlays?: { places?: Place[]; darkPins?: boolean; route?: [number, number][] }) => void;
   flyTo: (lat: number, lon: number, zoom?: number) => void;

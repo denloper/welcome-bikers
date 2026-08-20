@@ -110,6 +110,8 @@ test.describe("GO navigation", () => {
     await expect(page.getByLabel("map theme")).toBeVisible();
     await expect(page.getByLabel("Zoom in")).toBeVisible();
     await expect(page.getByLabel("My location")).toBeVisible();
+    await expect(page.getByLabel("Build route")).toHaveCount(0);
+    await expect(page.locator(".wb-me-star")).toHaveCount(0);
 
     await expect(page.locator(".map-gl")).toHaveAttribute("data-ready", "1", { timeout: 20_000 });
     await page.waitForTimeout(1500);
@@ -178,6 +180,50 @@ test.describe("GO navigation", () => {
     });
     await expect(page.getByText(/1 stop/i)).toBeVisible({ timeout: 10_000 });
     await expect(page.locator(".map-page.is-pick")).toHaveCount(0);
+  });
+
+  test("Build route sheet replaces Map/Satellite layers", async ({ page, context }) => {
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation(START);
+    await mockRouting(page);
+    await page.goto("/#/map");
+    await expectMapVisible(page);
+
+    await expect(page.getByLabel("layers")).toHaveCount(0);
+    await expect(page.getByLabel("Map type")).toHaveCount(0);
+    await expect(page.getByText("Satellite", { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("Build route")).toBeVisible();
+
+    await page.getByLabel("Build route").tap();
+    await expect(page.locator(".build-sheet")).toBeVisible();
+    await expect(page.locator(".build-sheet-top h3")).toHaveText("Build route");
+    await expect(page.locator(".build-sheet-top p")).toHaveText("Tap map or place");
+    await expect(page.getByText("My current location")).toBeVisible();
+    await expect(page.getByText("Tap a place or press on map")).toBeVisible();
+    await expect(page.locator(".build-go")).toBeDisabled();
+    await expect(page.locator(".map-page.is-pick")).toBeVisible();
+
+    const hit = page.locator(".map-hit");
+    await expect(hit).toBeVisible();
+    const box = await hit.boundingBox();
+    expect(box && box.width > 100 && box.height > 100).toBeTruthy();
+    await hit.tap({
+      position: { x: Math.round((box?.width || 320) * 0.4), y: Math.round((box?.height || 640) * 0.32) },
+    });
+    await expect(page.locator(".build-go")).toBeEnabled({ timeout: 10_000 });
+    await page.locator(".build-go").tap();
+    await expect(page.locator(".build-sheet")).toHaveCount(0);
+    await expect(page.locator(".route-go")).toBeEnabled({ timeout: 15_000 });
+  });
+
+  test("my location shows a blue star when not in GO", async ({ page, context }) => {
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation(START);
+    await page.goto("/#/map");
+    await expectMapVisible(page);
+    await page.getByLabel("My location").tap();
+    await expect(page.locator(".wb-me-star")).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".wb-garrow")).toHaveCount(0);
   });
 
   test("map chrome responds to a finger tap", async ({ page }) => {
