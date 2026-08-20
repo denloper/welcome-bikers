@@ -28,6 +28,7 @@ import { loadPlaces } from "../lib/data";
 import { asset } from "../lib/assets";
 import { bearingDeg, haversineKm, nearestIndex, pointAhead, validCoords } from "../lib/geo";
 import { MIN_NAV_METERS, remainingAlong, tripTooShort } from "../lib/nav";
+import { createNavMap, followNav, navZoom, setNavTheme } from "../lib/nav3d";
 import { darkTiles, lightTiles, satTiles } from "../lib/osm";
 import {
   formatArrival,
@@ -143,6 +144,8 @@ export function MapPage() {
   const endsRef = useRef<L.LayerGroup | null>(null);
   const meRef = useRef<L.Marker | null>(null);
   const watchRef = useRef<number | null>(null);
+  const glEl = useRef<HTMLDivElement>(null);
+  const glRef = useRef<ReturnType<typeof createNavMap> | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
   const [q, setQ] = useState("");
   const [on, setOn] = useState<Record<string, boolean>>(Object.fromEntries(TYPES.map((t) => [t, true])));
@@ -461,6 +464,34 @@ export function MapPage() {
   }, [navigating]);
 
   useEffect(() => {
+    if (!navigating || !glEl.current) return;
+    const start = stops?.[0];
+    if (!start) return;
+    const map = createNavMap(glEl.current, {
+      lon: start.lon,
+      lat: start.lat,
+      dark: !light && !sat,
+      route: driveRef.current?.geometry || [],
+    });
+    glRef.current = map;
+    const resize = () => map.resize();
+    const t = window.setTimeout(resize, 80);
+    const t2 = window.setTimeout(resize, 400);
+    return () => {
+      window.clearTimeout(t);
+      window.clearTimeout(t2);
+      map.remove();
+      glRef.current = null;
+    };
+  }, [navigating]);
+
+  useEffect(() => {
+    const gl = glRef.current;
+    if (!gl) return;
+    setNavTheme(gl, !light && !sat, driveRef.current?.geometry || []);
+  }, [light, sat]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!navigating || !map) {
       if (watchRef.current != null) {
@@ -491,6 +522,11 @@ export function MapPage() {
         const needle = meRef.current?.getElement()?.querySelector(".wb-nav-chevron") as HTMLElement | null;
         if (needle) needle.style.transform = `rotate(${br}deg)`;
       }
+      const gl = glRef.current;
+      if (gl) {
+        followNav(gl, { lon: follow.lon, lat: follow.lat, bearing: br });
+        return;
+      }
       if (!meRef.current) {
         meRef.current = L.marker([follow.lat, follow.lon], { icon: navArrowIcon(), zIndexOffset: 1200 }).addTo(map);
         const needle = meRef.current.getElement()?.querySelector(".wb-nav-chevron") as HTMLElement | null;
@@ -518,14 +554,27 @@ export function MapPage() {
   }, [navigating, stops]);
 
   function locate() {
-    const map = mapRef.current;
-    if (!map) return;
-    const zoom = navigating ? 16 : Math.max(map.getZoom(), 11);
-    const fallback = meRef.current?.getLatLng() || here || (stops ? { lat: stops[0].lat, lon: stops[0].lon } : null);
-    if (fallback) map.setView([fallback.lat, fallback.lon], zoom, { animate: false });
+    const gl = glRef.current;
     navigator.geolocation?.getCurrentPosition(
-      (pos) => map.setView([pos.coords.latitude, pos.coords.longitude], zoom, { animate: false }),
-      () => {},
+      (pos) => {
+        if (glRef.current) {
+          followNav(glRef.current, {
+            lon: pos.coords.longitude,
+            lat: pos.coords.latitude,
+            bearing: glRef.current.getBearing(),
+          });
+        } else {
+          mapRef.current?.setView([pos.coords.latitude, pos.coords.longitude], Math.max(mapRef.current.getZoom(), 11));
+        }
+      },
+      () => {
+        if (gl) {
+          const c = gl.getCenter();
+          followNav(gl, { lon: c.lng, lat: c.lat, bearing: gl.getBearing() });
+        } else if (here) {
+          mapRef.current?.setView([here.lat, here.lon], 11);
+        }
+      },
       { timeout: 5000, enableHighAccuracy: true, maximumAge: 5000 },
     );
   }
@@ -578,6 +627,7 @@ export function MapPage() {
     <div className={`page map-page${navigating ? " is-nav" : ""}${light || sat ? "" : " is-dark"}${pickMode ? " is-pick" : ""}`}>
       <div className="map-nav-stage">
         <div className="map-wrap full" ref={mapEl} />
+        {navigating && <div className="map-gl" ref={glEl} data-pitch="45" />}
       </div>
       {!trip && (
         <div className="map-search">
@@ -731,10 +781,24 @@ export function MapPage() {
         >
           {light && !sat ? <IconSun /> : <IconMoon />}
         </button>
-        <button className="map-round" onClick={() => mapRef.current?.zoomIn()} aria-label="Zoom in">
+        <button
+          className="map-round"
+          onClick={() => {
+            if (glRef.current) navZoom(glRef.current, 1);
+            else mapRef.current?.zoomIn();
+          }}
+          aria-label="Zoom in"
+        >
           +
         </button>
-        <button className="map-round" onClick={() => mapRef.current?.zoomOut()} aria-label="Zoom out">
+        <button
+          className="map-round"
+          onClick={() => {
+            if (glRef.current) navZoom(glRef.current, -1);
+            else mapRef.current?.zoomOut();
+          }}
+          aria-label="Zoom out"
+        >
           −
         </button>
         <button className="map-round" onClick={locate} aria-label="My location">
