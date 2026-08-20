@@ -1172,6 +1172,30 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
 .map-legend.map-overlay { z-index: 4010; }
 
 .empty { padding: 40px 20px; text-align: center; color: var(--muted); }
+.page-loading {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  background: #111;
+  color: #fff;
+  font-weight: 700;
+}
+.map-offline {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 76px;
+  z-index: 560;
+  border-radius: 12px;
+  background: #111e;
+  color: #fff;
+  padding: 9px 12px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 650;
+  box-shadow: 0 6px 20px #0006;
+  pointer-events: none;
+}
 
 .route-ab {
   position: absolute;
@@ -1238,6 +1262,8 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   padding: 12px 14px 12px;
   box-shadow: 0 8px 30px #0007;
   touch-action: manipulation;
+  max-height: 52dvh;
+  overflow-y: auto;
 }
 .build-sheet {
   position: absolute;
@@ -1370,14 +1396,93 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   padding: 0;
 }
 .route-share svg { width: 20px; height: 20px; }
+.route-profiles {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.route-profiles::-webkit-scrollbar { display: none; }
+.route-profiles button {
+  border: 1px solid #aaa;
+  border-radius: 999px;
+  background: #eee;
+  color: #222;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.route-profiles button.on {
+  border-color: #111;
+  background: #111;
+  color: #fff;
+}
+.route-alternatives {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  margin: 0 0 8px;
+  scrollbar-width: none;
+}
+.route-alternatives::-webkit-scrollbar { display: none; }
+.route-alternatives button {
+  min-width: 132px;
+  border: 1px solid #aaa;
+  border-radius: 11px;
+  background: #e8e8e8;
+  color: #222;
+  padding: 7px 9px;
+  text-align: left;
+  cursor: pointer;
+}
+.route-alternatives button.on {
+  border-color: #2f6bff;
+  box-shadow: inset 0 0 0 1px #2f6bff;
+}
+.route-alternatives b,
+.route-alternatives span { display: block; }
+.route-alternatives b { font-size: 12px; }
+.route-alternatives span { margin-top: 2px; color: #555; font-size: 10px; font-weight: 650; }
+.route-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 7px;
+}
+.route-source span {
+  border-radius: 999px;
+  background: #bcbcbc;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 750;
+}
+.route-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 14px;
+  margin-bottom: 8px;
+}
 .route-toll {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 8px 0 10px;
-  font-size: 14px;
+  margin: 3px 0;
+  font-size: 12px;
   font-weight: 600;
 }
+.route-options .sw {
+  width: 38px;
+  height: 22px;
+}
+.route-options .sw i {
+  top: 3px;
+  width: 16px;
+  height: 16px;
+}
+.route-options .sw.on i { left: 19px; }
 .sw {
   width: 48px;
   height: 28px;
@@ -1442,22 +1547,65 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   box-shadow: 0 8px 24px #0006;
 }
 .nav-banner svg { width: 22px; height: 22px; flex: 0 0 22px; }
-.nav-then {
+.nav-banner div { min-width: 0; }
+.nav-banner b,
+.nav-banner span { display: block; }
+.nav-banner b { font-size: 20px; line-height: 1; }
+.nav-banner span {
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-next-list {
   position: absolute;
   left: 10px;
-  top: 82px;
+  right: 72px;
+  top: 78px;
   z-index: 540;
+  display: grid;
+  gap: 4px;
+  pointer-events: none;
+}
+.nav-then {
   background: #0b7a3e;
   color: #fff;
-  border-radius: 12px;
-  padding: 8px 12px;
-  display: flex;
+  border-radius: 10px;
+  padding: 6px 9px;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: 6px;
+  font-size: 11px;
   font-weight: 700;
 }
+.nav-then b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-then small { opacity: .8; white-space: nowrap; }
 .nav-then svg { width: 18px; height: 18px; }
+.nav-status {
+  position: absolute;
+  top: 68px;
+  left: 50%;
+  z-index: 550;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #111;
+  color: #fff;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 750;
+  box-shadow: 0 4px 14px #0007;
+}
+.theme-auto {
+  font-size: 16px;
+  font-weight: 850;
+}
 .nav-hud {
   position: absolute;
   left: 0;

@@ -4,6 +4,41 @@ import type { DriveRoute } from "./osrm";
 export const MIN_NAV_METERS = 80;
 export const OFF_ROUTE_M = 80;
 export const LOOK_AHEAD_M = 70;
+export const REROUTE_HOLD_MS = 3200;
+export const REROUTE_COOLDOWN_MS = 12_000;
+
+export type RerouteState = {
+  offSince: number;
+  lastReroute: number;
+};
+
+export function freshRerouteState(): RerouteState {
+  return { offSince: 0, lastReroute: 0 };
+}
+
+export function updateReroute(
+  state: RerouteState,
+  input: { now: number; distanceM: number; accuracyM: number; pending: boolean },
+): { state: RerouteState; trigger: boolean; thresholdM: number } {
+  const thresholdM = Math.max(OFF_ROUTE_M, Math.min(180, input.accuracyM * 2));
+  if (!Number.isFinite(input.distanceM) || input.accuracyM > 120) {
+    return { state, trigger: false, thresholdM };
+  }
+  if (input.distanceM <= thresholdM * 0.72) {
+    return { state: { ...state, offSince: 0 }, trigger: false, thresholdM };
+  }
+  if (input.distanceM <= thresholdM) return { state, trigger: false, thresholdM };
+  const offSince = state.offSince || input.now;
+  const ready =
+    !input.pending &&
+    input.now - offSince >= REROUTE_HOLD_MS &&
+    input.now - state.lastReroute >= REROUTE_COOLDOWN_MS;
+  return {
+    state: ready ? { offSince, lastReroute: input.now } : { ...state, offSince },
+    trigger: ready,
+    thresholdM,
+  };
+}
 
 export function tripTooShort(points: { lat: number; lon: number }[]): boolean {
   if (points.length < 2) return true;

@@ -1,20 +1,13 @@
-export type LatLon = { lat: number; lon: number };
+import {
+  DEFAULT_ROUTING_OPTIONS,
+  type DriveRoute,
+  type LatLon,
+  type ManeuverPreview,
+  type NavStep,
+  type RoutingOptions,
+} from "./routing-types";
 
-export type NavStep = {
-  name: string;
-  distance: number;
-  duration: number;
-  type: string;
-  modifier: string;
-  location: [number, number];
-};
-
-export type DriveRoute = {
-  geometry: [number, number][];
-  distance: number;
-  duration: number;
-  steps: NavStep[];
-};
+export type { DriveRoute, LatLon, NavStep, RouteProfile, RoutingOptions } from "./routing-types";
 
 type OsrmJson = {
   code?: string;
@@ -117,39 +110,69 @@ const VALHALLA_TURN: Record<number, string> = {
   19: "uturn",
 };
 
-async function fetchOsrm(host: string, points: LatLon[]): Promise<DriveRoute | null> {
+async function fetchOsrm(
+  host: string,
+  points: LatLon[],
+  opts: RoutingOptions,
+): Promise<DriveRoute[]> {
   const coords = points.map((p) => `${p.lon},${p.lat}`).join(";");
-  const q = new URLSearchParams({ overview: "full", geometries: "geojson", steps: "true" });
+  const q = new URLSearchParams({
+    overview: "full",
+    geometries: "geojson",
+    steps: "true",
+    alternatives: opts.alternatives !== false && points.length === 2 ? "true" : "false",
+  });
   try {
     const res = await fetch(`${host}${coords}?${q}`);
-    if (!res.ok) return null;
+    if (!res.ok) return [];
     const data = (await res.json()) as OsrmJson;
-    const route = data.routes?.[0];
-    const line = route?.geometry?.coordinates;
-    if (!route || !line?.length) return null;
-    return {
-      geometry: line.map(([lon, lat]) => [lat, lon]),
-      distance: route.distance,
-      duration: route.duration,
-      steps: stepsFromOsrm(route, points[0]),
-    };
+    return (data.routes || [])
+      .slice(0, opts.alternatives !== false && points.length === 2 ? 3 : 1)
+      .flatMap((route, index): DriveRoute[] => {
+        const line = route.geometry?.coordinates;
+        if (!line?.length) return [];
+        return [{
+          id: `osrm-${index}-${Math.round(route.distance)}-${Math.round(route.duration)}`,
+          provider: "osrm",
+          profile: opts.profile,
+          trafficAware: false,
+          summary: index === 0 ? "Recommended" : `Alternative ${index + 1}`,
+          geometry: line.map(([lon, lat]) => [lat, lon]),
+          distance: route.distance,
+          duration: route.duration,
+          steps: stepsFromOsrm(route, points[0]),
+        }];
+      });
   } catch {
-    return null;
+    return [];
   }
 }
 
-async function fetchValhalla(points: LatLon[], useTolls: boolean): Promise<DriveRoute | null> {
+async function fetchValhalla(
+  points: LatLon[],
+  opts: RoutingOptions,
+): Promise<DriveRoute[]> {
   try {
+    const useHighways = opts.profile === "fastest" ? 0.75 : opts.profile === "scenic" ? 0.2 : 0;
+    const useTrails = opts.pavedOnly ? 0 : opts.profile === "scenic" ? 0.18 : 0.04;
     const res = await fetch("https://valhalla1.openstreetmap.de/route", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         locations: points.map((p) => ({ lat: p.lat, lon: p.lon })),
-        costing: "auto",
-        costing_options: { auto: { use_tolls: useTolls ? 1 : 0 } },
+        costing: "motorcycle",
+        costing_options: {
+          motorcycle: {
+            use_tolls: opts.allowTolls ? 0.5 : 0,
+            use_highways: useHighways,
+            use_ferry: opts.allowFerries ? 0.5 : 0,
+            use_trails: useTrails,
+          },
+        },
+        alternates: opts.alternatives !== false && points.length === 2 ? 2 : 0,
       }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return [];
     const data = (await res.json()) as ValhallaJson;
     const legs = data.trip?.legs || [];
     const geometry: [number, number][] = [];
@@ -170,51 +193,80 @@ async function fetchValhalla(points: LatLon[], useTolls: boolean): Promise<Drive
         });
       }
     }
-    if (geometry.length < 2) return null;
+    if (geometry.length < 2) return [];
     const summary = data.trip?.summary;
-    return {
+    const distance = (summary?.length || 0) * 1000 || geometry.length;
+    const duration = summary?.time || 0;
+    return [{
+      id: `valhalla-${Math.round(distance)}-${Math.round(duration)}`,
+      provider: "valhalla",
+      profile: opts.profile,
+      trafficAware: false,
+      summary: opts.profile === "scenic" ? "Scenic motorcycle route" : "Motorcycle route",
       geometry,
-      distance: (summary?.length || 0) * 1000 || geometry.length,
-      duration: summary?.time || 0,
+      distance,
+      duration,
       steps,
-    };
+    }];
   } catch {
-    return null;
+    return [];
   }
+}
+
+export async function osrmRoutes(
+  points: LatLon[],
+  options?: Partial<RoutingOptions>,
+): Promise<DriveRoute[]> {
+  if (points.length < 2) return [];
+  const opts = { ...DEFAULT_ROUTING_OPTIONS, ...options };
+  const needsMotoProfile =
+    opts.profile !== "fastest" || !opts.allowTolls || !opts.allowFerries || opts.pavedOnly;
+  if (needsMotoProfile) {
+    const motorcycle = await fetchValhalla(points, opts);
+    if (motorcycle.length) return motorcycle;
+  }
+  for (const host of OSRM_HOSTS) {
+    const routes = await fetchOsrm(host, points, opts);
+    if (routes.length) return routes;
+  }
+  return fetchValhalla(points, opts);
 }
 
 export async function osrmRoute(
   points: LatLon[],
-  opts?: { excludeToll?: boolean },
+  options?: Partial<RoutingOptions>,
 ): Promise<DriveRoute | null> {
-  if (points.length < 2) return null;
-  const avoidTolls = Boolean(opts?.excludeToll);
-  if (avoidTolls) {
-    const avoided = await fetchValhalla(points, false);
-    if (avoided) return avoided;
+  return (await osrmRoutes(points, { ...options, alternatives: false }))[0] || null;
+}
+
+export async function planRoutes(
+  points: LatLon[],
+  options?: Partial<RoutingOptions>,
+): Promise<DriveRoute[]> {
+  if (points.length < 2) return [];
+  const opts = { ...DEFAULT_ROUTING_OPTIONS, ...options };
+  if (opts.profile === "scenic") {
+    const scenic = await fetchValhalla(points, opts);
+    if (scenic.length) return scenic;
   }
-  for (const host of OSRM_HOSTS) {
-    const r = await fetchOsrm(host, points);
-    if (r) return r;
+  try {
+    const { googleRoutes } = await import("./groute");
+    const google = await Promise.race([
+      googleRoutes(points, opts),
+      new Promise<DriveRoute[]>((resolve) => window.setTimeout(() => resolve([]), 5500)),
+    ]);
+    if (google.length) return google;
+  } catch {
+    /* OSM fallback */
   }
-  return fetchValhalla(points, !avoidTolls);
+  return osrmRoutes(points, opts);
 }
 
 export async function planRoute(
   points: LatLon[],
-  opts?: { excludeToll?: boolean },
+  options?: Partial<RoutingOptions>,
 ): Promise<DriveRoute | null> {
-  try {
-    const { googleRoute } = await import("./groute");
-    const g = await Promise.race([
-      googleRoute(points, opts),
-      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 5500)),
-    ]);
-    if (g) return g;
-  } catch {
-    /* OSM fallback */
-  }
-  return osrmRoute(points, opts);
+  return (await planRoutes(points, { ...options, alternatives: false }))[0] || null;
 }
 
 export async function osrmDrive(points: LatLon[]): Promise<[number, number][]> {
@@ -245,6 +297,19 @@ export function formatMeters(meters: number): string {
   const km = meters / 1000;
   if (km < 1) return `${Math.round(meters)} m`;
   return `${km.toFixed(2)} km`;
+}
+
+export function maneuverPreviews(
+  route: DriveRoute,
+  stepI: number,
+  stepRemain: number,
+  count = 3,
+): ManeuverPreview[] {
+  return route.steps.slice(Math.max(0, stepI), Math.max(0, stepI) + count).map((step, index) => ({
+    step,
+    label: stepToward(step),
+    distance: index === 0 ? Math.max(0, stepRemain) : Math.max(0, step.distance),
+  }));
 }
 
 export function stepToward(step: NavStep | undefined): string {

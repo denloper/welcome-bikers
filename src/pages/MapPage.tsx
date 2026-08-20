@@ -21,18 +21,22 @@ import { Stars } from "../components/Stars";
 import { PlacePhoto } from "../components/PlacePhoto";
 import { loadPlaces } from "../lib/data";
 import { bearingDeg, closestOnPolyline, haversineKm, pointAhead, validCoords } from "../lib/geo";
-import { LOOK_AHEAD_M, MIN_NAV_METERS, OFF_ROUTE_M, remainingAlong, tripTooShort } from "../lib/nav";
+import { filterGpsFix, freshGpsState } from "../lib/gps";
+import { freshRerouteState, LOOK_AHEAD_M, MIN_NAV_METERS, OFF_ROUTE_M, remainingAlong, tripTooShort, updateReroute } from "../lib/nav";
 import { freshVoiceState, hushVoice, nextVoice, speakLine } from "../lib/voice";
 import { createWbMap, NAV_ZOOM, type MapKind, type WbMap } from "../lib/wbmap";
 import {
   formatArrival,
   formatDriveTime,
   formatMeters,
+  maneuverPreviews,
   planRoute,
-  stepThen,
+  planRoutes,
   stepToward,
   type DriveRoute,
   type NavStep,
+  type RouteProfile,
+  type RoutingOptions,
 } from "../lib/osrm";
 import { photosFor } from "../lib/photos";
 import { TYPE_CHIP } from "../lib/categories";
@@ -138,6 +142,15 @@ function mapKind(light: boolean, sat: boolean): MapKind {
   return light ? "vector-light" : "vector-dark";
 }
 
+type ThemeMode = "auto" | "light" | "dark";
+
+function automaticLight() {
+  const hour = new Date().getHours();
+  if (hour >= 8 && hour < 19) return true;
+  if (hour >= 20 || hour < 7) return false;
+  return !window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+}
+
 export function MapPage() {
   const nav = useNavigate();
   const [params] = useSearchParams();
@@ -155,25 +168,47 @@ export function MapPage() {
   const [draftFriendly, setDraftFriendly] = useState(false);
   const [filters, setFilters] = useState(false);
   const [info, setInfo] = useState(false);
-  const [light, setLight] = useState(true);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    const stored = localStorage.getItem("wb.map.theme");
+    return stored === "auto" || stored === "dark" || stored === "light" ? stored : "light";
+  });
+  const [autoLight, setAutoLight] = useState(automaticLight);
+  const light = themeMode === "auto" ? autoLight : themeMode === "light";
   const [sat] = useState(false);
   const [picked, setPicked] = useState<Place | null>(null);
   const [ready, setReady] = useState(false);
+  const [online, setOnline] = useState(() => navigator.onLine);
   const [stops, setStops] = useState<Stop[] | null>(null);
   const stopsRef = useRef(stops);
   stopsRef.current = stops;
   const [tolls, setTolls] = useState(false);
-  const tollsRef = useRef(tolls);
-  tollsRef.current = tolls;
+  const [profile, setProfile] = useState<RouteProfile>("fastest");
+  const [ferries, setFerries] = useState(true);
+  const [pavedOnly, setPavedOnly] = useState(true);
+  const [traffic, setTraffic] = useState(true);
+  const routingOptions = useMemo<RoutingOptions>(
+    () => ({
+      profile,
+      allowTolls: tolls,
+      allowFerries: ferries,
+      pavedOnly,
+      alternatives: true,
+    }),
+    [profile, tolls, ferries, pavedOnly],
+  );
+  const routingRef = useRef(routingOptions);
+  routingRef.current = routingOptions;
   const [drive, setDrive] = useState<DriveRoute | null>(null);
+  const [routeChoices, setRouteChoices] = useState<DriveRoute[]>([]);
   const driveRef = useRef<DriveRoute | null>(null);
   driveRef.current = drive;
   const [routingErr, setRoutingErr] = useState(false);
+  const [rerouting, setRerouting] = useState(false);
   const [navigating, setNavigating] = useState(false);
   const navigatingRef = useRef(false);
   navigatingRef.current = navigating;
   const voiceRef = useRef(freshVoiceState());
-  const voiceRouteRef = useRef(0);
+  const voiceRouteRef = useRef("");
   const [pickMode, setPickMode] = useState<null | "start" | "via" | "to">(null);
   const pickModeRef = useRef(pickMode);
   pickModeRef.current = pickMode;
@@ -182,11 +217,22 @@ export function MapPage() {
   const [buildTo, setBuildTo] = useState<Stop | null>(null);
   const [viaOpen, setViaOpen] = useState(false);
   const [here, setHere] = useState<{ lat: number; lon: number } | null>(null);
+  const hereRef = useRef(here);
+  hereRef.current = here;
   const [locating, setLocating] = useState(false);
   const kindInit = useRef(true);
-  const overlayRef = useRef<{ filtered: Place[]; darkPins: boolean; geometry?: [number, number][] }>({
+  const overlayRef = useRef<{
+    filtered: Place[];
+    darkPins: boolean;
+    routes: { id: string; points: [number, number][] }[];
+    selectedRouteId: string | null;
+    traffic: boolean;
+  }>({
     filtered: [],
     darkPins: false,
+    routes: [],
+    selectedRouteId: null,
+    traffic: true,
   });
 
   const filtered = useMemo(() => {
@@ -202,11 +248,23 @@ export function MapPage() {
 
   const trip = Boolean(stops && stops.length >= 2);
   const darkPins = !light && !sat;
-  overlayRef.current = { filtered, darkPins, geometry: drive?.geometry };
+  const mapRoutes = (routeChoices.length ? routeChoices : drive ? [drive] : []).map((route) => ({
+    id: route.id,
+    points: route.geometry,
+  }));
+  overlayRef.current = {
+    filtered,
+    darkPins,
+    routes: mapRoutes,
+    selectedRouteId: drive?.id || null,
+    traffic,
+  };
   const live = navigating && drive ? remainingAlong(drive, here || { lat: stops![0].lat, lon: stops![0].lon }) : null;
   const nowStep: NavStep | undefined = drive?.steps[live?.stepI ?? 0];
   const nextStep: NavStep | undefined = drive?.steps[(live?.stepI ?? 0) + 1];
-  const then = stepThen(nextStep);
+  const maneuvers = navigating && drive && live
+    ? maneuverPreviews(drive, live.stepI, live.stepRemain, 3)
+    : [];
 
   useEffect(() => {
     if (!navigating) {
@@ -214,7 +272,7 @@ export function MapPage() {
       voiceRef.current = freshVoiceState();
       return;
     }
-    const sig = drive?.geometry.length || 0;
+    const sig = drive?.id || "";
     if (sig !== voiceRouteRef.current) {
       voiceRouteRef.current = sig;
       voiceRef.current = freshVoiceState();
@@ -229,11 +287,34 @@ export function MapPage() {
     });
     voiceRef.current = state;
     if (line) speakLine(line);
-  }, [navigating, drive?.geometry.length, live?.arrived, live?.stepI, live?.stepRemain, nextStep, nowStep]);
+  }, [navigating, drive?.id, live?.arrived, live?.stepI, live?.stepRemain, nextStep, nowStep]);
 
   useEffect(() => {
     loadPlaces().then(setPlaces);
   }, []);
+
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("wb.map.theme", themeMode);
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    const update = () => setAutoLight(automaticLight());
+    const timer = window.setInterval(update, 60_000);
+    media?.addEventListener?.("change", update);
+    update();
+    return () => {
+      window.clearInterval(timer);
+      media?.removeEventListener?.("change", update);
+    };
+  }, [themeMode]);
 
   useLayoutEffect(() => {
     if (!mapEl.current) return;
@@ -335,6 +416,7 @@ export function MapPage() {
         if (!cancelled) {
           setStops(null);
           setDrive(null);
+          setRouteChoices([]);
           setNavigating(false);
         }
         return;
@@ -381,27 +463,30 @@ export function MapPage() {
   useEffect(() => {
     if (!ready || !stops || stops.length < 2) {
       setDrive(null);
+      setRouteChoices([]);
       setRoutingErr(false);
       wbRef.current?.clearRoute();
       return;
     }
     if (tripTooShort(stops)) {
       setDrive(null);
+      setRouteChoices([]);
       setRoutingErr(false);
       wbRef.current?.clearRoute();
       wbRef.current?.flyTo(stops[stops.length - 1].lat, stops[stops.length - 1].lon, 16);
       return;
     }
     let cancelled = false;
-    planRoute(stops, { excludeToll: !tolls }).then((route) => {
+    planRoutes(stops, routingOptions).then((routes) => {
       if (cancelled) return;
-      setDrive(route);
-      setRoutingErr(!route);
+      setRouteChoices(routes);
+      setDrive((current) => routes.find((route) => route.id === current?.id) || routes[0] || null);
+      setRoutingErr(routes.length === 0);
     });
     return () => {
       cancelled = true;
     };
-  }, [stops, tolls, ready]);
+  }, [stops, routingOptions, ready]);
 
   useEffect(() => {
     const wb = wbRef.current;
@@ -410,14 +495,22 @@ export function MapPage() {
       wb.clearRoute();
       return;
     }
-    const pts = drive?.geometry.length ? drive.geometry : stops.map((s) => [s.lat, s.lon] as [number, number]);
     if (tripTooShort(stops)) {
       wb.clearRoute();
       wb.flyTo(stops[stops.length - 1].lat, stops[stops.length - 1].lon, 16);
       return;
     }
-    wb.setRoute(pts, !light && !sat, { fit: !navigating && Boolean(drive) });
-  }, [drive, stops, ready, light, sat, navigating]);
+    const routes = mapRoutes.length
+      ? mapRoutes
+      : [{ id: "direct", points: stops.map((s) => [s.lat, s.lon] as [number, number]) }];
+    wb.setRoutes(routes, drive?.id || routes[0]?.id || null, !light && !sat, {
+      fit: !navigating && Boolean(drive),
+    });
+  }, [drive, routeChoices, stops, ready, light, sat, navigating]);
+
+  useEffect(() => {
+    wbRef.current?.setTraffic(traffic);
+  }, [traffic, ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -430,7 +523,9 @@ export function MapPage() {
     wbRef.current?.setKind(next, {
       places: o.filtered,
       darkPins: o.darkPins,
-      route: o.geometry,
+      routes: o.routes,
+      selectedRouteId: o.selectedRouteId,
+      traffic: o.traffic,
     });
   }, [light, sat, ready]);
 
@@ -452,80 +547,141 @@ export function MapPage() {
   useEffect(() => {
     const wb = wbRef.current;
     if (!navigating || !wb) {
+      setRerouting(false);
       if (watchRef.current != null) {
         navigator.geolocation?.clearWatch(watchRef.current);
         watchRef.current = null;
       }
       return;
     }
-    const lastFix = { lat: NaN, lon: NaN };
-    let offSince = 0;
-    let lastReroute = 0;
-    let rerouting = false;
-    const placeMe = (lat: number, lon: number, gpsHeading?: number | null, speed?: number | null) => {
-      const gps = { lat, lon };
-      setHere(gps);
+    let gpsState = freshGpsState();
+    let rerouteState = freshRerouteState();
+    let reroutePending = false;
+    let rerouteGeneration = 0;
+    let lastUiFix = 0;
+    let active = true;
+    const placeMe = (
+      lat: number,
+      lon: number,
+      gpsHeading?: number | null,
+      speed?: number | null,
+      accuracy = 50,
+      timestamp = Date.now(),
+    ) => {
+      const filteredFix = filterGpsFix(gpsState, {
+        lat,
+        lon,
+        accuracy,
+        heading: gpsHeading,
+        speed,
+        timestamp,
+      });
+      if (!filteredFix.accepted || !filteredFix.fix) return;
+      gpsState = filteredFix.state;
+      const fix = filteredFix.fix;
+      const gps = { lat: fix.lat, lon: fix.lon };
+      if (!lastUiFix || timestamp - lastUiFix >= 800) {
+        lastUiFix = timestamp;
+        setHere(gps);
+      }
       const geom = driveRef.current?.geometry;
       const snap = geom && geom.length >= 2 ? closestOnPolyline(geom, gps) : null;
-      const onRoad = Boolean(snap && snap.distKm * 1000 <= OFF_ROUTE_M);
+      const roadThreshold = Math.max(OFF_ROUTE_M, Math.min(180, fix.accuracy * 2));
+      const onRoad = Boolean(snap && snap.distKm * 1000 <= roadThreshold);
       const rider = onRoad && snap ? { lat: snap.lat, lon: snap.lon } : gps;
-      let br: number | null = null;
-      if (
-        !onRoad &&
-        gpsHeading != null &&
-        Number.isFinite(gpsHeading) &&
-        gpsHeading >= 0 &&
-        (speed == null || speed > 0.5)
-      ) {
-        br = gpsHeading;
-      } else if (Number.isFinite(lastFix.lat)) {
-        const moved = haversineKm(lastFix, gps) * 1000;
-        if (moved > 3) br = (bearingDeg(lastFix, gps) + 360) % 360;
-      }
       const look =
         geom && geom.length >= 2 ? pointAhead(geom, rider, LOOK_AHEAD_M) : null;
+      let br = fix.heading;
       if (br == null && look) br = (bearingDeg(rider, look) + 360) % 360;
-      lastFix.lat = lat;
-      lastFix.lon = lon;
       wb.follow(rider.lon, rider.lat, br, look ? { lon: look.lon, lat: look.lat } : undefined);
 
-      if (snap && snap.distKm * 1000 > OFF_ROUTE_M) {
-        if (!offSince) offSince = Date.now();
-        if (!rerouting && Date.now() - offSince > 2200 && Date.now() - lastReroute > 8000) {
+      if (snap) {
+        const decision = updateReroute(rerouteState, {
+          now: timestamp,
+          distanceM: snap.distKm * 1000,
+          accuracyM: fix.accuracy,
+          pending: reroutePending,
+        });
+        rerouteState = decision.state;
+        if (decision.trigger) {
           const list = stopsRef.current;
-          if (list && list.length >= 2) {
-            rerouting = true;
-            lastReroute = Date.now();
-            void planRoute([{ lat, lon }, ...list.slice(1)], { excludeToll: !tollsRef.current }).then((route) => {
-              rerouting = false;
-              if (route && navigatingRef.current) {
-                offSince = 0;
-                setDrive(route);
-              }
-            });
-          }
+          if (!list || list.length < 2) return;
+          reroutePending = true;
+          setRerouting(true);
+          const generation = ++rerouteGeneration;
+          void planRoute([gps, ...list.slice(1)], { ...routingRef.current, alternatives: false }).then((route) => {
+            if (!active || generation !== rerouteGeneration) return;
+            reroutePending = false;
+            setRerouting(false);
+            if (route && navigatingRef.current) {
+              rerouteState = freshRerouteState();
+              setDrive(route);
+              setRouteChoices([route]);
+            }
+          });
         }
-      } else {
-        offSince = 0;
       }
     };
     getHere().then((p) => {
-      if (p) placeMe(p.lat, p.lon);
-      else if (stops?.[0]) placeMe(stops[0].lat, stops[0].lon);
+      if (p) placeMe(p.lat, p.lon, null, null, 25);
+      else if (stops?.[0]) placeMe(stops[0].lat, stops[0].lon, null, null, 25);
     });
     if (navigator.geolocation) {
       watchRef.current = navigator.geolocation.watchPosition(
         (pos) =>
-          placeMe(pos.coords.latitude, pos.coords.longitude, pos.coords.heading, pos.coords.speed),
+          placeMe(
+            pos.coords.latitude,
+            pos.coords.longitude,
+            pos.coords.heading,
+            pos.coords.speed,
+            pos.coords.accuracy,
+            pos.timestamp,
+          ),
         () => {},
         { enableHighAccuracy: true, maximumAge: 500, timeout: 12_000 },
       );
     }
     return () => {
+      active = false;
+      rerouteGeneration += 1;
       if (watchRef.current != null) navigator.geolocation?.clearWatch(watchRef.current);
       watchRef.current = null;
     };
   }, [navigating, stops]);
+
+  useEffect(() => {
+    if (!navigating || drive?.provider !== "google" || !drive.trafficAware || !stops || stops.length !== 2) {
+      return;
+    }
+    let active = true;
+    const selectedId = drive.id;
+    const refreshEta = async () => {
+      const current = hereRef.current;
+      if (!current) return;
+      const refreshed = await planRoute([current, stops[1]], {
+        ...routingRef.current,
+        alternatives: false,
+      });
+      if (!active || !refreshed || refreshed.provider !== "google") return;
+      setDrive((route) =>
+        route?.id === selectedId
+          ? { ...route, duration: refreshed.duration, trafficAware: refreshed.trafficAware }
+          : route,
+      );
+      setRouteChoices((routes) =>
+        routes.map((route) =>
+          route.id === selectedId
+            ? { ...route, duration: refreshed.duration, trafficAware: refreshed.trafficAware }
+            : route,
+        ),
+      );
+    };
+    const timer = window.setInterval(() => void refreshEta(), 180_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [navigating, drive?.id, drive?.provider, drive?.trafficAware, stops]);
 
   function locate() {
     const wb = wbRef.current;
@@ -633,6 +789,11 @@ export function MapPage() {
     <div className={`page map-page${navigating ? " is-nav" : ""}${light || sat ? "" : " is-dark"}${pickMode ? " is-pick" : ""}`}>
       <div className="map-nav-stage">
         <div className="map-wrap full map-gl" ref={mapEl} data-pitch={navigating ? "45" : "0"} />
+        {!online && (
+          <div className="map-offline" role="status">
+            Map tiles and new routes need an internet connection. Saved places remain available.
+          </div>
+        )}
       </div>
       {pickMode && !navigating && (
         <div
@@ -751,13 +912,23 @@ export function MapPage() {
       {navigating && drive && (
         <>
           <div className="nav-banner">
-            <TurnArrow turn={nowStep?.modifier || "straight"} />
-            <span>{stepToward(nowStep)}</span>
+            <TurnArrow turn={maneuvers[0]?.step.modifier || nowStep?.modifier || "straight"} />
+            <div>
+              <b>{formatMeters(maneuvers[0]?.distance || live?.stepRemain || 0)}</b>
+              <span>{maneuvers[0]?.label || stepToward(nowStep)}</span>
+            </div>
           </div>
-          {then && (
-            <div className="nav-then">
-              <span>{then.label}</span>
-              <TurnArrow turn={then.turn} />
+          {rerouting && <div className="nav-status">Rerouting…</div>}
+          {maneuvers.length > 1 && (
+            <div className="nav-next-list">
+              {maneuvers.slice(1, 3).map((item, index) => (
+                <div className="nav-then" key={`${item.step.location.join(",")}-${index}`}>
+                  <span>{index === 0 ? "Then" : "Next"}</span>
+                  <TurnArrow turn={item.step.modifier || item.step.type} />
+                  <b>{item.label}</b>
+                  <small>{formatMeters(item.distance)}</small>
+                </div>
+              ))}
             </div>
           )}
         </>
@@ -783,10 +954,14 @@ export function MapPage() {
           type="button"
           className="map-round"
           data-testid="map-theme"
-          onClick={() => setLight((v) => !v)}
+          data-theme-mode={themeMode}
+          onClick={() =>
+            setThemeMode((mode) => (mode === "light" ? "dark" : mode === "dark" ? "auto" : "light"))
+          }
           aria-label="map theme"
+          title={`Theme: ${themeMode}`}
         >
-          {light ? <IconSun /> : <IconMoon />}
+          {themeMode === "auto" ? <span className="theme-auto">A</span> : light ? <IconSun /> : <IconMoon />}
         </button>
         <button className="map-round" onClick={() => wbRef.current?.zoomBy(1)} aria-label="Zoom in">
           +
@@ -844,12 +1019,68 @@ export function MapPage() {
               <IconShare />
             </button>
           </div>
-          <label className="route-toll">
-            Toll roads
-            <button type="button" className={`sw${tolls ? " on" : ""}`} onClick={() => setTolls((v) => !v)} aria-label="Toll roads">
-              <i />
-            </button>
-          </label>
+          <div className="route-profiles" aria-label="Route profile">
+            {([
+              ["fastest", "Fastest"],
+              ["scenic", "Scenic"],
+              ["no-highways", "No highways"],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={profile === value ? "on" : ""}
+                onClick={() => setProfile(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {routeChoices.length > 1 && (
+            <div className="route-alternatives" aria-label="Route alternatives">
+              {routeChoices.map((route, index) => (
+                <button
+                  key={route.id}
+                  type="button"
+                  className={drive.id === route.id ? "on" : ""}
+                  onClick={() => setDrive(route)}
+                >
+                  <b>{index === 0 ? "Recommended" : `Route ${index + 1}`}</b>
+                  <span>{formatDriveTime(route.duration)} · {formatMeters(route.distance)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="route-source">
+            <span>{drive.provider === "google" ? "Google" : "OSM"}</span>
+            {drive.trafficAware && <span>Traffic ETA</span>}
+            {drive.profile !== "fastest" && <span>Motorcycle preference</span>}
+          </div>
+          <div className="route-options">
+            <label className="route-toll">
+              Toll roads
+              <button type="button" className={`sw${tolls ? " on" : ""}`} onClick={() => setTolls((v) => !v)} aria-label="Toll roads">
+                <i />
+              </button>
+            </label>
+            <label className="route-toll">
+              Ferries
+              <button type="button" className={`sw${ferries ? " on" : ""}`} onClick={() => setFerries((v) => !v)} aria-label="Ferries">
+                <i />
+              </button>
+            </label>
+            <label className="route-toll">
+              Paved roads
+              <button type="button" className={`sw${pavedOnly ? " on" : ""}`} onClick={() => setPavedOnly((v) => !v)} aria-label="Paved roads">
+                <i />
+              </button>
+            </label>
+            <label className="route-toll">
+              Traffic
+              <button type="button" className={`sw${traffic ? " on" : ""}`} onClick={() => setTraffic((v) => !v)} aria-label="Traffic">
+                <i />
+              </button>
+            </label>
+          </div>
           <div className="route-actions">
             <button
               className="btn green route-go"

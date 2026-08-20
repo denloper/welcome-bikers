@@ -2,7 +2,7 @@ import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { MarkerClusterer, SuperClusterAlgorithm } from "@googlemaps/markerclusterer";
 import { asset } from "./assets";
 import type { Place } from "../types";
-import { HOME, HOME_ZOOM, NAV_TILT, NAV_ZOOM, type MapKind, type WbMap } from "./wbmap-types";
+import { HOME, HOME_ZOOM, NAV_TILT, NAV_ZOOM, type MapKind, type WbMap, type WbRouteLine } from "./wbmap-types";
 
 const LIGHT_MAP_ID = "a7dbf0e5d7ceea8629f41e1e";
 const DARK_MAP_ID = "a7dbf0e5d7ceea8614b0b9ae";
@@ -72,8 +72,10 @@ export async function createGoogleMap(
   let navOn = false;
   let lastPlaces: Place[] = [];
   let lastDarkPins = false;
-  let lastRoute: [number, number][] = [];
+  let lastRoutes: WbRouteLine[] = [];
+  let selectedRouteId: string | null = null;
   let lastRouteDark = false;
+  let trafficOn = false;
   let pendingFit = false;
   let pickOn = false;
   let kind: MapKind = "vector-light";
@@ -81,8 +83,8 @@ export async function createGoogleMap(
   let gmap: google.maps.Map;
   let clusterer: MarkerClusterer | null = null;
   let pinMarkers: google.maps.marker.AdvancedMarkerElement[] = [];
-  let routeLine: google.maps.Polyline | null = null;
-  let routeBorder: google.maps.Polyline | null = null;
+  let routePolylines: google.maps.Polyline[] = [];
+  let trafficLayer: google.maps.TrafficLayer | null = null;
   let arrow: google.maps.marker.AdvancedMarkerElement | null = null;
   let meMark: google.maps.marker.AdvancedMarkerElement | null = null;
   let lastMe: { lat: number; lon: number } | null = null;
@@ -122,48 +124,60 @@ export async function createGoogleMap(
     clusterer?.clearMarkers();
     clusterer = null;
     pinMarkers = [];
-    routeLine?.setMap(null);
-    routeBorder?.setMap(null);
-    routeLine = null;
-    routeBorder = null;
+    routePolylines.forEach((line) => line.setMap(null));
+    routePolylines = [];
+    trafficLayer?.setMap(null);
+    trafficLayer = null;
     if (arrow) arrow.map = null;
   };
 
   const paintRoute = () => {
-    routeLine?.setMap(null);
-    routeBorder?.setMap(null);
-    routeLine = null;
-    routeBorder = null;
-    if (lastRoute.length < 2) return;
-    const path = lastRoute.map(([lat, lon]) => ({ lat, lng: lon }));
-    routeBorder = new google.maps.Polyline({
-      path,
-      geodesic: true,
-      strokeColor: lastRouteDark ? "#FFCC00" : "#000099",
-      strokeOpacity: 1,
-      strokeWeight: 9,
-      map: gmap,
-      clickable: false,
-      zIndex: 1,
-    });
-    routeLine = new google.maps.Polyline({
-      path,
-      geodesic: true,
-      strokeColor: lastRouteDark ? "#FFFF00" : "#0033FF",
-      strokeOpacity: 0.8,
-      strokeWeight: 4,
-      map: gmap,
-      clickable: false,
-      zIndex: 2,
-    });
+    routePolylines.forEach((line) => line.setMap(null));
+    routePolylines = [];
+    const ordered = [...lastRoutes].sort((a) => (a.id === selectedRouteId ? 1 : -1));
+    for (const route of ordered) {
+      if (route.points.length < 2) continue;
+      const selected = route.id === selectedRouteId || (!selectedRouteId && route === ordered[ordered.length - 1]);
+      const path = route.points.map(([lat, lon]) => ({ lat, lng: lon }));
+      const border = new google.maps.Polyline({
+        path,
+        geodesic: true,
+        strokeColor: lastRouteDark ? "#FFCC00" : "#000099",
+        strokeOpacity: selected ? 1 : 0.26,
+        strokeWeight: selected ? 9 : 6,
+        map: gmap,
+        clickable: false,
+        zIndex: selected ? 3 : 1,
+      });
+      const line = new google.maps.Polyline({
+        path,
+        geodesic: true,
+        strokeColor: lastRouteDark ? "#FFFF00" : "#0033FF",
+        strokeOpacity: selected ? 0.86 : 0.32,
+        strokeWeight: selected ? 4 : 3,
+        map: gmap,
+        clickable: false,
+        zIndex: selected ? 4 : 2,
+      });
+      routePolylines.push(border, line);
+    }
   };
 
   const fitRoute = () => {
-    if (lastRoute.length < 2 || navOn) return;
+    const route = lastRoutes.find((item) => item.id === selectedRouteId) || lastRoutes[0];
+    if (!route || route.points.length < 2 || navOn) return;
     const bounds = new google.maps.LatLngBounds();
-    lastRoute.forEach(([lat, lon]) => bounds.extend({ lat, lng: lon }));
+    route.points.forEach(([lat, lon]) => bounds.extend({ lat, lng: lon }));
     gmap.fitBounds(bounds, { top: 130, bottom: 240, left: 28, right: 56 });
     pendingFit = false;
+  };
+
+  const paintTraffic = () => {
+    trafficLayer?.setMap(null);
+    trafficLayer = null;
+    if (!trafficOn) return;
+    trafficLayer = new google.maps.TrafficLayer({ autoRefresh: true });
+    trafficLayer.setMap(gmap);
   };
 
   const openPlace = (id: string) => {
@@ -371,6 +385,7 @@ export async function createGoogleMap(
       keepHost();
       paintPlaces();
       paintRoute();
+      paintTraffic();
       paintMe();
       if (pendingFit) fitRoute();
       if (navOn) applyNavCamera();
@@ -398,6 +413,7 @@ export async function createGoogleMap(
     waitIdle();
     paintPlaces();
     paintRoute();
+    paintTraffic();
     paintMe();
     if (navOn) applyNavCamera();
     resize();
@@ -447,22 +463,27 @@ export async function createGoogleMap(
       lastDarkPins = darkPins;
       paintPlaces();
     },
-    setRoute(pts, dark, extra) {
-      lastRoute = pts;
+    setRoutes(routes, selectedId, dark, extra) {
+      lastRoutes = routes;
+      selectedRouteId = selectedId;
       lastRouteDark = dark;
       paintRoute();
-      if (extra?.fit && pts.length >= 2 && !navOn) {
+      if (extra?.fit && routes.some((route) => route.points.length >= 2) && !navOn) {
         pendingFit = true;
         fitRoute();
       }
     },
     clearRoute() {
-      lastRoute = [];
+      lastRoutes = [];
+      selectedRouteId = null;
       pendingFit = false;
-      routeLine?.setMap(null);
-      routeBorder?.setMap(null);
-      routeLine = null;
-      routeBorder = null;
+      routePolylines.forEach((line) => line.setMap(null));
+      routePolylines = [];
+    },
+    setTraffic(on) {
+      trafficOn = on;
+      el.dataset.traffic = on ? "on" : "off";
+      paintTraffic();
     },
     setNav(on) {
       navOn = on;
@@ -502,7 +523,9 @@ export async function createGoogleMap(
         lastDarkPins = overlays.darkPins;
         lastRouteDark = overlays.darkPins;
       }
-      if (overlays?.route) lastRoute = overlays.route;
+      if (overlays?.routes) lastRoutes = overlays.routes;
+      if (overlays && "selectedRouteId" in overlays) selectedRouteId = overlays.selectedRouteId ?? null;
+      if (overlays?.traffic != null) trafficOn = overlays.traffic;
       const mapIdChanged = mapIdFor(next) !== mapIdFor(kind);
       const darkChanged = (next === "vector-dark") !== (kind === "vector-dark");
       if (mapIdChanged || darkChanged) {
@@ -515,6 +538,7 @@ export async function createGoogleMap(
       });
       paintPlaces();
       paintRoute();
+      paintTraffic();
       if (pendingFit) fitRoute();
       if (navOn) applyNavCamera();
       el.dataset.ready = "1";

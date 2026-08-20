@@ -1,5 +1,11 @@
 import { loadGoogle } from "./wbmap-gmaps";
-import type { DriveRoute, LatLon, NavStep } from "./osrm";
+import {
+  DEFAULT_ROUTING_OPTIONS,
+  type DriveRoute,
+  type LatLon,
+  type NavStep,
+  type RoutingOptions,
+} from "./routing-types";
 
 function stripHtml(html: string) {
   return html
@@ -28,10 +34,18 @@ function modifierFrom(maneuver: string) {
   return "straight";
 }
 
-function fromGoogleRoute(route: google.maps.DirectionsRoute): DriveRoute | null {
+function fromGoogleRoute(
+  route: google.maps.DirectionsRoute,
+  index: number,
+  opts: RoutingOptions,
+): DriveRoute | null {
   const geometry: [number, number][] = [];
   const steps: NavStep[] = [];
+  let trafficAware = false;
   for (const leg of route.legs || []) {
+    if ((leg as google.maps.DirectionsLeg & { duration_in_traffic?: google.maps.Duration }).duration_in_traffic) {
+      trafficAware = true;
+    }
     for (const step of leg.steps || []) {
       const path = step.path || [];
       for (const p of path) geometry.push([p.lat(), p.lng()]);
@@ -56,7 +70,17 @@ function fromGoogleRoute(route: google.maps.DirectionsRoute): DriveRoute | null 
     const traffic = (l as google.maps.DirectionsLeg & { duration_in_traffic?: google.maps.Duration }).duration_in_traffic;
     return s + (traffic?.value || l.duration?.value || 0);
   }, 0);
-  return { geometry, distance, duration, steps };
+  return {
+    id: `google-${index}-${Math.round(distance)}-${Math.round(duration)}`,
+    provider: "google",
+    profile: opts.profile,
+    trafficAware,
+    summary: route.summary?.trim() || `Route ${index + 1}`,
+    geometry,
+    distance,
+    duration,
+    steps,
+  };
 }
 
 function ask(svc: google.maps.DirectionsService, req: google.maps.DirectionsRequest) {
@@ -68,11 +92,12 @@ function ask(svc: google.maps.DirectionsService, req: google.maps.DirectionsRequ
   });
 }
 
-export async function googleRoute(
+export async function googleRoutes(
   points: LatLon[],
-  opts?: { excludeToll?: boolean },
-): Promise<DriveRoute | null> {
-  if (points.length < 2) return null;
+  options?: Partial<RoutingOptions>,
+): Promise<DriveRoute[]> {
+  if (points.length < 2) return [];
+  const opts = { ...DEFAULT_ROUTING_OPTIONS, ...options };
   await loadGoogle();
   const svc = new google.maps.DirectionsService();
   const origin = { lat: points[0].lat, lng: points[0].lon };
@@ -81,30 +106,45 @@ export async function googleRoute(
     location: { lat: p.lat, lng: p.lon },
     stopover: true,
   }));
+  const alternatives = opts.alternatives !== false && waypoints.length === 0;
   const req: google.maps.DirectionsRequest = {
     origin,
     destination,
     waypoints,
     travelMode: google.maps.TravelMode.DRIVING,
-    avoidTolls: Boolean(opts?.excludeToll),
-    provideRouteAlternatives: false,
-    drivingOptions: {
+    avoidTolls: !opts.allowTolls,
+    avoidFerries: !opts.allowFerries,
+    avoidHighways: opts.profile === "no-highways" || opts.profile === "scenic",
+    provideRouteAlternatives: alternatives,
+  };
+  if (waypoints.length === 0) {
+    req.drivingOptions = {
       departureTime: new Date(),
       trafficModel: google.maps.TrafficModel.BEST_GUESS,
-    },
-  };
+    };
+  }
+  const parse = (result: google.maps.DirectionsResult) =>
+    (result.routes || [])
+      .slice(0, alternatives ? 3 : 1)
+      .map((route, index) => fromGoogleRoute(route, index, opts))
+      .filter((route): route is DriveRoute => Boolean(route));
   try {
     const res = await ask(svc, req);
-    const route = res.routes?.[0];
-    return route ? fromGoogleRoute(route) : null;
+    return parse(res);
   } catch {
     delete req.drivingOptions;
     try {
       const res = await ask(svc, req);
-      const route = res.routes?.[0];
-      return route ? fromGoogleRoute(route) : null;
+      return parse(res);
     } catch {
-      return null;
+      return [];
     }
   }
+}
+
+export async function googleRoute(
+  points: LatLon[],
+  options?: Partial<RoutingOptions>,
+): Promise<DriveRoute | null> {
+  return (await googleRoutes(points, { ...options, alternatives: false }))[0] || null;
 }

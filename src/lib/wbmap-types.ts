@@ -12,17 +12,32 @@ export type WbCamera = {
   getZoom: () => number;
 };
 
+export type WbRouteLine = {
+  id: string;
+  points: [number, number][];
+};
+
 export type WbMap = {
   map: WbCamera;
   el: HTMLElement;
   setPlaces: (places: Place[], darkPins: boolean) => void;
-  setRoute: (pts: [number, number][], dark: boolean, opts?: { fit?: boolean }) => void;
+  setRoutes: (routes: WbRouteLine[], selectedId: string | null, dark: boolean, opts?: { fit?: boolean }) => void;
   clearRoute: () => void;
+  setTraffic: (on: boolean) => void;
   setNav: (on: boolean) => void;
   setPick: (on: boolean) => void;
   setMe: (pt: { lat: number; lon: number } | null) => void;
   follow: (lon: number, lat: number, bearing?: number | null, look?: { lon: number; lat: number }) => void;
-  setKind: (kind: MapKind, overlays?: { places?: Place[]; darkPins?: boolean; route?: [number, number][] }) => void;
+  setKind: (
+    kind: MapKind,
+    overlays?: {
+      places?: Place[];
+      darkPins?: boolean;
+      routes?: WbRouteLine[];
+      selectedRouteId?: string | null;
+      traffic?: boolean;
+    },
+  ) => void;
   flyTo: (lat: number, lon: number, zoom?: number) => void;
   zoomBy: (dir: 1 | -1) => void;
   tapAt: (x: number, y: number) => void;

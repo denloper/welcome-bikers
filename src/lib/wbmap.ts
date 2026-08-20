@@ -1,6 +1,4 @@
 import { HOME_ZOOM, type WbMap } from "./wbmap-types";
-import { createGoogleMap } from "./wbmap-gmaps";
-import { createLibreMap } from "./wbmap-libre";
 
 export {
   HOME,
@@ -39,11 +37,14 @@ export function createWbMap(
     setPlaces(places, darkPins) {
       use((m) => m.setPlaces(places, darkPins));
     },
-    setRoute(pts, dark, extra) {
-      use((m) => m.setRoute(pts, dark, extra));
+    setRoutes(routes, selectedId, dark, extra) {
+      use((m) => m.setRoutes(routes, selectedId, dark, extra));
     },
     clearRoute() {
       use((m) => m.clearRoute());
+    },
+    setTraffic(on) {
+      use((m) => m.setTraffic(on));
     },
     setNav(on) {
       use((m) => m.setNav(on));
@@ -85,6 +86,7 @@ export function createWbMap(
 
   void (async () => {
     try {
+      const { createGoogleMap } = await import("./wbmap-gmaps");
       const googleMap = createGoogleMap(el, opts);
       const timeout = new Promise<never>((_, reject) => {
         window.setTimeout(() => reject(new Error("gmaps-timeout")), 12_000);
@@ -94,6 +96,8 @@ export function createWbMap(
       if (el.dataset.engine === "dead" || !el.isConnected) return;
       el.dataset.engine = "libre";
       el.replaceChildren();
+      const { createLibreMap } = await import("./wbmap-libre");
+      if (el.dataset.engine === "dead" || !el.isConnected) return;
       impl = createLibreMap(el, opts);
     }
     if (el.dataset.engine === "dead") {

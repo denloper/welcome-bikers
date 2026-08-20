@@ -1,10 +1,16 @@
 import { expect, test } from "@playwright/test";
 import { closestOnPolyline } from "../src/lib/geo";
-import { remainingAlong, tripTooShort } from "../src/lib/nav";
-import { formatDriveTime, formatMeters, type DriveRoute } from "../src/lib/osrm";
+import { filterGpsFix, freshGpsState, lerpAngle } from "../src/lib/gps";
+import { freshRerouteState, remainingAlong, tripTooShort, updateReroute } from "../src/lib/nav";
+import { formatDriveTime, formatMeters, maneuverPreviews, type DriveRoute } from "../src/lib/osrm";
 import { nextVoice, voiceLine } from "../src/lib/voice";
 
 const route: DriveRoute = {
+  id: "test-route",
+  provider: "osrm",
+  profile: "fastest",
+  trafficAware: false,
+  summary: "Test",
   geometry: [
     [42.441, 19.2626],
     [42.436, 19.271],
@@ -73,6 +79,87 @@ test("closestOnPolyline snaps a nearby point onto the line", () => {
   expect(snap.distKm).toBeLessThan(0.05);
   expect(snap.lat).toBeGreaterThan(42.43);
   expect(snap.lat).toBeLessThan(42.441);
+});
+
+test("GPS filter rejects inaccurate fixes and impossible jumps", () => {
+  const first = filterGpsFix(freshGpsState(), {
+    lat: 42.441,
+    lon: 19.2626,
+    accuracy: 8,
+    heading: 350,
+    speed: 12,
+    timestamp: 10_000,
+  });
+  expect(first.accepted).toBe(true);
+  const inaccurate = filterGpsFix(first.state, {
+    lat: 42.4411,
+    lon: 19.2627,
+    accuracy: 180,
+    timestamp: 11_000,
+  });
+  expect(inaccurate.accepted).toBe(false);
+  expect(inaccurate.reason).toBe("inaccurate");
+  const jump = filterGpsFix(first.state, {
+    lat: 43.441,
+    lon: 20.2626,
+    accuracy: 8,
+    speed: 5,
+    timestamp: 11_000,
+  });
+  expect(jump.accepted).toBe(false);
+  expect(jump.reason).toBe("jump");
+});
+
+test("heading smoothing takes the short path across north", () => {
+  expect(lerpAngle(350, 10, 0.5)).toBeCloseTo(0, 5);
+  expect(lerpAngle(10, 350, 0.5)).toBeCloseTo(0, 5);
+});
+
+test("reroute waits for a sustained accurate off-route position", () => {
+  const first = updateReroute(freshRerouteState(), {
+    now: 20_000,
+    distanceM: 130,
+    accuracyM: 12,
+    pending: false,
+  });
+  expect(first.trigger).toBe(false);
+  const ready = updateReroute(first.state, {
+    now: 24_000,
+    distanceM: 130,
+    accuracyM: 12,
+    pending: false,
+  });
+  expect(ready.trigger).toBe(true);
+  const poor = updateReroute(first.state, {
+    now: 24_000,
+    distanceM: 300,
+    accuracyM: 160,
+    pending: false,
+  });
+  expect(poor.trigger).toBe(false);
+});
+
+test("HUD can preview the current and next two maneuvers", () => {
+  const three: DriveRoute = {
+    ...route,
+    steps: [
+      route.steps[0],
+      {
+        name: "Bridge",
+        distance: 600,
+        duration: 80,
+        type: "turn",
+        modifier: "left",
+        location: [42.436, 19.271],
+      },
+      route.steps[1],
+    ],
+  };
+  const preview = maneuverPreviews(three, 0, 240, 3);
+  expect(preview).toHaveLength(3);
+  expect(preview[0].distance).toBe(240);
+  expect(preview[1].label).toContain("Bridge");
+  expect(preview[2].step.type).toBe("arrive");
 });
 
 test("voice says the turn once on approach and once at the corner", () => {

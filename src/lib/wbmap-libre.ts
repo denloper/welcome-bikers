@@ -3,7 +3,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { asset } from "./assets";
 import type { Place, PlaceType } from "../types";
-import { HOME, HOME_ZOOM, NAV_TILT, NAV_ZOOM, type MapKind, type WbMap } from "./wbmap-types";
+import { HOME, HOME_ZOOM, NAV_TILT, NAV_ZOOM, type MapKind, type WbMap, type WbRouteLine } from "./wbmap-types";
 
 setWorkerUrl(workerUrl);
 
@@ -98,19 +98,20 @@ function placesFc(places: Place[], darkPins: boolean) {
   };
 }
 
-function routeFc(pts: [number, number][]) {
+function routeFc(routes: WbRouteLine[], selectedId: string | null) {
+  const ordered = [...routes].sort((a) => (a.id === selectedId ? 1 : -1));
   return {
     type: "FeatureCollection" as const,
-    features: [
-      {
+    features: ordered
+      .filter((route) => route.points.length >= 2)
+      .map((route) => ({
         type: "Feature" as const,
-        properties: {},
+        properties: { id: route.id, selected: route.id === selectedId ? 1 : 0 },
         geometry: {
           type: "LineString" as const,
-          coordinates: pts.map(([lat, lon]) => [lon, lat]),
+          coordinates: route.points.map(([lat, lon]) => [lon, lat]),
         },
-      },
-    ],
+      })),
   };
 }
 
@@ -243,7 +244,13 @@ function addOverlays(map: MapLibreMap, routeDark: boolean) {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#000099",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 4, 3, 10, 6, 16, 10],
+        "line-opacity": ["case", ["==", ["get", "selected"], 1], 1, 0.25],
+        "line-width": [
+          "case",
+          ["==", ["get", "selected"], 1],
+          ["interpolate", ["linear"], ["zoom"], 4, 3, 10, 6, 16, 10],
+          ["interpolate", ["linear"], ["zoom"], 4, 2, 10, 4, 16, 6],
+        ],
       },
     });
     map.addLayer({
@@ -253,8 +260,13 @@ function addOverlays(map: MapLibreMap, routeDark: boolean) {
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
         "line-color": "#0033FF",
-        "line-width": ["interpolate", ["linear"], ["zoom"], 4, 1.5, 10, 3, 16, 5],
-        "line-opacity": 0.85,
+        "line-width": [
+          "case",
+          ["==", ["get", "selected"], 1],
+          ["interpolate", ["linear"], ["zoom"], 4, 1.5, 10, 3, 16, 5],
+          ["interpolate", ["linear"], ["zoom"], 4, 1, 10, 2, 16, 3],
+        ],
+        "line-opacity": ["case", ["==", ["get", "selected"], 1], 0.85, 0.32],
       },
     });
   }
@@ -312,7 +324,8 @@ export function createLibreMap(
   let lastMe: { lat: number; lon: number } | null = null;
   let lastPlaces: Place[] = [];
   let lastDarkPins = false;
-  let lastRoute: [number, number][] = [];
+  let lastRoutes: WbRouteLine[] = [];
+  let selectedRouteId: string | null = null;
   let lastRouteDark = false;
   let pendingFit = false;
   let pendingView: { center: [number, number]; zoom: number; bearing: number; pitch: number } | null = null;
@@ -427,8 +440,8 @@ export function createLibreMap(
       if (lastPlaces.length) {
         (map.getSource("wb-places") as GeoJSONSource | undefined)?.setData(placesFc(lastPlaces, lastDarkPins));
       }
-      if (lastRoute.length >= 2) {
-        (map.getSource("wb-route") as GeoJSONSource | undefined)?.setData(routeFc(lastRoute));
+      if (lastRoutes.some((route) => route.points.length >= 2)) {
+        (map.getSource("wb-route") as GeoJSONSource | undefined)?.setData(routeFc(lastRoutes, selectedRouteId));
         paintRoute(map, lastRouteDark);
       }
       setPinVisibility(map, !navOn && !pickOn);
@@ -436,7 +449,8 @@ export function createLibreMap(
         map.jumpTo(pendingView);
         pendingView = null;
       }
-      if (pendingFit && lastRoute.length >= 2) fitRoute(lastRoute);
+      const selected = lastRoutes.find((route) => route.id === selectedRouteId) || lastRoutes[0];
+      if (pendingFit && selected?.points.length >= 2) fitRoute(selected.points);
     } catch {
       /* style not ready */
     }
@@ -544,20 +558,26 @@ export function createLibreMap(
       lastDarkPins = darkPins;
       (map.getSource("wb-places") as GeoJSONSource | undefined)?.setData(placesFc(places, darkPins));
     },
-    setRoute(pts, dark, extra) {
-      lastRoute = pts;
+    setRoutes(routes, selectedId, dark, extra) {
+      lastRoutes = routes;
+      selectedRouteId = selectedId;
       lastRouteDark = dark;
-      (map.getSource("wb-route") as GeoJSONSource | undefined)?.setData(routeFc(pts));
+      (map.getSource("wb-route") as GeoJSONSource | undefined)?.setData(routeFc(routes, selectedId));
       paintRoute(map, dark);
-      if (extra?.fit && pts.length >= 2 && !navOn) {
+      const selected = routes.find((route) => route.id === selectedId) || routes[0];
+      if (extra?.fit && selected?.points.length >= 2 && !navOn) {
         pendingFit = true;
-        fitRoute(pts);
+        fitRoute(selected.points);
       }
     },
     clearRoute() {
-      lastRoute = [];
+      lastRoutes = [];
+      selectedRouteId = null;
       pendingFit = false;
       (map.getSource("wb-route") as GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: [] });
+    },
+    setTraffic(on) {
+      el.dataset.traffic = on ? "unavailable" : "off";
     },
     setNav(on) {
       navOn = on;
@@ -610,7 +630,9 @@ export function createLibreMap(
         lastDarkPins = overlays.darkPins;
         lastRouteDark = overlays.darkPins;
       }
-      if (overlays?.route) lastRoute = overlays.route;
+      if (overlays?.routes) lastRoutes = overlays.routes;
+      if (overlays && "selectedRouteId" in overlays) selectedRouteId = overlays.selectedRouteId ?? null;
+      if (overlays?.traffic != null) el.dataset.traffic = overlays.traffic ? "unavailable" : "off";
       el.dataset.ready = "0";
       el.dataset.kind = next;
       applyStyle(kindStyle(next));

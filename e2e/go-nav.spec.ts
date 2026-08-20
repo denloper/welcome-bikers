@@ -35,6 +35,36 @@ const OSRM = {
         },
       ],
     },
+    {
+      distance: 2700,
+      duration: 410,
+      geometry: {
+        coordinates: [
+          [START.longitude, START.latitude],
+          [19.268, 42.439],
+          [19.275, 42.433],
+          [DEST.lon, DEST.lat],
+        ],
+      },
+      legs: [
+        {
+          steps: [
+            {
+              name: "Alternative road",
+              distance: 1700,
+              duration: 250,
+              maneuver: { type: "depart", modifier: "straight", location: [START.longitude, START.latitude] },
+            },
+            {
+              name: "Destination",
+              distance: 1000,
+              duration: 160,
+              maneuver: { type: "arrive", modifier: "right", location: [DEST.lon, DEST.lat] },
+            },
+          ],
+        },
+      ],
+    },
   ],
 };
 
@@ -101,6 +131,8 @@ test.describe("GO navigation", () => {
     await expectMapVisible(page);
     await expect(page.locator(".nav-hud")).toBeVisible();
     await expect(page.locator(".nav-exit")).toBeVisible();
+    await expect(page.locator(".nav-banner b")).not.toHaveText("0 m");
+    await expect(page.locator(".nav-next-list")).toBeVisible();
     await expect(page.locator(".bottom-nav")).toHaveCount(0);
 
     await expect(page.locator(".nav-hud-time")).not.toHaveText("Now");
@@ -149,6 +181,14 @@ test.describe("GO navigation", () => {
     await expect(page.locator(".route-go")).toBeEnabled();
     await page.locator('[data-stop="start"]').click();
     await expect(page.locator('[data-stop="start"]')).toContainText(/Locating|Tap to change|Tap the map/i);
+    await expect(page.locator(".route-go")).toBeEnabled();
+    await expect(page.getByLabel("Route profile")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Fastest" })).toHaveClass(/on/);
+    await expect(page.getByRole("button", { name: "Traffic", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ferries", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Paved roads", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "No highways" }).tap();
+    await expect(page.getByRole("button", { name: "No highways" })).toHaveClass(/on/);
     await expect(page.locator(".route-go")).toBeEnabled();
   });
 
@@ -249,5 +289,53 @@ test.describe("GO navigation", () => {
         return page.locator(".map-gl").getAttribute("data-zoom");
       })
       .not.toBe(beforeZoom);
+  });
+
+  test("falls back to MapLibre and offers route alternatives when Google is unavailable", async ({ page, context }) => {
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation(START);
+    await page.route(/maps\.googleapis\.com/, (route) => route.abort());
+    await mockRouting(page);
+
+    await page.goto(`/#/map?to=${DEST.lat},${DEST.lon}&name=Fallback`);
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-engine", "libre", { timeout: 25_000 });
+    await expect(page.locator(".route-go")).toBeEnabled({ timeout: 15_000 });
+    await expect(page.getByLabel("Route alternatives")).toBeVisible();
+    await expect(page.getByLabel("Route alternatives").getByRole("button")).toHaveCount(2);
+    await page.getByLabel("Route alternatives").getByRole("button").nth(1).tap();
+    await expect(page.getByLabel("Route alternatives").getByRole("button").nth(1)).toHaveClass(/on/);
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-traffic", "unavailable");
+  });
+
+  test("cycles Light, Dark, and Auto map themes", async ({ page }) => {
+    await page.goto("/#/map");
+    await expectMapVisible(page);
+    const theme = page.getByTestId("map-theme");
+    await expect(theme).toHaveAttribute("data-theme-mode", "light");
+    await theme.tap();
+    await expect(theme).toHaveAttribute("data-theme-mode", "dark");
+    await theme.tap();
+    await expect(theme).toHaveAttribute("data-theme-mode", "auto");
+    await theme.tap();
+    await expect(theme).toHaveAttribute("data-theme-mode", "light");
+  });
+
+  test("keeps the PWA shell readable when the connection drops", async ({ page, context }) => {
+    await page.goto("/#/map");
+    await expectMapVisible(page);
+    await context.setOffline(true);
+    await expect(page.locator(".map-offline")).toContainText(/internet connection/i);
+    await expect(page.locator(".map-page")).toBeVisible();
+    await context.setOffline(false);
+    await expect(page.locator(".map-offline")).toHaveCount(0);
+  });
+
+  test("publishes an installable web app manifest", async ({ request }) => {
+    const response = await request.get("/manifest.webmanifest");
+    expect(response.ok()).toBeTruthy();
+    const manifest = await response.json();
+    expect(manifest.name).toBe("Welcome Bikers");
+    expect(manifest.display).toBe("standalone");
+    expect(manifest.icons.length).toBeGreaterThan(0);
   });
 });
