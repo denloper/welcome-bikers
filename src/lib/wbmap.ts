@@ -47,6 +47,9 @@ export function createWbMap(
     setNav(on) {
       use((m) => m.setNav(on));
     },
+    setPick(on) {
+      use((m) => m.setPick(on));
+    },
     follow(lon, lat, bearing) {
       use((m) => m.follow(lon, lat, bearing));
     },

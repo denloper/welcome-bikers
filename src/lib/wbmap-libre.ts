@@ -3,7 +3,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { asset } from "./assets";
 import type { Place, PlaceType } from "../types";
-import { NAV_TILT, NAV_ZOOM, type MapKind, type WbMap } from "./wbmap-types";
+import { HOME, HOME_ZOOM, NAV_TILT, NAV_ZOOM, type MapKind, type WbMap } from "./wbmap-types";
 
 setWorkerUrl(workerUrl);
 
@@ -188,8 +188,8 @@ function addOverlays(map: MapLibreMap, routeDark: boolean) {
       type: "geojson",
       data: { type: "FeatureCollection", features: [] },
       cluster: true,
-      clusterMaxZoom: 14,
-      clusterRadius: 48,
+      clusterMaxZoom: 11,
+      clusterRadius: 100,
     });
     map.addLayer({
       id: "wb-clusters",
@@ -276,11 +276,13 @@ export function createLibreMap(
   },
 ): WbMap {
   el.dataset.pitch = "0";
+  el.dataset.kind = "vector-light";
+  el.dataset.zoom = String(HOME_ZOOM);
   const map = new MapLibreMap({
     container: el,
     style: kindStyle("vector-light"),
-    center: [18.7338288, 42.6930838],
-    zoom: 15,
+    center: [HOME.lng, HOME.lat],
+    zoom: HOME_ZOOM,
     pitch: 0,
     bearing: 0,
     attributionControl: false,
@@ -302,6 +304,7 @@ export function createLibreMap(
   let alive = true;
   let booted = false;
   let navOn = false;
+  let pickOn = false;
   let kind: MapKind = "vector-light";
   let marker: Marker | null = null;
   let lastPlaces: Place[] = [];
@@ -412,7 +415,7 @@ export function createLibreMap(
         (map.getSource("wb-route") as GeoJSONSource | undefined)?.setData(routeFc(lastRoute));
         paintRoute(map, lastRouteDark);
       }
-      setPinVisibility(map, !navOn);
+      setPinVisibility(map, !navOn && !pickOn);
       if (pendingView) {
         map.jumpTo(pendingView);
         pendingView = null;
@@ -425,6 +428,8 @@ export function createLibreMap(
     clearStyleTimer();
     booted = true;
     el.dataset.ready = "1";
+    el.dataset.kind = kind;
+    el.dataset.zoom = String(map.getZoom());
     if (navOn) applyCamera();
     else el.dataset.pitch = "0";
     map.resize();
@@ -435,6 +440,10 @@ export function createLibreMap(
   });
   map.on("load", () => {
     if (!booted) void paint();
+  });
+  map.on("zoom", () => {
+    el.dataset.zoom = String(map.getZoom());
+    el.dataset.kind = kind;
   });
   styleTimer = window.setTimeout(() => {
     if (!alive || booted || !el.isConnected || kind === "satellite") return;
@@ -518,12 +527,17 @@ export function createLibreMap(
     },
     setNav(on) {
       navOn = on;
-      setPinVisibility(map, !on);
+      setPinVisibility(map, !on && !pickOn);
       if (!on) marker?.remove();
       requestAnimationFrame(() => {
         resize();
         applyCamera();
       });
+    },
+    setPick(on) {
+      pickOn = on;
+      el.dataset.pick = on ? "1" : "0";
+      setPinVisibility(map, !navOn && !on);
     },
     follow(lon, lat, bearing) {
       const cam: {
@@ -559,6 +573,7 @@ export function createLibreMap(
       }
       if (overlays?.route) lastRoute = overlays.route;
       el.dataset.ready = "0";
+      el.dataset.kind = next;
       applyStyle(kindStyle(next));
     },
     flyTo(lat, lon, zoom = 11) {

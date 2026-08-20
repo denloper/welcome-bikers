@@ -2,8 +2,8 @@ import type { Place } from "../types";
 
 export const NAV_TILT = 45;
 export const NAV_ZOOM = 17;
-export const HOME = { lat: 42.6930838, lng: 18.7338288 };
-export const HOME_ZOOM = 15;
+export const HOME = { lat: 48.2, lng: 16.4 };
+export const HOME_ZOOM = 5;
 
 export type MapKind = "vector-light" | "vector-dark" | "satellite";
 
@@ -19,6 +19,7 @@ export type WbMap = {
   setRoute: (pts: [number, number][], dark: boolean, opts?: { fit?: boolean }) => void;
   clearRoute: () => void;
   setNav: (on: boolean) => void;
+  setPick: (on: boolean) => void;
   follow: (lon: number, lat: number, bearing?: number | null) => void;
   setKind: (kind: MapKind, overlays?: { places?: Place[]; darkPins?: boolean; route?: [number, number][] }) => void;
   flyTo: (lat: number, lon: number, zoom?: number) => void;

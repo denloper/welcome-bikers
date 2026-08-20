@@ -52,6 +52,9 @@ export async function createGoogleMap(
   let lastRoute: [number, number][] = [];
   let lastRouteDark = false;
   let pendingFit = false;
+  let pickOn = false;
+  let kind: MapKind = "vector-light";
+  let idleGen = 0;
   let gmap: google.maps.Map;
   let clusterer: MarkerClusterer | null = null;
   let pinMarkers: google.maps.marker.AdvancedMarkerElement[] = [];
@@ -59,6 +62,8 @@ export async function createGoogleMap(
   let routeBorder: google.maps.Polyline | null = null;
   let arrow: google.maps.marker.AdvancedMarkerElement | null = null;
   const listeners: google.maps.MapsEventListener[] = [];
+  let lastPickAt = 0;
+  let press: { x: number; y: number } | null = null;
 
   const camera = () => ({
     center: gmap.getCenter()?.toJSON() || HOME,
@@ -137,7 +142,7 @@ export async function createGoogleMap(
     clusterer?.clearMarkers();
     clusterer = null;
     pinMarkers = [];
-    if (navOn) return;
+    if (navOn || pickOn) return;
     const Advanced = google.maps.marker.AdvancedMarkerElement;
     pinMarkers = lastPlaces
       .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon))
@@ -160,7 +165,7 @@ export async function createGoogleMap(
     clusterer = new MarkerClusterer({
       map: gmap,
       markers: pinMarkers,
-      algorithm: new SuperClusterAlgorithm({ maxZoom: 14, radius: 48 }),
+      algorithm: new SuperClusterAlgorithm({ maxZoom: 11, radius: 100 }),
       renderer: {
         render({ count, position }) {
           const big = count >= 20;
@@ -201,29 +206,80 @@ export async function createGoogleMap(
     }
   };
 
+  const latLngAt = (x: number, y: number) => {
+    const b = gmap.getBounds();
+    if (!b || el.clientWidth < 8 || el.clientHeight < 8) return null;
+    const ne = b.getNorthEast();
+    const sw = b.getSouthWest();
+    const lng = sw.lng() + (x / el.clientWidth) * (ne.lng() - sw.lng());
+    const north = Math.log(Math.tan(Math.PI / 4 + (ne.lat() * Math.PI) / 360));
+    const south = Math.log(Math.tan(Math.PI / 4 + (sw.lat() * Math.PI) / 360));
+    const merc = north - (y / el.clientHeight) * (north - south);
+    const lat = ((2 * Math.atan(Math.exp(merc)) - Math.PI / 2) * 180) / Math.PI;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+  };
+
+  const emitMap = (lat: number, lon: number) => {
+    if (navOn) return;
+    const now = Date.now();
+    if (now - lastPickAt < 400) return;
+    lastPickAt = now;
+    opts.onMap?.(lat, lon);
+  };
+
   const bind = () => {
     listeners.splice(0).forEach((l) => l.remove());
     listeners.push(
       gmap.addListener("click", (e: google.maps.MapMouseEvent) => {
-        if (navOn || !e.latLng) return;
-        opts.onMap?.(e.latLng.lat(), e.latLng.lng());
+        if (!e.latLng) return;
+        emitMap(e.latLng.lat(), e.latLng.lng());
+      }),
+      gmap.addListener("zoom_changed", () => {
+        el.dataset.zoom = String(gmap.getZoom() ?? HOME_ZOOM);
       }),
     );
   };
 
   const keepHost = () => {
     el.classList.add("map-wrap", "full", "map-gl");
+    el.dataset.kind = kind;
+    el.dataset.zoom = String(gmap.getZoom() ?? HOME_ZOOM);
   };
 
-  const blockGoogleNav = (ev: Event) => {
-    const node = ev.target as Element | null;
-    if (node?.closest?.(".map-place")) return;
-    const a = node?.closest?.("a");
-    const href = a instanceof HTMLAnchorElement ? a.href : "";
-    if (href && /google\.(com|ru|by|kz)/i.test(href)) {
-      ev.preventDefault();
-      ev.stopImmediatePropagation();
-    }
+  const waitIdle = () => {
+    const gen = ++idleGen;
+    google.maps.event.addListenerOnce(gmap, "idle", () => {
+      if (!alive || gen !== idleGen) return;
+      el.dataset.ready = "1";
+      keepHost();
+      paintPlaces();
+      paintRoute();
+      if (pendingFit) fitRoute();
+      if (navOn) applyNavCamera();
+      resize();
+    });
+    window.setTimeout(() => {
+      if (!alive || gen !== idleGen || el.dataset.ready === "1") return;
+      el.dataset.ready = "1";
+      keepHost();
+    }, 8000);
+  };
+
+  const rebuild = (next: MapKind) => {
+    const view = camera();
+    clearOverlays();
+    listeners.splice(0).forEach((l) => l.remove());
+    kind = next;
+    el.dataset.ready = "0";
+    gmap = new google.maps.Map(el, mapOptions(next, view));
+    keepHost();
+    bind();
+    waitIdle();
+    paintPlaces();
+    paintRoute();
+    if (navOn) applyNavCamera();
+    resize();
   };
 
   const resize = () => {
@@ -232,13 +288,54 @@ export async function createGoogleMap(
     google.maps.event.trigger(gmap, "resize");
   };
 
-  document.addEventListener("click", blockGoogleNav, true);
-  el.addEventListener("click", blockGoogleNav, true);
-
   gmap = new google.maps.Map(el, mapOptions("vector-light", { center: HOME, zoom: HOME_ZOOM, heading: 0, tilt: 0 }));
   keepHost();
   el.dataset.engine = "google";
   bind();
+  const onPress = (x: number, y: number) => {
+    if (!pickOn || navOn) return;
+    press = { x, y };
+  };
+  const onRelease = (x: number, y: number) => {
+    if (!pickOn || navOn || !press) return;
+    const dx = x - press.x;
+    const dy = y - press.y;
+    press = null;
+    if (dx * dx + dy * dy > 36) return;
+    const rect = el.getBoundingClientRect();
+    const pt = latLngAt(x - rect.left, y - rect.top);
+    if (pt) emitMap(pt.lat, pt.lng);
+  };
+  el.addEventListener(
+    "pointerdown",
+    (e) => {
+      onPress(e.clientX, e.clientY);
+    },
+    true,
+  );
+  el.addEventListener(
+    "pointerup",
+    (e) => {
+      onRelease(e.clientX, e.clientY);
+    },
+    true,
+  );
+  el.addEventListener(
+    "touchstart",
+    (e) => {
+      const t = e.changedTouches[0];
+      if (t) onPress(t.clientX, t.clientY);
+    },
+    { capture: true, passive: true },
+  );
+  el.addEventListener(
+    "touchend",
+    (e) => {
+      const t = e.changedTouches[0];
+      if (t) onRelease(t.clientX, t.clientY);
+    },
+    { capture: true, passive: true },
+  );
 
   const ready = new Promise<void>((resolve) => {
     google.maps.event.addListenerOnce(gmap, "idle", () => resolve());
@@ -298,6 +395,11 @@ export async function createGoogleMap(
         applyNavCamera();
       });
     },
+    setPick(on) {
+      pickOn = on;
+      el.dataset.pick = on ? "1" : "0";
+      paintPlaces();
+    },
     follow(lon, lat, bearing) {
       const next: google.maps.CameraOptions = {
         center: { lat, lng: lon },
@@ -318,15 +420,22 @@ export async function createGoogleMap(
         lastRouteDark = overlays.darkPins;
       }
       if (overlays?.route) lastRoute = overlays.route;
+      const mapIdChanged = mapIdFor(next) !== mapIdFor(kind);
+      const darkChanged = (next === "vector-dark") !== (kind === "vector-dark");
+      if (mapIdChanged || darkChanged) {
+        rebuild(next);
+        return;
+      }
+      kind = next;
       gmap.setOptions({
         mapTypeId: next === "satellite" ? "hybrid" : "roadmap",
-        colorScheme: next === "vector-dark" ? google.maps.ColorScheme.DARK : google.maps.ColorScheme.LIGHT,
       });
       paintPlaces();
       paintRoute();
       if (pendingFit) fitRoute();
       if (navOn) applyNavCamera();
       el.dataset.ready = "1";
+      keepHost();
       resize();
     },
     flyTo(lat, lon, zoom = 11) {
@@ -342,8 +451,6 @@ export async function createGoogleMap(
     remove() {
       alive = false;
       listeners.splice(0).forEach((l) => l.remove());
-      document.removeEventListener("click", blockGoogleNav, true);
-      el.removeEventListener("click", blockGoogleNav, true);
       window.removeEventListener("resize", resize);
       window.removeEventListener("orientationchange", resize);
       window.visualViewport?.removeEventListener("resize", resize);

@@ -257,6 +257,10 @@ export function MapPage() {
   }, [filtered, darkPins, ready]);
 
   useEffect(() => {
+    wbRef.current?.setPick(Boolean(pickMode) && !navigating);
+  }, [pickMode, navigating, ready]);
+
+  useEffect(() => {
     if (!ready) return;
     let cancelled = false;
     async function init() {
@@ -697,7 +701,11 @@ export function MapPage() {
               <IconGo />
               GO!
             </button>
-            <button className="btn white route-add" onClick={() => setPickMode("via")}>
+            <button
+              type="button"
+              className={`btn white route-add${pickMode === "via" ? " on" : ""}`}
+              onClick={() => setPickMode("via")}
+            >
               <IconPlus />
               Add waypoint
             </button>
