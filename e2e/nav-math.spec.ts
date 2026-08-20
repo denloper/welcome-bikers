@@ -1,6 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { closestOnPolyline } from "../src/lib/geo";
 import { filterGpsFix, freshGpsState, lerpAngle } from "../src/lib/gps";
+import {
+  angleDelta,
+  easeInOutCubic,
+  interpolateAngle,
+  interpolatePoint,
+  NAV_FLAT_ENTRY_MS,
+  NAV_FOLLOW_RESUME_MS,
+  NAV_MOVE_MS,
+} from "../src/lib/nav-camera";
 import { freshRerouteState, remainingAlong, tripTooShort, updateReroute } from "../src/lib/nav";
 import { formatDriveTime, formatMeters, maneuverPreviews, type DriveRoute } from "../src/lib/osrm";
 import { nextVoice, voiceLine, voiceScore } from "../src/lib/voice";
@@ -144,6 +153,22 @@ test("GPS filter always lets navigation start and recover", () => {
 test("heading smoothing takes the short path across north", () => {
   expect(lerpAngle(350, 10, 0.5)).toBeCloseTo(0, 5);
   expect(lerpAngle(10, 350, 0.5)).toBeCloseTo(0, 5);
+});
+
+test("navigation camera interpolates GPS and heading without jumps", () => {
+  expect(NAV_MOVE_MS).toBe(480);
+  expect(NAV_FLAT_ENTRY_MS).toBe(900);
+  expect(NAV_FOLLOW_RESUME_MS).toBe(10_000);
+  expect(easeInOutCubic(0)).toBe(0);
+  expect(easeInOutCubic(0.5)).toBe(0.5);
+  expect(easeInOutCubic(1)).toBe(1);
+  expect(interpolatePoint({ lat: 42, lon: 19 }, { lat: 44, lon: 23 }, 0.5)).toEqual({
+    lat: 43,
+    lon: 21,
+  });
+  expect(angleDelta(350, 10)).toBe(20);
+  expect(angleDelta(10, 350)).toBe(-20);
+  expect(interpolateAngle(350, 10, 0.5)).toBeCloseTo(0, 5);
 });
 
 test("reroute waits for a sustained accurate off-route position", () => {

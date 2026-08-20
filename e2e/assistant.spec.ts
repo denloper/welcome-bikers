@@ -13,17 +13,19 @@ test.describe("Real Bro assistant", () => {
     await expect(page.getByTestId("assistant-input")).toBeVisible();
   });
 
-  test("answers a category question with place cards and rides to one", async ({ page }) => {
+  test("answers in English with place cards and rides to one", async ({ page }) => {
     await page.goto("/#/");
     await page.getByTestId("assistant-row").tap();
-    await page.getByTestId("assistant-input").fill("какие бары есть в Черногории");
+    await page.getByTestId("assistant-input").fill("what bars are in Montenegro?");
     await page.getByTestId("assistant-send").tap();
 
     const cards = page.locator('[data-testid="assistant-card"]');
     await expect(cards.first()).toBeVisible({ timeout: 15_000 });
     expect(await cards.count()).toBeGreaterThanOrEqual(3);
-    await expect(page.locator(".rb-bubble.bro").last()).toContainText(/бар/i);
-    await expect(page.locator(".rb-bubble.bro").last()).toContainText(/Черногории/i);
+    const answer = page.locator(".rb-bubble.bro").last();
+    await expect(answer).toContainText(/bikers bars/i);
+    await expect(answer).toContainText(/Montenegro/i);
+    await expect(answer).not.toContainText(/[а-яё]/i);
 
     const firstName = await cards.first().locator("b").textContent();
     await cards.first().getByTestId("assistant-ride").tap();
@@ -44,8 +46,36 @@ test.describe("Real Bro assistant", () => {
   test("explains what it can do on an unclear request", async ({ page }) => {
     await page.goto("/#/");
     await page.getByTestId("assistant-row").tap();
-    await page.getByTestId("assistant-input").fill("привет как дела");
+    await page.getByTestId("assistant-input").fill("how is the weather?");
     await page.getByTestId("assistant-send").tap();
-    await expect(page.locator(".rb-bubble.bro").last()).toContainText(/маршрут/i, { timeout: 15_000 });
+    await expect(page.locator(".rb-bubble.bro").last()).toContainText(/build a route/i, { timeout: 15_000 });
+  });
+
+  test("records in English and shows a live waveform", async ({ page }) => {
+    await page.addInitScript(() => {
+      class FakeRecognition {
+        lang = "";
+        interimResults = false;
+        maxAlternatives = 1;
+        onresult = null;
+        onerror = null;
+        onend: (() => void) | null = null;
+        start() {
+          (window as unknown as { __recognitionLang?: string }).__recognitionLang = this.lang;
+        }
+        stop() {
+          this.onend?.();
+        }
+      }
+      Object.defineProperty(window, "SpeechRecognition", { value: FakeRecognition, configurable: true });
+    });
+    await page.goto("/#/");
+    await page.getByTestId("assistant-row").tap();
+    await page.getByLabel("Voice input").tap();
+    await expect(page.getByTestId("assistant-waveform")).toBeVisible();
+    await expect(page.locator(".rb-state")).toHaveText("Listening…");
+    expect(
+      await page.evaluate(() => (window as unknown as { __recognitionLang?: string }).__recognitionLang),
+    ).toBe("en-US");
   });
 });

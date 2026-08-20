@@ -22,6 +22,7 @@ import { PlacePhoto } from "../components/PlacePhoto";
 import { loadPlaces } from "../lib/data";
 import { bearingDeg, closestOnPolyline, haversineKm, pointAhead, validCoords } from "../lib/geo";
 import { filterGpsFix, freshGpsState } from "../lib/gps";
+import { angleDelta } from "../lib/nav-camera";
 import { freshRerouteState, LOOK_AHEAD_M, MIN_NAV_METERS, OFF_ROUTE_M, remainingAlong, tripTooShort, updateReroute } from "../lib/nav";
 import { freshVoiceState, hushVoice, nextVoice, speakLine, warmVoices } from "../lib/voice";
 import { createWbMap, NAV_ZOOM, type MapKind, type WbMap } from "../lib/wbmap";
@@ -136,6 +137,16 @@ function setGoChrome(on: boolean) {
   void setWake(on);
 }
 
+function requestCompassAccess() {
+  if (typeof DeviceOrientationEvent === "undefined") return;
+  const orientation = DeviceOrientationEvent as unknown as {
+    requestPermission?: () => Promise<"granted" | "denied">;
+  };
+  if (typeof orientation.requestPermission === "function") {
+    void orientation.requestPermission().catch(() => "denied");
+  }
+}
+
 function mapKind(light: boolean, sat: boolean): MapKind {
   if (sat) return "satellite";
   return light ? "vector-light" : "vector-dark";
@@ -206,6 +217,7 @@ export function MapPage() {
   const [navigating, setNavigating] = useState(false);
   const navigatingRef = useRef(false);
   navigatingRef.current = navigating;
+  const compassHeadingRef = useRef<number | null>(null);
   const voiceRef = useRef(freshVoiceState());
   const voiceRouteRef = useRef("");
   const [pickMode, setPickMode] = useState<null | "start" | "via" | "to">(null);
@@ -545,6 +557,34 @@ export function MapPage() {
   }, [navigating]);
 
   useEffect(() => {
+    if (!navigating) {
+      compassHeadingRef.current = null;
+      return;
+    }
+    const onOrientation = (event: DeviceOrientationEvent) => {
+      const iosHeading = (event as DeviceOrientationEvent & { webkitCompassHeading?: number })
+        .webkitCompassHeading;
+      const raw =
+        typeof iosHeading === "number"
+          ? iosHeading
+          : typeof event.alpha === "number"
+            ? 360 - event.alpha
+            : null;
+      if (raw == null || !Number.isFinite(raw)) return;
+      const heading = (raw + 360) % 360;
+      const previous = compassHeadingRef.current;
+      if (previous != null && Math.abs(angleDelta(previous, heading)) <= 3) return;
+      compassHeadingRef.current = heading;
+      wbRef.current?.orient(heading);
+    };
+    window.addEventListener("deviceorientation", onOrientation, { passive: true });
+    return () => {
+      window.removeEventListener("deviceorientation", onOrientation);
+      compassHeadingRef.current = null;
+    };
+  }, [navigating]);
+
+  useEffect(() => {
     const wb = wbRef.current;
     if (!navigating || !wb) {
       setRerouting(false);
@@ -570,7 +610,7 @@ export function MapPage() {
     if (origin) {
       const look = bootGeom && bootGeom.length >= 2 ? pointAhead(bootGeom, origin, LOOK_AHEAD_M) : null;
       const br = look ? (bearingDeg(origin, look) + 360) % 360 : null;
-      wb.follow(origin.lon, origin.lat, br, look ? { lon: look.lon, lat: look.lat } : undefined);
+      wb.follow(origin.lon, origin.lat, br);
     }
     const placeMe = (
       lat: number,
@@ -603,9 +643,9 @@ export function MapPage() {
       const rider = onRoad && snap ? { lat: snap.lat, lon: snap.lon } : gps;
       const look =
         geom && geom.length >= 2 ? pointAhead(geom, rider, LOOK_AHEAD_M) : null;
-      let br = fix.heading;
+      let br = compassHeadingRef.current ?? fix.heading;
       if (br == null && look) br = (bearingDeg(rider, look) + 360) % 360;
-      wb.follow(rider.lon, rider.lat, br, look ? { lon: look.lon, lat: look.lat } : undefined);
+      wb.follow(rider.lon, rider.lat, br);
 
       if (snap) {
         const decision = updateReroute(rerouteState, {
@@ -702,6 +742,7 @@ export function MapPage() {
         const geo = { lat: pos.coords.latitude, lon: pos.coords.longitude };
         setHere(geo);
         if (navigatingRef.current) {
+          wb?.resumeFollow();
           wb?.follow(pos.coords.longitude, pos.coords.latitude, wb.map.getBearing());
         } else {
           wb?.flyTo(pos.coords.latitude, pos.coords.longitude, Math.max(wb.map.getZoom(), 11));
@@ -1099,6 +1140,7 @@ export function MapPage() {
               disabled={!canGo}
               onClick={() => {
                 if (!canGo) return;
+                requestCompassAccess();
                 void (async () => {
                   const geo = await getHere();
                   if (geo && stops && haversineKm(geo, stops[0]) > 0.25) {

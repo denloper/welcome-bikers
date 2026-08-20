@@ -133,7 +133,9 @@ test.describe("GO navigation", () => {
     await page.locator(".route-go").click();
     await expect(page.locator(".map-page.is-nav")).toBeVisible();
     await expect(page.locator(".map-gl")).toBeVisible();
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-nav-entry", "flat-to-3d");
     await expect(page.locator(".map-gl")).toHaveAttribute("data-pitch", "45");
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-follow", "on");
     await expectMapVisible(page);
     await expect(page.locator(".nav-hud")).toBeVisible();
     await expect(page.locator(".nav-exit")).toBeVisible();
@@ -150,6 +152,11 @@ test.describe("GO navigation", () => {
     await expect(page.getByLabel("My location")).toBeVisible();
     await expect(page.getByLabel("Build route")).toHaveCount(0);
     await expect(page.locator(".wb-me-star")).toHaveCount(0);
+
+    await page.getByLabel("Zoom in").tap();
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-follow", "paused");
+    await page.getByLabel("My location").tap();
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-follow", "on");
 
     await expect(page.locator(".map-gl")).toHaveAttribute("data-ready", "1", { timeout: 20_000 });
     await page.waitForTimeout(1500);

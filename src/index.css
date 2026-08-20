@@ -1249,6 +1249,16 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
 .rb-head > div { flex: 1; min-width: 0; }
 .rb-head b { display: block; font-size: 17px; }
 .rb-state { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.rb-waveform {
+  display: block;
+  width: 100%;
+  height: 34px;
+  margin: -2px 0 10px;
+  padding: 5px 8px;
+  border: 1px solid #262626;
+  border-radius: 12px;
+  background: #161616;
+}
 .rb-msgs {
   flex: 1;
   overflow-y: auto;
@@ -1814,6 +1824,30 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
 .map-page.is-nav.is-dark {
   background: #111;
 }
+.map-page.is-nav .nav-banner {
+  animation: nav-slide-down 360ms cubic-bezier(.2, .8, .2, 1) both;
+}
+.map-page.is-nav .nav-next-list {
+  animation: nav-slide-down 420ms 70ms cubic-bezier(.2, .8, .2, 1) both;
+}
+.map-page.is-nav .nav-hud {
+  animation: nav-slide-up 380ms cubic-bezier(.2, .8, .2, 1) both;
+}
+.map-page.is-nav .map-tools {
+  animation: nav-tools-in 360ms 80ms cubic-bezier(.2, .8, .2, 1) both;
+}
+@keyframes nav-slide-down {
+  from { opacity: 0; transform: translateY(-18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes nav-slide-up {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes nav-tools-in {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
 .wb-gl-me,
 .wb-garrow {
   display: block;
@@ -1825,6 +1859,22 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
 .wb-gl-me svg {
   display: block;
   pointer-events: none;
+}
+.map-page.is-nav .wb-garrow svg {
+  animation: nav-arrow-in 300ms cubic-bezier(.2, .8, .2, 1) both;
+}
+@keyframes nav-arrow-in {
+  from { opacity: 0; transform: scale(.55); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-page.is-nav .nav-banner,
+  .map-page.is-nav .nav-next-list,
+  .map-page.is-nav .nav-hud,
+  .map-page.is-nav .map-tools,
+  .map-page.is-nav .wb-garrow svg {
+    animation: none;
+  }
 }
 .wb-me-star {
   display: block;

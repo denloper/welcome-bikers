@@ -3,6 +3,16 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { asset } from "./assets";
 import type { Place, PlaceType } from "../types";
+import { haversineKm } from "./geo";
+import {
+  easeInOutCubic,
+  NAV_ENTER_MS,
+  NAV_FLAT_ENTRY_MS,
+  NAV_FOLLOW_RESUME_MS,
+  NAV_HEADING_MS,
+  NAV_MOVE_MS,
+  type NavPoint,
+} from "./nav-camera";
 import { HOME, HOME_ZOOM, NAV_TILT, NAV_ZOOM, USER_PIN_HTML, type MapKind, type WbMap, type WbRouteLine } from "./wbmap-types";
 
 setWorkerUrl(workerUrl);
@@ -21,7 +31,7 @@ const PIN_TYPES: PlaceType[] = [
 const TONES = ["friendly", "black", "white"] as const;
 const pinCache: Record<string, ImageData> = {};
 
-const ARROW = `<span class="wb-gl-me"><svg viewBox="0 0 24 32" width="28" height="36"><path d="M12 2 L22 30 L12 23 L2 30 Z" fill="#3DADF3" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></span>`;
+const ARROW = `<span class="wb-gl-me wb-garrow"><svg viewBox="0 0 24 32" width="28" height="36"><path d="M12 2 L22 30 L12 23 L2 30 Z" fill="#3DADF3" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></span>`;
 const ME_STAR = USER_PIN_HTML;
 
 function vectorStyle(dark: boolean) {
@@ -332,6 +342,14 @@ export function createLibreMap(
   let styleTimer = 0;
   let paintGen = 0;
   let styleGen = 0;
+  let followPaused = false;
+  let followResumeTimer = 0;
+  let markerFrame = 0;
+  let shownPoint: NavPoint | null = null;
+  let lastFollow: (NavPoint & { bearing: number | null }) | null = null;
+  let firstFollow = true;
+  let navPhase: "off" | "entering" | "active" = "off";
+  let navPhaseTimer = 0;
 
   const clearStyleTimer = () => {
     if (styleTimer) {
@@ -363,6 +381,77 @@ export function createLibreMap(
     return marker;
   };
 
+  const clearFollowResume = () => {
+    if (followResumeTimer) {
+      window.clearTimeout(followResumeTimer);
+      followResumeTimer = 0;
+    }
+  };
+
+  const animateMarker = (target: NavPoint, requestedDuration: number) => {
+    window.cancelAnimationFrame(markerFrame);
+    const start = shownPoint || target;
+    const jump = shownPoint ? haversineKm(shownPoint, target) * 1000 > 100 : false;
+    const duration = jump ? 0 : requestedDuration;
+    const started = performance.now();
+    const drawFrame = (now: number) => {
+      const progress = duration <= 0 ? 1 : Math.min(1, (now - started) / duration);
+      const eased = easeInOutCubic(progress);
+      shownPoint = {
+        lat: start.lat + (target.lat - start.lat) * eased,
+        lon: start.lon + (target.lon - start.lon) * eased,
+      };
+      arrow().setLngLat([shownPoint.lon, shownPoint.lat]).addTo(map);
+      if (progress < 1) markerFrame = window.requestAnimationFrame(drawFrame);
+    };
+    markerFrame = window.requestAnimationFrame(drawFrame);
+  };
+
+  const moveCameraTo = (target: NavPoint & { bearing: number | null }, duration: number) => {
+    if (!navOn || followPaused) return;
+    const entering = navPhase === "entering";
+    map.easeTo({
+      center: [target.lon, target.lat],
+      pitch: entering ? 0 : NAV_TILT,
+      zoom: map.getZoom() < NAV_ZOOM ? NAV_ZOOM : map.getZoom(),
+      bearing: entering ? 0 : target.bearing ?? map.getBearing(),
+      duration,
+      easing: easeInOutCubic,
+      essential: true,
+    });
+  };
+
+  const clearNavPhaseTimer = () => {
+    if (navPhaseTimer) {
+      window.clearTimeout(navPhaseTimer);
+      navPhaseTimer = 0;
+    }
+  };
+
+  const activateNavigationPhase = () => {
+    navPhaseTimer = 0;
+    if (!navOn) return;
+    navPhase = "active";
+    el.dataset.cameraPhase = "active";
+    el.dataset.pitch = String(NAV_TILT);
+    if (!followPaused && lastFollow) moveCameraTo(lastFollow, NAV_ENTER_MS);
+  };
+
+  const resumeFollow = () => {
+    clearFollowResume();
+    followPaused = false;
+    el.dataset.follow = navOn ? "on" : "off";
+    if (navOn && lastFollow) moveCameraTo(lastFollow, NAV_ENTER_MS);
+  };
+
+  const pauseFollow = () => {
+    if (!navOn) return;
+    followPaused = true;
+    el.dataset.follow = "paused";
+    clearFollowResume();
+    followResumeTimer = window.setTimeout(resumeFollow, NAV_FOLLOW_RESUME_MS);
+  };
+
   const paintMe = () => {
     if (navOn || !lastMe) {
       meMark?.remove();
@@ -386,8 +475,18 @@ export function createLibreMap(
       } catch {
         /* ignore */
       }
-      map.jumpTo({ pitch: NAV_TILT, zoom: Math.max(map.getZoom(), NAV_ZOOM) });
-      el.dataset.pitch = String(NAV_TILT);
+      if (lastFollow && !followPaused) moveCameraTo(lastFollow, NAV_ENTER_MS);
+      else {
+        map.easeTo({
+          pitch: navPhase === "entering" ? 0 : NAV_TILT,
+          zoom: Math.max(map.getZoom(), NAV_ZOOM),
+          bearing: navPhase === "entering" ? 0 : map.getBearing(),
+          duration: NAV_ENTER_MS,
+          easing: easeInOutCubic,
+          essential: true,
+        });
+      }
+      el.dataset.pitch = navPhase === "entering" ? "0" : String(NAV_TILT);
     } else {
       try {
         map.dragRotate.disable();
@@ -395,7 +494,7 @@ export function createLibreMap(
       } catch {
         /* ignore */
       }
-      map.jumpTo({ pitch: 0, bearing: 0 });
+      map.easeTo({ pitch: 0, bearing: 0, duration: 350, easing: easeInOutCubic, essential: true });
       el.dataset.pitch = "0";
     }
   };
@@ -474,6 +573,16 @@ export function createLibreMap(
   map.on("zoom", () => {
     el.dataset.zoom = String(map.getZoom());
     el.dataset.kind = kind;
+  });
+  map.on("dragstart", pauseFollow);
+  map.on("zoomstart", (event) => {
+    if (event.originalEvent) pauseFollow();
+  });
+  map.on("rotatestart", (event) => {
+    if (event.originalEvent) pauseFollow();
+  });
+  map.on("pitchstart", (event) => {
+    if (event.originalEvent) pauseFollow();
   });
   styleTimer = window.setTimeout(() => {
     if (!alive || booted || !el.isConnected || kind === "satellite") return;
@@ -581,8 +690,28 @@ export function createLibreMap(
     },
     setNav(on) {
       navOn = on;
+      followPaused = false;
+      clearFollowResume();
+      el.dataset.follow = on ? "on" : "off";
+      clearNavPhaseTimer();
+      if (on) {
+        navPhase = "entering";
+        el.dataset.cameraPhase = "entering";
+        el.dataset.navEntry = "flat-to-3d";
+        el.dataset.pitch = "0";
+        navPhaseTimer = window.setTimeout(activateNavigationPhase, NAV_FLAT_ENTRY_MS);
+      } else {
+        navPhase = "off";
+        el.dataset.cameraPhase = "off";
+      }
       setPinVisibility(map, !on && !pickOn);
-      if (!on) marker?.remove();
+      if (!on) {
+        firstFollow = true;
+        lastFollow = null;
+        shownPoint = null;
+        window.cancelAnimationFrame(markerFrame);
+        marker?.remove();
+      }
       paintMe();
       requestAnimationFrame(() => {
         resize();
@@ -598,26 +727,33 @@ export function createLibreMap(
       lastMe = pt;
       paintMe();
     },
-    follow(lon, lat, bearing, look) {
-      const cam: {
-        center: [number, number];
-        pitch: number;
-        zoom?: number;
-        bearing?: number;
-        duration: number;
-        essential: boolean;
-      } = {
-        center: [look?.lon ?? lon, look?.lat ?? lat],
-        pitch: NAV_TILT,
-        duration: 180,
-        essential: true,
+    follow(lon, lat, bearing) {
+      const target = {
+        lat,
+        lon,
+        bearing: bearing != null && Number.isFinite(bearing) ? bearing : null,
       };
-      if (bearing != null && Number.isFinite(bearing)) cam.bearing = bearing;
-      if (map.getZoom() < NAV_ZOOM) cam.zoom = NAV_ZOOM;
-      map.easeTo(cam);
-      arrow().setLngLat([lon, lat]).addTo(map);
-      el.dataset.pitch = String(NAV_TILT);
+      const duration =
+        firstFollow && navPhase === "entering" ? NAV_FLAT_ENTRY_MS : firstFollow ? NAV_ENTER_MS : NAV_MOVE_MS;
+      lastFollow = target;
+      animateMarker(target, duration);
+      if (!followPaused) moveCameraTo(target, duration);
+      firstFollow = false;
+      el.dataset.pitch = navPhase === "entering" ? "0" : String(NAV_TILT);
     },
+    orient(bearing) {
+      if (!navOn || !lastFollow || !Number.isFinite(bearing)) return;
+      lastFollow = { ...lastFollow, bearing };
+      if (followPaused || navPhase === "entering") return;
+      map.easeTo({
+        bearing,
+        pitch: NAV_TILT,
+        duration: NAV_HEADING_MS,
+        easing: easeInOutCubic,
+        essential: true,
+      });
+    },
+    resumeFollow,
     setKind(next, overlays) {
       kind = next;
       const center = map.getCenter();
@@ -641,6 +777,7 @@ export function createLibreMap(
       map.easeTo({ center: [lon, lat], zoom, duration: 500, pitch: navOn ? NAV_TILT : 0 });
     },
     zoomBy(dir) {
+      if (navOn) pauseFollow();
       map.easeTo({ zoom: map.getZoom() + dir, duration: 200, pitch: navOn ? NAV_TILT : map.getPitch() });
     },
     tapAt(x, y) {
@@ -654,6 +791,9 @@ export function createLibreMap(
     resize,
     remove() {
       alive = false;
+      window.cancelAnimationFrame(markerFrame);
+      clearFollowResume();
+      clearNavPhaseTimer();
       retries.forEach((id) => window.clearTimeout(id));
       clearStyleTimer();
       window.removeEventListener("resize", resize);

@@ -176,7 +176,7 @@ function countryRu(canon: string): string {
 }
 
 export function greeting(): string {
-  return "Yo, bro! Скажи, куда ехать — например «поехали в Подгорицу», или спроси «какие бары есть в Черногории». Покажу карточки и построю маршрут.";
+  return 'Yo, bro! Say where you want to ride — for example, "ride to Podgorica" — or ask "what bars are in Montenegro?" I will show place cards and build the route.';
 }
 
 export function rideReply(name: string, ru: boolean): string {

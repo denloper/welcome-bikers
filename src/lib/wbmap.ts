@@ -55,8 +55,14 @@ export function createWbMap(
     setMe(pt) {
       use((m) => m.setMe(pt));
     },
-    follow(lon, lat, bearing, look) {
-      use((m) => m.follow(lon, lat, bearing, look));
+    follow(lon, lat, bearing) {
+      use((m) => m.follow(lon, lat, bearing));
+    },
+    orient(bearing) {
+      use((m) => m.orient(bearing));
+    },
+    resumeFollow() {
+      use((m) => m.resumeFollow());
     },
     setKind(kind, overlays) {
       use((m) => m.setKind(kind, overlays));

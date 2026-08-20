@@ -4,7 +4,6 @@ import {
   categoryReply,
   geocodePlace,
   greeting,
-  isRu,
   matchPlaces,
   notFoundReply,
   parseIntent,
@@ -71,6 +70,106 @@ export function RealBroAvatar({ phase, size = 46 }: { phase: Phase; size?: numbe
   );
 }
 
+function VoiceWaveform({ active }: { active: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!active) return;
+    const canvas = canvasRef.current;
+    const draw = canvas?.getContext("2d");
+    if (!canvas || !draw) return;
+
+    let frame = 0;
+    let stopped = false;
+    let stream: MediaStream | null = null;
+    let audio: AudioContext | null = null;
+    let source: MediaStreamAudioSourceNode | null = null;
+    let analyser: AnalyserNode | null = null;
+    let levels: Uint8Array<ArrayBuffer> | null = null;
+
+    const fit = () => {
+      const ratio = Math.min(2, window.devicePixelRatio || 1);
+      canvas.width = Math.max(1, Math.round(canvas.clientWidth * ratio));
+      canvas.height = Math.max(1, Math.round(canvas.clientHeight * ratio));
+      draw.setTransform(ratio, 0, 0, ratio, 0, 0);
+    };
+    fit();
+    const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(fit);
+    resize?.observe(canvas);
+
+    const paint = (now: number) => {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      draw.clearRect(0, 0, width, height);
+      const bars = 28;
+      const gap = 2.5;
+      const barWidth = Math.max(1, (width - gap * (bars - 1)) / bars);
+      const gradient = draw.createLinearGradient(0, 0, width, 0);
+      gradient.addColorStop(0, "#29aae1");
+      gradient.addColorStop(0.55, "#3d8aff");
+      gradient.addColorStop(1, "#e10600");
+      draw.fillStyle = gradient;
+      if (analyser && levels) analyser.getByteFrequencyData(levels);
+      for (let i = 0; i < bars; i++) {
+        const sample = levels
+          ? levels[Math.min(levels.length - 1, Math.floor((i / bars) * Math.min(72, levels.length)))] / 255
+          : 0.12 + Math.abs(Math.sin(now / 170 + i * 0.62)) * 0.16;
+        const barHeight = Math.max(3, sample * (height - 2));
+        draw.beginPath();
+        draw.roundRect(i * (barWidth + gap), (height - barHeight) / 2, barWidth, barHeight, barWidth / 2);
+        draw.fill();
+      }
+      frame = window.requestAnimationFrame(paint);
+    };
+    frame = window.requestAnimationFrame(paint);
+
+    void navigator.mediaDevices
+      ?.getUserMedia({ audio: true })
+      .then((nextStream) => {
+        if (stopped) {
+          nextStream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        stream = nextStream;
+        const AudioCtor =
+          window.AudioContext ||
+          (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!AudioCtor) return;
+        audio = new AudioCtor();
+        analyser = audio.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.82;
+        levels = new Uint8Array(analyser.frequencyBinCount);
+        source = audio.createMediaStreamSource(stream);
+        source.connect(analyser);
+        void audio.resume();
+      })
+      .catch(() => {
+        // SpeechRecognition can still work when raw microphone access is unavailable.
+      });
+
+    return () => {
+      stopped = true;
+      window.cancelAnimationFrame(frame);
+      resize?.disconnect();
+      source?.disconnect();
+      stream?.getTracks().forEach((track) => track.stop());
+      void audio?.close();
+    };
+  }, [active]);
+
+  if (!active) return null;
+  return (
+    <canvas
+      ref={canvasRef}
+      className="rb-waveform"
+      data-testid="assistant-waveform"
+      role="img"
+      aria-label="Live voice waveform"
+    />
+  );
+}
+
 let seq = 0;
 
 export function RealBro() {
@@ -81,7 +180,6 @@ export function RealBro() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
-  const recLangRef = useRef("ru-RU");
   const speakToken = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const hasMic = recognizerCtor() !== null;
@@ -98,12 +196,12 @@ export function RealBro() {
     setMsgs((m) => [...m, { ...msg, id: ++seq }]);
   }
 
-  function say(text: string, ru: boolean) {
+  function say(text: string) {
     const token = ++speakToken.current;
     const done = () => {
       if (speakToken.current === token) setPhase("idle");
     };
-    const started = speakText(text, ru ? "ru-RU" : "en-US", done);
+    const started = speakText(text, "en-US", done);
     if (started) {
       setPhase("speaking");
       // Safety net: headless / muted browsers may never fire onend.
@@ -116,7 +214,7 @@ export function RealBro() {
     if (!msgs.length) {
       const hello = greeting();
       push({ role: "bro", text: hello });
-      say(hello, true);
+      say(hello);
     }
   }
 
@@ -133,42 +231,41 @@ export function RealBro() {
     if (!text || busy) return;
     setBusy(true);
     push({ role: "user", text });
-    const ru = isRu(text);
     try {
       const intent = parseIntent(text);
       if (intent.kind === "ride") {
         const places = await loadPlaces();
         const found = matchPlaces(places, intent.query);
         if (found.length) {
-          const reply = rideReply(found[0].name, ru);
+          const reply = rideReply(found[0].name, false);
           push({ role: "bro", text: reply, cards: found.map(placeCard) });
-          say(reply, ru);
+          say(reply);
         } else {
           const geo = await geocodePlace(intent.query);
           if (geo) {
-            const reply = rideReply(geo.name, ru);
+            const reply = rideReply(geo.name, false);
             push({
               role: "bro",
               text: reply,
-              cards: [{ key: `geo-${geo.lat}`, name: geo.name, sub: ru ? "Точка на карте" : "Point on the map", lat: geo.lat, lon: geo.lon }],
+              cards: [{ key: `geo-${geo.lat}`, name: geo.name, sub: "Point on the map", lat: geo.lat, lon: geo.lon }],
             });
-            say(reply, ru);
+            say(reply);
           } else {
-            const reply = notFoundReply(intent.query, ru);
+            const reply = notFoundReply(intent.query, false);
             push({ role: "bro", text: reply });
-            say(reply, ru);
+            say(reply);
           }
         }
       } else if (intent.kind === "category") {
         const places = await loadPlaces();
         const list = topByCategory(places, intent.type, intent.country);
-        const reply = categoryReply(list.length, intent.type, intent.country, ru);
+        const reply = categoryReply(list.length, intent.type, intent.country, false);
         push({ role: "bro", text: reply, cards: list.map(placeCard) });
-        say(reply, ru);
+        say(reply);
       } else {
-        const reply = unknownReply(ru);
+        const reply = unknownReply(false);
         push({ role: "bro", text: reply });
-        say(reply, ru);
+        say(reply);
       }
     } finally {
       setBusy(false);
@@ -192,7 +289,7 @@ export function RealBro() {
     hushVoice();
     speakToken.current++;
     const rec = new Ctor();
-    rec.lang = recLangRef.current;
+    rec.lang = "en-US";
     rec.interimResults = false;
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
@@ -200,10 +297,7 @@ export function RealBro() {
       setPhase("idle");
       if (transcript) void handleQuery(transcript);
     };
-    rec.onerror = (e) => {
-      if (e.error === "language-not-supported") recLangRef.current = "en-US";
-      setPhase("idle");
-    };
+    rec.onerror = () => setPhase("idle");
     rec.onend = () => setPhase((p) => (p === "listening" ? "idle" : p));
     recRef.current = rec;
     setPhase("listening");
@@ -245,6 +339,7 @@ export function RealBro() {
                 </svg>
               </button>
             </div>
+            <VoiceWaveform active={phase === "listening"} />
 
             <div className="rb-msgs" ref={listRef}>
               {msgs.map((m) => (
@@ -276,7 +371,7 @@ export function RealBro() {
               <input
                 data-testid="assistant-input"
                 value={input}
-                placeholder='Say or type: "какие бары в Черногории"'
+                placeholder='Say or type: "what bars are in Montenegro?"'
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSend();

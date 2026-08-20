@@ -2,6 +2,18 @@ import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { MarkerClusterer, SuperClusterAlgorithm } from "@googlemaps/markerclusterer";
 import { asset } from "./assets";
 import type { Place } from "../types";
+import { haversineKm } from "./geo";
+import {
+  easeInOutCubic,
+  interpolateAngle,
+  interpolatePoint,
+  NAV_ENTER_MS,
+  NAV_FLAT_ENTRY_MS,
+  NAV_FOLLOW_RESUME_MS,
+  NAV_HEADING_MS,
+  NAV_MOVE_MS,
+  type NavPoint,
+} from "./nav-camera";
 import { HOME, HOME_ZOOM, NAV_TILT, NAV_ZOOM, USER_PIN_HTML, type MapKind, type WbMap, type WbRouteLine } from "./wbmap-types";
 
 const LIGHT_MAP_ID = "a7dbf0e5d7ceea8629f41e1e";
@@ -123,6 +135,16 @@ export async function createGoogleMap(
   let lastPlaceAt = 0;
   let lastPlaceId = "";
   let hitView: InstanceType<typeof PixelLayer> | null = null;
+  let followPaused = false;
+  let followResumeTimer = 0;
+  let followFrame = 0;
+  let gestureTimer = 0;
+  let systemCameraUntil = 0;
+  let shownPoint: NavPoint | null = null;
+  let lastFollow: (NavPoint & { bearing: number | null }) | null = null;
+  let firstFollow = true;
+  let navPhase: "off" | "entering" | "active" = "off";
+  let navPhaseTimer = 0;
 
   const camera = () => ({
     center: gmap.getCenter()?.toJSON() || HOME,
@@ -297,6 +319,100 @@ export async function createGoogleMap(
     return arrow;
   };
 
+  const clearFollowResume = () => {
+    if (followResumeTimer) {
+      window.clearTimeout(followResumeTimer);
+      followResumeTimer = 0;
+    }
+  };
+
+  const cameraIsSystemDriven = () => Date.now() < systemCameraUntil;
+
+  const animateFollow = (
+    target: NavPoint & { bearing: number | null },
+    requestedDuration: number,
+    moveCamera = true,
+  ) => {
+    lastFollow = target;
+    window.cancelAnimationFrame(followFrame);
+    const marker = makeArrow();
+    const markerStart = shownPoint || target;
+    const mapCenter = gmap.getCenter()?.toJSON();
+    const cameraStart = {
+      lat: mapCenter?.lat ?? markerStart.lat,
+      lon: mapCenter?.lng ?? markerStart.lon,
+    };
+    const entering = navPhase === "entering";
+    const startHeading = gmap.getHeading() ?? target.bearing ?? 0;
+    const targetHeading = entering ? 0 : target.bearing ?? startHeading;
+    const startTilt = gmap.getTilt() || 0;
+    const targetTilt = entering ? 0 : NAV_TILT;
+    const startZoom = gmap.getZoom() ?? NAV_ZOOM;
+    const targetZoom = startZoom < NAV_ZOOM ? NAV_ZOOM : startZoom;
+    const markerJump = shownPoint ? haversineKm(shownPoint, target) * 1000 > 100 : false;
+    const markerDuration = markerJump ? 0 : requestedDuration;
+    const cameraDuration = requestedDuration;
+    const started = performance.now();
+
+    const drawFrame = (now: number) => {
+      const cameraProgress = cameraDuration <= 0 ? 1 : Math.min(1, (now - started) / cameraDuration);
+      const markerProgress = markerDuration <= 0 ? 1 : Math.min(1, (now - started) / markerDuration);
+      const cameraEase = easeInOutCubic(cameraProgress);
+      const markerEase = easeInOutCubic(markerProgress);
+      const markerPoint = interpolatePoint(markerStart, target, markerEase);
+      shownPoint = markerPoint;
+      marker.position = { lat: markerPoint.lat, lng: markerPoint.lon };
+      marker.map = gmap;
+
+      if (moveCamera && navOn && !followPaused) {
+        const center = interpolatePoint(cameraStart, target, cameraEase);
+        systemCameraUntil = Date.now() + 180;
+        gmap.moveCamera({
+          center: { lat: center.lat, lng: center.lon },
+          heading: interpolateAngle(startHeading, targetHeading, cameraEase),
+          tilt: startTilt + (targetTilt - startTilt) * cameraEase,
+          zoom: startZoom + (targetZoom - startZoom) * cameraEase,
+        });
+      }
+
+      if (cameraProgress < 1 || markerProgress < 1) {
+        followFrame = window.requestAnimationFrame(drawFrame);
+      }
+    };
+    followFrame = window.requestAnimationFrame(drawFrame);
+  };
+
+  const clearNavPhaseTimer = () => {
+    if (navPhaseTimer) {
+      window.clearTimeout(navPhaseTimer);
+      navPhaseTimer = 0;
+    }
+  };
+
+  const activateNavigationPhase = () => {
+    navPhaseTimer = 0;
+    if (!navOn) return;
+    navPhase = "active";
+    el.dataset.cameraPhase = "active";
+    el.dataset.pitch = String(NAV_TILT);
+    if (!followPaused && lastFollow) animateFollow(lastFollow, NAV_ENTER_MS);
+  };
+
+  const resumeFollow = () => {
+    clearFollowResume();
+    followPaused = false;
+    el.dataset.follow = navOn ? "on" : "off";
+    if (navOn && lastFollow) animateFollow(lastFollow, NAV_ENTER_MS);
+  };
+
+  const pauseFollow = () => {
+    if (!navOn) return;
+    followPaused = true;
+    el.dataset.follow = "paused";
+    clearFollowResume();
+    followResumeTimer = window.setTimeout(resumeFollow, NAV_FOLLOW_RESUME_MS);
+  };
+
   const paintMe = () => {
     if (navOn || !lastMe) {
       if (meMark) meMark.map = null;
@@ -318,10 +434,10 @@ export async function createGoogleMap(
   const applyNavCamera = () => {
     gmap.setOptions({ headingInteractionEnabled: navOn && vectorOk, tiltInteractionEnabled: false });
     if (navOn) {
-      gmap.setTilt(NAV_TILT);
-      if ((gmap.getZoom() ?? 0) < NAV_ZOOM) gmap.setZoom(NAV_ZOOM);
-      el.dataset.pitch = String(NAV_TILT);
+      el.dataset.pitch = navPhase === "entering" ? "0" : String(NAV_TILT);
+      if (lastFollow && !followPaused) animateFollow(lastFollow, NAV_ENTER_MS);
     } else {
+      systemCameraUntil = Date.now() + 180;
       gmap.setTilt(0);
       gmap.setHeading(0);
       el.dataset.pitch = "0";
@@ -393,6 +509,19 @@ export async function createGoogleMap(
       }),
       gmap.addListener("zoom_changed", () => {
         el.dataset.zoom = String(gmap.getZoom() ?? HOME_ZOOM);
+        if (navOn && !cameraIsSystemDriven()) {
+          window.clearTimeout(gestureTimer);
+          gestureTimer = window.setTimeout(() => {
+            if (!cameraIsSystemDriven()) pauseFollow();
+          }, 120);
+        }
+      }),
+      gmap.addListener("dragstart", pauseFollow),
+      gmap.addListener("heading_changed", () => {
+        if (navOn && !cameraIsSystemDriven()) pauseFollow();
+      }),
+      gmap.addListener("tilt_changed", () => {
+        if (navOn && !cameraIsSystemDriven()) pauseFollow();
       }),
     );
   };
@@ -519,7 +648,25 @@ export async function createGoogleMap(
     },
     setNav(on) {
       navOn = on;
-      if (!on && arrow) arrow.map = null;
+      followPaused = false;
+      clearFollowResume();
+      el.dataset.follow = on ? "on" : "off";
+      clearNavPhaseTimer();
+      if (on) {
+        navPhase = "entering";
+        el.dataset.cameraPhase = "entering";
+        el.dataset.navEntry = "flat-to-3d";
+        el.dataset.pitch = "0";
+        navPhaseTimer = window.setTimeout(activateNavigationPhase, NAV_FLAT_ENTRY_MS);
+      } else {
+        navPhase = "off";
+        el.dataset.cameraPhase = "off";
+        firstFollow = true;
+        lastFollow = null;
+        shownPoint = null;
+        window.cancelAnimationFrame(followFrame);
+        if (arrow) arrow.map = null;
+      }
       paintPlaces();
       paintMe();
       requestAnimationFrame(() => {
@@ -536,19 +683,27 @@ export async function createGoogleMap(
       lastMe = pt;
       paintMe();
     },
-    follow(lon, lat, bearing, look) {
-      const next: google.maps.CameraOptions = {
-        center: look ? { lat: look.lat, lng: look.lon } : { lat, lng: lon },
-        tilt: NAV_TILT,
-        zoom: Math.max(gmap.getZoom() ?? NAV_ZOOM, NAV_ZOOM),
+    follow(lon, lat, bearing) {
+      const target = {
+        lat,
+        lon,
+        bearing: bearing != null && Number.isFinite(bearing) ? bearing : null,
       };
-      if (bearing != null && Number.isFinite(bearing)) next.heading = bearing;
-      gmap.moveCamera(next);
-      const mark = makeArrow();
-      mark.position = { lat, lng: lon };
-      mark.map = gmap;
-      el.dataset.pitch = String(NAV_TILT);
+      animateFollow(
+        target,
+        firstFollow && navPhase === "entering" ? NAV_FLAT_ENTRY_MS : firstFollow ? NAV_ENTER_MS : NAV_MOVE_MS,
+        !followPaused,
+      );
+      firstFollow = false;
+      el.dataset.pitch = navPhase === "entering" ? "0" : String(NAV_TILT);
     },
+    orient(bearing) {
+      if (!navOn || !lastFollow || !Number.isFinite(bearing)) return;
+      lastFollow = { ...lastFollow, bearing };
+      if (followPaused || navPhase === "entering") return;
+      animateFollow(lastFollow, NAV_HEADING_MS);
+    },
+    resumeFollow,
     setKind(next, overlays) {
       if (overlays?.places) lastPlaces = overlays.places;
       if (overlays?.darkPins != null) {
@@ -583,6 +738,8 @@ export async function createGoogleMap(
       if (navOn) gmap.setTilt(NAV_TILT);
     },
     zoomBy(dir) {
+      if (navOn) pauseFollow();
+      systemCameraUntil = Date.now() + 180;
       gmap.setZoom((gmap.getZoom() ?? HOME_ZOOM) + dir);
       if (navOn) gmap.setTilt(NAV_TILT);
     },
@@ -603,6 +760,10 @@ export async function createGoogleMap(
     resize,
     remove() {
       alive = false;
+      window.cancelAnimationFrame(followFrame);
+      window.clearTimeout(gestureTimer);
+      clearFollowResume();
+      clearNavPhaseTimer();
       listeners.splice(0).forEach((l) => l.remove());
       window.removeEventListener("resize", resize);
       window.removeEventListener("orientationchange", resize);

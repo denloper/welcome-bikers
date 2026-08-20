@@ -34,7 +34,9 @@ export type WbMap = {
   setNav: (on: boolean) => void;
   setPick: (on: boolean) => void;
   setMe: (pt: { lat: number; lon: number } | null) => void;
-  follow: (lon: number, lat: number, bearing?: number | null, look?: { lon: number; lat: number }) => void;
+  follow: (lon: number, lat: number, bearing?: number | null) => void;
+  orient: (bearing: number) => void;
+  resumeFollow: () => void;
   setKind: (
     kind: MapKind,
     overlays?: {
