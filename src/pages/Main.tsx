@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { RealBro } from "../components/Assistant";
 import { BrandLogo } from "../components/BrandLogo";
 import { CategoryGlyph } from "../components/Icons";
 import { CATEGORIES } from "../lib/categories";
@@ -34,6 +35,8 @@ export function Main() {
           </button>
         ))}
       </div>
+
+      <RealBro />
     </div>
   );
 }

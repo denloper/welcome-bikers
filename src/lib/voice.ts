@@ -143,6 +143,75 @@ export function hushVoice() {
   }
 }
 
+function qualityScoreFor(voice: { name: string; lang: string; localService?: boolean }, lang: string): number {
+  const vl = voice.lang.toLowerCase().replace("_", "-");
+  const want = lang.toLowerCase();
+  const base = want.split("-")[0];
+  if (!vl.startsWith(base)) return -1;
+  const name = voice.name.toLowerCase();
+  if (NOVELTY.some((bad) => name.includes(bad))) return -1;
+  let score = vl.startsWith(want) ? 40 : 28;
+  if (name.includes("natural")) score += 60;
+  if (name.includes("neural")) score += 55;
+  if (name.includes("premium") || name.includes("enhanced")) score += 42;
+  if (name.includes("siri")) score += 36;
+  if (name.includes("google")) score += 30;
+  if (name.includes("online")) score += 12;
+  if (name.includes("compact")) score -= 40;
+  if (voice.localService === false) score += 8;
+  return score;
+}
+
+/**
+ * Speak in an explicit language (assistant replies can be Russian). Keeps
+ * speakLine untouched: that one is tuned for English driving prompts.
+ * Returns true when speech actually started; onDone always fires once.
+ */
+export function speakText(text: string, lang: string, onDone?: () => void): boolean {
+  if (!text || typeof window === "undefined" || !window.speechSynthesis) {
+    onDone?.();
+    return false;
+  }
+  try {
+    if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = lang;
+    u.rate = 1;
+    u.pitch = 1;
+    u.volume = 1;
+    if (!cachedVoices.length) warmVoices();
+    let best: SpeechSynthesisVoice | null = null;
+    let bestScore = -1;
+    for (const voice of cachedVoices) {
+      const score = qualityScoreFor(voice, lang);
+      if (score > bestScore) {
+        bestScore = score;
+        best = voice;
+      }
+    }
+    if (best) {
+      u.voice = best;
+      u.lang = best.lang || lang;
+    }
+    if (onDone) {
+      let done = false;
+      const finish = () => {
+        if (!done) {
+          done = true;
+          onDone();
+        }
+      };
+      u.onend = finish;
+      u.onerror = finish;
+    }
+    window.speechSynthesis.speak(u);
+    return true;
+  } catch {
+    onDone?.();
+    return false;
+  }
+}
+
 export function speakLine(text: string) {
   if (!text || typeof window === "undefined" || !window.speechSynthesis) return;
   try {
