@@ -213,7 +213,7 @@ export function formatDriveTime(sec: number): string {
   const m = Math.floor((s % 3600) / 60);
   if (d > 0) return h > 0 ? `${d} d. ${h} h.` : `${d} d.`;
   if (h > 0) return m > 0 ? `${h} h. ${m} min.` : `${h} h.`;
-  if (s < 20) return "Now";
+  if (s < 45) return "1 min.";
   return `${Math.max(1, m)} min.`;
 }
 

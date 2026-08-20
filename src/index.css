@@ -748,6 +748,11 @@ textarea { min-height: 96px; resize: vertical; }
   height: calc(100dvh - var(--nav) - env(safe-area-inset-bottom, 0px));
   overflow: hidden;
 }
+.map-nav-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
 .map-wrap,
 .map-wrap.full,
 .map-wrap.leaflet-container,
@@ -758,7 +763,6 @@ textarea { min-height: 96px; resize: vertical; }
   height: 100% !important;
   background: #111;
   z-index: 0;
-  isolation: isolate;
 }
 .map-search {
   position: absolute;
@@ -1229,12 +1233,30 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   cursor: pointer;
 }
 .map-page.is-nav {
-  perspective: 900px;
+  height: 100dvh;
+  perspective: 560px;
+  perspective-origin: 50% 88%;
+  overflow: hidden;
+  background: #d4cfc4;
 }
-.map-page.is-nav .map-wrap.full {
-  transform: rotateX(52deg) rotateZ(var(--nav-rot, 0deg)) scale(1.72);
-  transform-origin: 50% 78%;
+.map-page.is-nav.is-dark {
+  background: #111;
+}
+.map-page.is-nav .map-nav-stage {
+  transform: rotateZ(var(--nav-rot, 0deg)) rotateX(45deg) scale(2.8);
+  transform-origin: 50% 84%;
   will-change: transform;
+}
+.map-page.is-nav .map-wrap.full,
+.map-page.is-nav .map-wrap.full.leaflet-container {
+  background: transparent;
+  isolation: auto;
+}
+.map-page.is-nav .map-tools {
+  top: 12px;
+}
+body.wb-nav-go .bottom-nav {
+  display: none;
 }
 .wb-me {
   background: none !important;

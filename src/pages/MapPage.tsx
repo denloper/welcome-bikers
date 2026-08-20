@@ -26,7 +26,7 @@ import { Stars } from "../components/Stars";
 import { PlacePhoto } from "../components/PlacePhoto";
 import { loadPlaces } from "../lib/data";
 import { asset } from "../lib/assets";
-import { bearingDeg, haversineKm, pointAhead, validCoords } from "../lib/geo";
+import { bearingDeg, haversineKm, nearestIndex, pointAhead, validCoords } from "../lib/geo";
 import { darkTiles, lightTiles, satTiles } from "../lib/osm";
 import {
   formatArrival,
@@ -126,21 +126,16 @@ function TurnArrow({ turn }: { turn: string }) {
 
 function remainingAlong(route: DriveRoute, here: { lat: number; lon: number }) {
   const pts = route.geometry;
+  if (pts.length < 2) return { distance: route.distance, duration: route.duration, stepI: 0, arrived: false };
   const last = pts[pts.length - 1];
-  const nearEnd = last && haversineKm(here, { lat: last[0], lon: last[1] }) < 0.08;
-  if (nearEnd) return { distance: 0, duration: 0, stepI: Math.max(0, route.steps.length - 1) };
-  if (pts.length < 2) return { distance: route.distance, duration: route.duration, stepI: 0 };
-  let bestI = 0;
-  let best = Infinity;
-  for (let i = 0; i < pts.length; i++) {
-    const km = haversineKm(here, { lat: pts[i][0], lon: pts[i][1] });
-    if (km < best) {
-      best = km;
-      bestI = i;
-    }
+  const bestI = nearestIndex(pts, here);
+  const distToLine = haversineKm(here, { lat: pts[bestI][0], lon: pts[bestI][1] });
+  const distToEnd = haversineKm(here, { lat: last[0], lon: last[1] });
+  if (distToEnd < 0.08 && distToLine < 0.2) {
+    return { distance: 0, duration: 0, stepI: Math.max(0, route.steps.length - 1), arrived: true };
   }
-  if (best > 0.8) {
-    return { distance: route.distance, duration: route.duration, stepI: 0 };
+  if (distToLine > 0.8) {
+    return { distance: route.distance, duration: route.duration, stepI: 0, arrived: false };
   }
   let rest = 0;
   for (let i = bestI; i < pts.length - 1; i++) {
@@ -158,7 +153,7 @@ function remainingAlong(route: DriveRoute, here: { lat: number; lon: number }) {
     }
     stepI = i;
   }
-  return { distance: rest, duration: route.duration * ratio, stepI };
+  return { distance: rest, duration: route.duration * ratio, stepI, arrived: false };
 }
 
 export function MapPage() {
@@ -436,12 +431,27 @@ export function MapPage() {
     if (!map || !ready) return;
     if (navigating) {
       if (cluster && map.hasLayer(cluster)) map.removeLayer(cluster);
-      map.invalidateSize();
     } else {
       if (cluster && !map.hasLayer(cluster)) map.addLayer(cluster);
-      map.invalidateSize();
     }
+    const refresh = () => map.invalidateSize();
+    refresh();
+    const t = window.setTimeout(refresh, 60);
+    const t2 = window.setTimeout(refresh, 280);
+    return () => {
+      window.clearTimeout(t);
+      window.clearTimeout(t2);
+    };
   }, [navigating, ready]);
+
+  useEffect(() => {
+    document.querySelector(".app")?.classList.toggle("no-nav", navigating);
+    document.body.classList.toggle("wb-nav-go", navigating);
+    return () => {
+      document.querySelector(".app")?.classList.remove("no-nav");
+      document.body.classList.remove("wb-nav-go");
+    };
+  }, [navigating]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -455,23 +465,28 @@ export function MapPage() {
       return;
     }
     const placeMe = (lat: number, lon: number, gpsHeading?: number | null) => {
-      const herePt = { lat, lon };
-      setHere(herePt);
+      const gps = { lat, lon };
+      setHere(gps);
       const geom = driveRef.current?.geometry;
-      let br = gpsHeading != null && Number.isFinite(gpsHeading) && gpsHeading >= 0 ? gpsHeading : null;
-      let look = herePt;
+      let follow = gps;
       if (geom && geom.length >= 2) {
-        look = pointAhead(geom, herePt, 90);
-        if (br == null) br = (bearingDeg(herePt, look) + 360) % 360;
+        const i = nearestIndex(geom, gps);
+        const dist = haversineKm(gps, { lat: geom[i][0], lon: geom[i][1] });
+        if (dist > 0.8) follow = { lat: geom[0][0], lon: geom[0][1] };
+      }
+      let br = gpsHeading != null && Number.isFinite(gpsHeading) && gpsHeading >= 0 ? gpsHeading : null;
+      let look = follow;
+      if (geom && geom.length >= 2) {
+        look = pointAhead(geom, follow, 80);
+        if (br == null) br = (bearingDeg(follow, look) + 360) % 360;
       }
       if (br != null) setHeading(br);
       if (!meRef.current) {
-        meRef.current = L.marker([lat, lon], { icon: navArrowIcon(), zIndexOffset: 1200 }).addTo(map);
+        meRef.current = L.marker([follow.lat, follow.lon], { icon: navArrowIcon(), zIndexOffset: 1200 }).addTo(map);
       } else {
-        meRef.current.setLatLng([lat, lon]);
+        meRef.current.setLatLng([follow.lat, follow.lon]);
       }
-      const z = Math.max(map.getZoom(), 17);
-      map.setView([look.lat, look.lon], z, { animate: true });
+      map.setView([look.lat, look.lon], Math.max(map.getZoom(), 16), { animate: false });
     };
     getHere().then((p) => {
       if (p) placeMe(p.lat, p.lon);
@@ -533,16 +548,17 @@ export function MapPage() {
 
   const photos = picked ? photosFor(picked).slice(0, 2) : [];
   const site = picked?.website || (picked ? `https://www.google.com/maps/search/?api=1&query=${picked.lat},${picked.lon}` : "");
-  const hudDist = live?.distance ?? drive?.distance ?? 0;
-  const hudTime = live?.duration ?? drive?.duration ?? 0;
+  const hudDist = live?.arrived ? 0 : live?.distance ?? drive?.distance ?? 0;
+  const hudTime = live?.arrived ? 0 : live?.duration ?? drive?.duration ?? 0;
 
   return (
-    <div className={`page map-page${navigating ? " is-nav" : ""}`}>
+    <div className={`page map-page${navigating ? " is-nav" : ""}${light || sat ? "" : " is-dark"}`}>
       <div
-        className="map-wrap full"
-        ref={mapEl}
+        className="map-nav-stage"
         style={navigating ? ({ ["--nav-rot"]: `${-(heading ?? 0)}deg` } as CSSProperties) : undefined}
-      />
+      >
+        <div className="map-wrap full" ref={mapEl} />
+      </div>
       {!trip && (
         <div className="map-search">
           <button className="map-round" onClick={() => nav(-1)} aria-label="Back">
@@ -710,7 +726,10 @@ export function MapPage() {
         {navigating && (
           <button
             className="map-round"
-            onClick={() => here && mapRef.current?.setView([here.lat, here.lon], 17)}
+            onClick={() => {
+              const p = meRef.current?.getLatLng();
+              if (p) mapRef.current?.setView(p, 16, { animate: false });
+            }}
             aria-label="Recenter"
           >
             <IconLocate />
@@ -760,7 +779,7 @@ export function MapPage() {
       {navigating && drive && (
         <div className="nav-hud">
           <div>
-            <p className="nav-hud-time">{formatDriveTime(hudTime)}</p>
+            <p className="nav-hud-time">{live?.arrived ? "Now" : formatDriveTime(hudTime)}</p>
             <p className="nav-hud-km">{formatMeters(hudDist)}</p>
           </div>
           <button className="nav-exit" onClick={() => setNavigating(false)}>
