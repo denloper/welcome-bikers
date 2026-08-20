@@ -38,6 +38,11 @@ const OSRM = {
   ],
 };
 
+async function expectMapVisible(page: Page) {
+  await expect(page.locator(".map-gl")).toHaveAttribute("data-ready", "1", { timeout: 20_000 });
+  await expect(page.locator(".map-gl .gm-style").or(page.locator(".map-gl canvas")).first()).toBeVisible();
+}
+
 async function mockRouting(page: Page) {
   await page.route(/valhalla1\.openstreetmap\.de/, (route) =>
     route.fulfill({ status: 500, body: "no" }),
@@ -54,19 +59,18 @@ async function mockRouting(page: Page) {
 test.describe("GO navigation", () => {
   test("browse map stays visible with a canvas", async ({ page }) => {
     await page.goto("/#/map");
-    await expect(page.locator(".map-gl canvas")).toBeVisible();
+    await expectMapVisible(page);
     await expect(page.locator(".map-page.is-nav")).toHaveCount(0);
     await expect(page.locator(".map-gl")).toHaveAttribute("data-pitch", "0");
   });
 
   test("dark theme reloads the map style and keeps the canvas", async ({ page }) => {
     await page.goto("/#/map");
-    await expect(page.locator(".map-gl")).toHaveAttribute("data-ready", "1", { timeout: 20_000 });
+    await expectMapVisible(page);
     await page.getByLabel("map theme").click();
     await expect(page.locator(".map-page.is-dark")).toBeVisible();
-    await expect(page.locator(".map-gl")).toHaveAttribute("data-ready", "1", { timeout: 20_000 });
-    await expect(page.locator(".map-gl canvas")).toBeVisible();
-    const box = await page.locator(".map-gl canvas").boundingBox();
+    await expectMapVisible(page);
+    const box = await page.locator(".map-gl").boundingBox();
     expect(box && box.width > 100 && box.height > 100).toBeTruthy();
   });
 
@@ -82,7 +86,7 @@ test.describe("GO navigation", () => {
     await expect(page.locator(".map-page.is-nav")).toBeVisible();
     await expect(page.locator(".map-gl")).toBeVisible();
     await expect(page.locator(".map-gl")).toHaveAttribute("data-pitch", "45");
-    await expect(page.locator(".map-gl canvas")).toBeVisible();
+    await expectMapVisible(page);
     await expect(page.locator(".nav-hud")).toBeVisible();
     await expect(page.locator(".nav-exit")).toBeVisible();
     await expect(page.locator(".bottom-nav")).toHaveCount(0);
@@ -98,14 +102,14 @@ test.describe("GO navigation", () => {
     await expect(page.locator(".map-gl")).toHaveAttribute("data-ready", "1", { timeout: 20_000 });
     await page.waitForTimeout(1500);
     expect(await page.locator(".map-gl").getAttribute("data-pitch")).toBe("45");
-    const box = await page.locator(".map-gl canvas").boundingBox();
+    const box = await page.locator(".map-gl").boundingBox();
     expect(box && box.width > 100 && box.height > 100).toBeTruthy();
     await page.screenshot({ path: "test-results/go-nav.png", fullPage: true });
 
     await page.locator(".nav-exit").click();
     await expect(page.locator(".map-page.is-nav")).toHaveCount(0);
     await expect(page.locator(".map-gl")).toHaveAttribute("data-pitch", "0");
-    await expect(page.locator(".map-gl canvas")).toBeVisible();
+    await expectMapVisible(page);
     await expect(page.locator(".route-go")).toBeEnabled();
 
     await page.screenshot({ path: "test-results/go-exit.png", fullPage: true });

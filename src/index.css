@@ -804,6 +804,36 @@ textarea { min-height: 96px; resize: vertical; }
   background: #e8e4d8;
   z-index: 0;
 }
+.map-gl .gm-style {
+  width: 100% !important;
+  height: 100% !important;
+}
+.wb-gpin {
+  display: block;
+  width: 30px;
+  height: 40px;
+  pointer-events: none;
+}
+.wb-gcluster {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #4da3ff;
+  color: #fff;
+  font: 700 12px/32px Manrope, system-ui, sans-serif;
+  text-align: center;
+  box-shadow: 0 0 0 3px rgba(77, 163, 255, 0.35);
+}
+.wb-gcluster.big {
+  width: 44px;
+  height: 44px;
+  line-height: 44px;
+  background: #e10600;
+  box-shadow: 0 0 0 3px rgba(225, 6, 0, 0.35);
+}
+.wb-garrow {
+  transform: translateY(50%);
+}
 .map-page.is-dark .map-wrap,
 .map-page.is-dark .map-gl {
   background: #111;
