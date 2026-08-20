@@ -176,37 +176,37 @@ function countryRu(canon: string): string {
 }
 
 export function greeting(): string {
-  return 'Yo, bro! Say where you want to ride — for example, "ride to Podgorica" — or ask "what bars are in Montenegro?" I will show place cards and build the route.';
+  return 'Yo, bro! Real Bro here. Point the bike — say "ride to Podgorica" — or ask "what bars are in Montenegro?" I drop the cards, you twist the throttle.';
 }
 
 export function rideReply(name: string, ru: boolean): string {
   return ru
-    ? `Погнали! Нашёл «${name}». Жми «Go» — построю маршрут.`
-    : `Let's roll! Found ${name}. Hit Go and I will build the route.`;
+    ? `Погнали, бро. Нашёл «${name}». Жми Go — пока думаешь, резина стынет.`
+    : `Hell yeah. ${name} is locked in. Hit Go before you talk yourself back to the couch.`;
 }
 
 export function notFoundReply(query: string, ru: boolean): string {
   return ru
-    ? `Не нашёл «${query}» ни в базе, ни на карте. Скажи иначе, bro.`
-    : `Could not find "${query}" in my base or on the map. Try another name, bro.`;
+    ? `«${query}» нет ни в базе, ни на карте. Либо секретная точка, либо название прожевал. Давай ещё раз, bro.`
+    : `No "${query}" in my base or on the map. Ghost town or you mumbled it. Try another name, bro.`;
 }
 
 export function unknownReply(ru: boolean): string {
   return ru
-    ? "Я Real Bro. Могу построить маршрут — скажи «поехали в Подгорицу». Или спроси про места: «какие бары есть в Черногории», «какие фестивали в Сербии»."
-    : 'I am Real Bro. Say "ride to Podgorica" to build a route, or ask "what bars are in Montenegro" and I will show the cards.';
+    ? "Бро, я не погода и не терапевт. Я Real Bro. Скажи «поехали в Подгорицу» — построю маршрут. Или «какие бары есть в Черногории» — кину карточки."
+    : 'Easy, bro. I am Real Bro, not your weather app. Say "ride to Podgorica" to build a route, or "what bars are in Montenegro" and I drop the cards.';
 }
 
 export function categoryReply(count: number, type: PlaceType, country: string | undefined, ru: boolean): string {
   if (ru) {
     const where = country ? ` в ${countryRu(country)}` : "";
-    if (!count) return `Пока не нашёл таких мест${where}. Попробуй другую страну или категорию.`;
-    return `Нашёл ${count} ${ruPlural(count, CATEGORY_RU[type])}${where}. Вот карточки — жми «Go», и поехали.`;
+    if (!count) return `Пока не нашёл таких мест${where}. Либо не та страна, либо единорогов ищешь.`;
+    return `Держи ${count} ${ruPlural(count, CATEGORY_RU[type])}${where}. Карточка, Go — и не клади её в повороте.`;
   }
   const where = country ? ` in ${country}` : "";
-  if (!count) return `No such places${where} yet. Try another country or category.`;
+  if (!count) return `No such places${where} yet. Wrong country or you are hunting unicorns. Try another shot.`;
   const [one, many] = CATEGORY_EN[type];
-  return `Found ${count} ${count === 1 ? one : many}${where}. Pick a card and hit Go.`;
+  return `Found ${count} ${count === 1 ? one : many}${where}. Pick a card, hit Go, try not to drop it.`;
 }
 
 export type GeoHit = { lat: number; lon: number; name: string };

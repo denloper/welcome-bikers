@@ -84,4 +84,5 @@ test("categoryReply speaks Russian plurals and the country", () => {
   expect(categoryReply(2, "bars", "Serbia", true)).toContain("2 байкерских бара в Сербии");
   expect(categoryReply(0, "bars", undefined, true)).toContain("не нашёл");
   expect(categoryReply(3, "bars", "Montenegro", false)).toContain("3 bikers bars in Montenegro");
+  expect(categoryReply(0, "bars", undefined, false)).toMatch(/unicorns/i);
 });
