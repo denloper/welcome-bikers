@@ -59,6 +59,17 @@ test.describe("GO navigation", () => {
     await expect(page.locator(".map-gl")).toHaveAttribute("data-pitch", "0");
   });
 
+  test("dark theme reloads the map style and keeps the canvas", async ({ page }) => {
+    await page.goto("/#/map");
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-ready", "1", { timeout: 20_000 });
+    await page.getByLabel("map theme").click();
+    await expect(page.locator(".map-page.is-dark")).toBeVisible();
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-ready", "1", { timeout: 20_000 });
+    await expect(page.locator(".map-gl canvas")).toBeVisible();
+    const box = await page.locator(".map-gl canvas").boundingBox();
+    expect(box && box.width > 100 && box.height > 100).toBeTruthy();
+  });
+
   test("uses a 45-degree 3D camera like the original, with side tools", async ({ page, context }) => {
     await context.grantPermissions(["geolocation"]);
     await context.setGeolocation(START);

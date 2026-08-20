@@ -337,12 +337,13 @@ export function MapPage() {
 
   useEffect(() => {
     if (!ready) return;
+    const next = mapKind(light, sat);
     if (kindInit.current) {
       kindInit.current = false;
-      return;
+      if (next === "vector-light") return;
     }
     const o = overlayRef.current;
-    wbRef.current?.setKind(mapKind(light, sat), {
+    wbRef.current?.setKind(next, {
       places: o.filtered,
       darkPins: o.darkPins,
       route: o.geometry,

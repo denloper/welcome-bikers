@@ -1,4 +1,4 @@
-import { GeoJSONSource, Map as MapLibreMap, Marker, setWorkerUrl } from "maplibre-gl";
+import { GeoJSONSource, Map as MapLibreMap, Marker, setWorkerUrl, type StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { asset } from "./assets";
@@ -81,6 +81,23 @@ function kindStyle(kind: MapKind) {
   return vectorStyle(false);
 }
 
+function sanitizeStyle(style: StyleSpecification) {
+  for (const layer of style.layers || []) {
+    const paint = "paint" in layer ? layer.paint : undefined;
+    if (paint && "fill-pattern" in paint) {
+      delete (paint as { "fill-pattern"?: unknown })["fill-pattern"];
+    }
+  }
+  return style;
+}
+
+const STYLE_OPTS = {
+  diff: false as const,
+  transformStyle(_prev: StyleSpecification | undefined, next: StyleSpecification) {
+    return sanitizeStyle(next);
+  },
+};
+
 function placesFc(places: Place[], darkPins: boolean) {
   return {
     type: "FeatureCollection" as const,
@@ -152,7 +169,7 @@ async function loadPins(map: MapLibreMap) {
   );
 }
 
-function addBuildings(map: MapLibreMap) {
+function addBuildings(map: MapLibreMap, dark: boolean) {
   if (map.getLayer("wb-3d-buildings") || !map.getSource("openmaptiles")) return;
   try {
     for (const layer of map.getStyle().layers || []) {
@@ -167,7 +184,7 @@ function addBuildings(map: MapLibreMap) {
       type: "fill-extrusion",
       minzoom: 14,
       paint: {
-        "fill-extrusion-color": "#c4c1b6",
+        "fill-extrusion-color": dark ? "#2a2a2a" : "#c4c1b6",
         "fill-extrusion-height": ["coalesce", ["get", "render_height"], ["get", "height"], 8],
         "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], ["get", "min_height"], 0],
         "fill-extrusion-opacity": 0.82,
@@ -260,7 +277,7 @@ function addOverlays(map: MapLibreMap, routeDark: boolean) {
     });
   }
   paintRoute(map, routeDark);
-  addBuildings(map);
+  addBuildings(map, routeDark);
 }
 
 function setPinVisibility(map: MapLibreMap, show: boolean) {
@@ -311,6 +328,32 @@ export function createWbMap(
   let lastRoute: [number, number][] = [];
   let lastRouteDark = false;
   let pendingFit = false;
+  let pendingView: { center: [number, number]; zoom: number; bearing: number; pitch: number } | null = null;
+  let styleTimer = 0;
+  let paintGen = 0;
+  let styleGen = 0;
+
+  const clearStyleTimer = () => {
+    if (styleTimer) {
+      window.clearTimeout(styleTimer);
+      styleTimer = 0;
+    }
+  };
+
+  const fallbackRaster = () => {
+    if (!alive || kind === "satellite") return;
+    map.setStyle(rasterStyle(kind === "vector-dark"), STYLE_OPTS);
+  };
+
+  const applyStyle = (style: string | StyleSpecification) => {
+    const gen = ++styleGen;
+    clearStyleTimer();
+    styleTimer = window.setTimeout(() => {
+      if (!alive || gen !== styleGen) return;
+      fallbackRaster();
+    }, 6000);
+    map.setStyle(style, STYLE_OPTS);
+  };
 
   const arrow = () => {
     if (marker) return marker;
@@ -371,13 +414,14 @@ export function createWbMap(
   };
 
   const paint = async () => {
+    const gen = ++paintGen;
     if (!alive) return;
     try {
       await loadPins(map);
     } catch {
       /* pins optional */
     }
-    if (!alive) return;
+    if (!alive || gen !== paintGen) return;
     try {
       addOverlays(map, lastRouteDark);
       if (lastPlaces.length) {
@@ -388,10 +432,16 @@ export function createWbMap(
         paintRoute(map, lastRouteDark);
       }
       setPinVisibility(map, !navOn);
+      if (pendingView) {
+        map.jumpTo(pendingView);
+        pendingView = null;
+      }
       if (pendingFit && lastRoute.length >= 2) fitRoute(lastRoute);
     } catch {
       /* style not ready */
     }
+    if (gen !== paintGen) return;
+    clearStyleTimer();
     booted = true;
     el.dataset.ready = "1";
     if (navOn) applyCamera();
@@ -399,12 +449,15 @@ export function createWbMap(
     map.resize();
   };
 
-  map.on("load", () => {
+  map.on("style.load", () => {
     void paint();
   });
-  window.setTimeout(() => {
+  map.on("load", () => {
+    if (!booted) void paint();
+  });
+  styleTimer = window.setTimeout(() => {
     if (!alive || booted || !el.isConnected || kind === "satellite") return;
-    map.setStyle(rasterStyle(kind === "vector-dark"));
+    fallbackRaster();
   }, 8000);
 
   map.on("click", "wb-clusters", (e) => {
@@ -516,15 +569,15 @@ export function createWbMap(
       const zoom = map.getZoom();
       const bearing = map.getBearing();
       const pitch = navOn ? NAV_TILT : 0;
+      pendingView = { center: [center.lng, center.lat], zoom, bearing, pitch };
       if (overlays?.places) lastPlaces = overlays.places;
-      if (overlays?.darkPins != null) lastDarkPins = overlays.darkPins;
+      if (overlays?.darkPins != null) {
+        lastDarkPins = overlays.darkPins;
+        lastRouteDark = overlays.darkPins;
+      }
       if (overlays?.route) lastRoute = overlays.route;
-      map.setStyle(kindStyle(next));
-      map.once("idle", () => {
-        if (!alive) return;
-        map.jumpTo({ center, zoom, bearing, pitch });
-        map.resize();
-      });
+      el.dataset.ready = "0";
+      applyStyle(kindStyle(next));
     },
     flyTo(lat, lon, zoom = 11) {
       map.easeTo({ center: [lon, lat], zoom, duration: 500, pitch: navOn ? NAV_TILT : 0 });
@@ -536,6 +589,7 @@ export function createWbMap(
     remove() {
       alive = false;
       retries.forEach((id) => window.clearTimeout(id));
+      clearStyleTimer();
       window.removeEventListener("resize", resize);
       window.removeEventListener("orientationchange", resize);
       window.visualViewport?.removeEventListener("resize", resize);
