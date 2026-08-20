@@ -3,7 +3,7 @@ import { closestOnPolyline } from "../src/lib/geo";
 import { filterGpsFix, freshGpsState, lerpAngle } from "../src/lib/gps";
 import { freshRerouteState, remainingAlong, tripTooShort, updateReroute } from "../src/lib/nav";
 import { formatDriveTime, formatMeters, maneuverPreviews, type DriveRoute } from "../src/lib/osrm";
-import { nextVoice, voiceLine } from "../src/lib/voice";
+import { nextVoice, voiceLine, voiceScore } from "../src/lib/voice";
 
 const route: DriveRoute = {
   id: "test-route",
@@ -110,6 +110,37 @@ test("GPS filter rejects inaccurate fixes and impossible jumps", () => {
   expect(jump.reason).toBe("jump");
 });
 
+test("GPS filter always lets navigation start and recover", () => {
+  // A coarse first fix (indoors, LTE) must still be accepted.
+  const coarseFirst = filterGpsFix(freshGpsState(), {
+    lat: 42.441,
+    lon: 19.2626,
+    accuracy: 900,
+    timestamp: 10_000,
+  });
+  expect(coarseFirst.accepted).toBe(true);
+
+  // Repeated rejections must not freeze the rider: the filter resets.
+  let state = filterGpsFix(freshGpsState(), {
+    lat: 42.441,
+    lon: 19.2626,
+    accuracy: 8,
+    timestamp: 10_000,
+  }).state;
+  const far = { lat: 43.441, lon: 20.2626, accuracy: 8, timestamp: 11_000 };
+  const r1 = filterGpsFix(state, { ...far, timestamp: 11_000 });
+  expect(r1.accepted).toBe(false);
+  const r2 = filterGpsFix(r1.state, { ...far, timestamp: 12_000 });
+  expect(r2.accepted).toBe(false);
+  const r3 = filterGpsFix(r2.state, { ...far, timestamp: 13_000 });
+  expect(r3.accepted).toBe(true);
+  expect(r3.fix?.lat).toBeCloseTo(43.441, 5);
+
+  // A fix after a long GPS gap (tunnel) is trusted immediately.
+  const afterGap = filterGpsFix(state, { ...far, timestamp: 30_000 });
+  expect(afterGap.accepted).toBe(true);
+});
+
 test("heading smoothing takes the short path across north", () => {
   expect(lerpAngle(350, 10, 0.5)).toBeCloseTo(0, 5);
   expect(lerpAngle(10, 350, 0.5)).toBeCloseTo(0, 5);
@@ -139,7 +170,7 @@ test("reroute waits for a sustained accurate off-route position", () => {
   expect(poor.trigger).toBe(false);
 });
 
-test("HUD can preview the current and next two maneuvers", () => {
+test("HUD previews upcoming maneuvers, not the road already driven", () => {
   const three: DriveRoute = {
     ...route,
     steps: [
@@ -156,10 +187,29 @@ test("HUD can preview the current and next two maneuvers", () => {
     ],
   };
   const preview = maneuverPreviews(three, 0, 240, 3);
-  expect(preview).toHaveLength(3);
+  expect(preview).toHaveLength(2);
+  expect(preview[0].label).toBe("Turn left onto Bridge");
   expect(preview[0].distance).toBe(240);
-  expect(preview[1].label).toContain("Bridge");
-  expect(preview[2].step.type).toBe("arrive");
+  expect(preview[1].step.type).toBe("arrive");
+  expect(preview[1].label).toBe("Arrive at destination");
+  expect(preview[1].distance).toBe(600);
+
+  const last = maneuverPreviews(three, 2, 120, 3);
+  expect(last).toHaveLength(1);
+  expect(last[0].label).toBe("Arrive at destination");
+  expect(last[0].distance).toBe(120);
+});
+
+test("voice picker prefers natural voices over compact ones", () => {
+  const natural = voiceScore({ name: "Microsoft Ava Online (Natural)", lang: "en-US", localService: false });
+  const google = voiceScore({ name: "Google US English", lang: "en-US", localService: false });
+  const compact = voiceScore({ name: "Samantha (Compact)", lang: "en-US", localService: true });
+  const novelty = voiceScore({ name: "Zarvox", lang: "en-US", localService: true });
+  const russian = voiceScore({ name: "Milena", lang: "ru-RU", localService: true });
+  expect(natural).toBeGreaterThan(google);
+  expect(google).toBeGreaterThan(compact);
+  expect(novelty).toBe(-1);
+  expect(russian).toBe(-1);
 });
 
 test("voice says the turn once on approach and once at the corner", () => {

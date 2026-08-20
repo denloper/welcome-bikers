@@ -1667,21 +1667,11 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   height: 40px;
   line-height: 0;
   pointer-events: none;
-  filter: drop-shadow(0 2px 5px #0009);
 }
 .wb-me-star svg {
   display: block;
   width: 30px;
   height: 40px;
-  pointer-events: none;
-}
-.wb-me-star img {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 14px;
-  height: 14px;
-  filter: grayscale(1) brightness(0) invert(1);
   pointer-events: none;
 }
 .map-page.is-nav .map-tools {

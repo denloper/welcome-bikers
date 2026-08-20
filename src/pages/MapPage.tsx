@@ -23,7 +23,7 @@ import { loadPlaces } from "../lib/data";
 import { bearingDeg, closestOnPolyline, haversineKm, pointAhead, validCoords } from "../lib/geo";
 import { filterGpsFix, freshGpsState } from "../lib/gps";
 import { freshRerouteState, LOOK_AHEAD_M, MIN_NAV_METERS, OFF_ROUTE_M, remainingAlong, tripTooShort, updateReroute } from "../lib/nav";
-import { freshVoiceState, hushVoice, nextVoice, speakLine } from "../lib/voice";
+import { freshVoiceState, hushVoice, nextVoice, speakLine, warmVoices } from "../lib/voice";
 import { createWbMap, NAV_ZOOM, type MapKind, type WbMap } from "../lib/wbmap";
 import {
   formatArrival,
@@ -32,7 +32,6 @@ import {
   maneuverPreviews,
   planRoute,
   planRoutes,
-  stepToward,
   type DriveRoute,
   type NavStep,
   type RouteProfile,
@@ -291,6 +290,7 @@ export function MapPage() {
 
   useEffect(() => {
     loadPlaces().then(setPlaces);
+    warmVoices();
   }, []);
 
   useEffect(() => {
@@ -560,6 +560,18 @@ export function MapPage() {
     let rerouteGeneration = 0;
     let lastUiFix = 0;
     let active = true;
+    // Enter the navigation camera immediately with the best known position;
+    // GPS fixes will refine it. Waiting for geolocation here made GO feel dead.
+    const bootGeom = driveRef.current?.geometry;
+    const origin =
+      hereRef.current ||
+      (bootGeom?.length ? { lat: bootGeom[0][0], lon: bootGeom[0][1] } : null) ||
+      (stopsRef.current?.[0] ? { lat: stopsRef.current[0].lat, lon: stopsRef.current[0].lon } : null);
+    if (origin) {
+      const look = bootGeom && bootGeom.length >= 2 ? pointAhead(bootGeom, origin, LOOK_AHEAD_M) : null;
+      const br = look ? (bearingDeg(origin, look) + 360) % 360 : null;
+      wb.follow(origin.lon, origin.lat, br, look ? { lon: look.lon, lat: look.lat } : undefined);
+    }
     const placeMe = (
       lat: number,
       lon: number,
@@ -912,10 +924,10 @@ export function MapPage() {
       {navigating && drive && (
         <>
           <div className="nav-banner">
-            <TurnArrow turn={maneuvers[0]?.step.modifier || nowStep?.modifier || "straight"} />
+            <TurnArrow turn={maneuvers[0]?.step.modifier || maneuvers[0]?.step.type || "straight"} />
             <div>
-              <b>{formatMeters(maneuvers[0]?.distance || live?.stepRemain || 0)}</b>
-              <span>{maneuvers[0]?.label || stepToward(nowStep)}</span>
+              <b>{formatMeters(maneuvers[0]?.distance ?? live?.stepRemain ?? 0)}</b>
+              <span>{maneuvers[0]?.label || "Follow the route"}</span>
             </div>
           </div>
           {rerouting && <div className="nav-status">Rerouting…</div>}

@@ -3,7 +3,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import { asset } from "./assets";
 import type { Place, PlaceType } from "../types";
-import { HOME, HOME_ZOOM, NAV_TILT, NAV_ZOOM, type MapKind, type WbMap, type WbRouteLine } from "./wbmap-types";
+import { HOME, HOME_ZOOM, NAV_TILT, NAV_ZOOM, USER_PIN_HTML, type MapKind, type WbMap, type WbRouteLine } from "./wbmap-types";
 
 setWorkerUrl(workerUrl);
 
@@ -22,7 +22,7 @@ const TONES = ["friendly", "black", "white"] as const;
 const pinCache: Record<string, ImageData> = {};
 
 const ARROW = `<span class="wb-gl-me"><svg viewBox="0 0 24 32" width="28" height="36"><path d="M12 2 L22 30 L12 23 L2 30 Z" fill="#3DADF3" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></span>`;
-const ME_STAR = `<span class="wb-me-star"><svg viewBox="0 0 30 40" width="30" height="40"><path d="M15 1.4c-6.7 0-12.2 5.3-12.2 12.4C2.8 22.4 15 38.6 15 38.6s12.2-16.2 12.2-24.8C27.2 6.7 21.7 1.4 15 1.4z" fill="#3D8AFF" stroke="#fff" stroke-width="1.5"/></svg><img src="${asset("/icons/figma-rating-star.svg")}" alt="" /></span>`;
+const ME_STAR = USER_PIN_HTML;
 
 function vectorStyle(dark: boolean) {
   return dark ? "https://tiles.openfreemap.org/styles/dark" : "https://tiles.openfreemap.org/styles/liberty";
@@ -266,7 +266,7 @@ function addOverlays(map: MapLibreMap, routeDark: boolean) {
           ["interpolate", ["linear"], ["zoom"], 4, 1.5, 10, 3, 16, 5],
           ["interpolate", ["linear"], ["zoom"], 4, 1, 10, 2, 16, 3],
         ],
-        "line-opacity": ["case", ["==", ["get", "selected"], 1], 0.85, 0.32],
+        "line-opacity": ["case", ["==", ["get", "selected"], 1], 0.8, 0.32],
       },
     });
   }

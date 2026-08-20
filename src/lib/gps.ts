@@ -16,6 +16,7 @@ export type FilteredGpsFix = RawGpsFix & {
 
 export type GpsFilterState = {
   fix: FilteredGpsFix | null;
+  rejects: number;
 };
 
 export type GpsFilterResult = {
@@ -25,8 +26,13 @@ export type GpsFilterResult = {
   reason?: "invalid" | "inaccurate" | "jump";
 };
 
+/** After this many consecutive rejections the filter resets and trusts the new fix. */
+const MAX_REJECTS = 2;
+/** A previous fix older than this no longer vetoes new data (tunnel, app switch, GPS gap). */
+const STALE_MS = 10_000;
+
 export function freshGpsState(): GpsFilterState {
-  return { fix: null };
+  return { fix: null, rejects: 0 };
 }
 
 export function lerpAngle(from: number, to: number, amount: number): number {
@@ -38,22 +44,35 @@ function validHeading(value: number | null | undefined) {
   return value != null && Number.isFinite(value) && value >= 0 && value <= 360;
 }
 
+function acceptRaw(raw: RawGpsFix, accuracy: number): GpsFilterResult {
+  const fix: FilteredGpsFix = {
+    ...raw,
+    accuracy,
+    heading: validHeading(raw.heading) ? Number(raw.heading) : null,
+    speed: raw.speed != null && Number.isFinite(raw.speed) ? Math.max(0, raw.speed) : null,
+  };
+  return { state: { fix, rejects: 0 }, fix, accepted: true };
+}
+
 export function filterGpsFix(state: GpsFilterState, raw: RawGpsFix): GpsFilterResult {
   if (!validCoords(raw.lat, raw.lon)) return { state, fix: null, accepted: false, reason: "invalid" };
-  const accuracy = Number.isFinite(raw.accuracy) ? Math.max(1, raw.accuracy) : 80;
+  const accuracy = Number.isFinite(raw.accuracy) ? Math.max(1, raw.accuracy) : 120;
   const previous = state.fix;
-  if (accuracy > (previous ? 120 : 200)) {
-    return { state, fix: null, accepted: false, reason: "inaccurate" };
+
+  // Navigation must always be able to start and recover: the very first fix,
+  // or the first fix after a long GPS gap, is trusted no matter how coarse.
+  if (!previous || raw.timestamp - previous.timestamp > STALE_MS) {
+    return acceptRaw(raw, accuracy);
   }
 
-  if (!previous) {
-    const first: FilteredGpsFix = {
-      ...raw,
-      accuracy,
-      heading: validHeading(raw.heading) ? Number(raw.heading) : null,
-      speed: raw.speed != null && Number.isFinite(raw.speed) ? Math.max(0, raw.speed) : null,
+  if (accuracy > 150) {
+    if (state.rejects >= MAX_REJECTS) return acceptRaw(raw, accuracy);
+    return {
+      state: { fix: previous, rejects: state.rejects + 1 },
+      fix: null,
+      accepted: false,
+      reason: "inaccurate",
     };
-    return { state: { fix: first }, fix: first, accepted: true };
   }
 
   const dt = Math.max(0.25, (raw.timestamp - previous.timestamp) / 1000);
@@ -63,7 +82,13 @@ export function filterGpsFix(state: GpsFilterState, raw: RawGpsFix): GpsFilterRe
   const uncertainty = Math.max(accuracy, previous.accuracy) * 2.2;
   const plausibleM = uncertainty + Math.max(55, (reportedSpeed || previous.speed || 0) * 2.5) * dt;
   if (movedM > plausibleM && movedM / dt > 75) {
-    return { state, fix: null, accepted: false, reason: "jump" };
+    if (state.rejects >= MAX_REJECTS) return acceptRaw(raw, accuracy);
+    return {
+      state: { fix: previous, rejects: state.rejects + 1 },
+      fix: null,
+      accepted: false,
+      reason: "jump",
+    };
   }
 
   let alpha = accuracy <= 10 ? 0.72 : accuracy <= 25 ? 0.52 : 0.34;
@@ -93,5 +118,5 @@ export function filterGpsFix(state: GpsFilterState, raw: RawGpsFix): GpsFilterRe
     speed: reportedSpeed,
     timestamp: raw.timestamp,
   };
-  return { state: { fix }, fix, accepted: true };
+  return { state: { fix, rejects: 0 }, fix, accepted: true };
 }

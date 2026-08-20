@@ -74,13 +74,65 @@ export function nextVoice(
   return { state: next, line: null };
 }
 
+let cachedVoices: SpeechSynthesisVoice[] = [];
+let voicesHooked = false;
+
+function refreshVoices() {
+  try {
+    cachedVoices = window.speechSynthesis?.getVoices?.() || [];
+  } catch {
+    cachedVoices = [];
+  }
+}
+
+/**
+ * Chrome populates getVoices() asynchronously; without warming it the first
+ * prompt falls back to the robotic default voice. Call early (page mount).
+ */
+export function warmVoices() {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  if (!voicesHooked) {
+    voicesHooked = true;
+    window.speechSynthesis.addEventListener?.("voiceschanged", refreshVoices);
+  }
+  refreshVoices();
+}
+
+const NOVELTY = [
+  "albert", "bad news", "bahh", "bells", "boing", "bubbles", "cellos", "good news",
+  "jester", "organ", "superstar", "trinoids", "whisper", "wobble", "zarvox",
+];
+
+export function voiceScore(voice: { name: string; lang: string; localService?: boolean }): number {
+  const lang = voice.lang.toLowerCase().replace("_", "-");
+  if (!lang.startsWith("en")) return -1;
+  const name = voice.name.toLowerCase();
+  if (NOVELTY.some((bad) => name.includes(bad))) return -1;
+  let score = lang.startsWith("en-us") ? 40 : lang.startsWith("en-gb") ? 34 : 28;
+  if (name.includes("natural")) score += 60;
+  if (name.includes("neural")) score += 55;
+  if (name.includes("premium") || name.includes("enhanced")) score += 42;
+  if (name.includes("siri")) score += 36;
+  if (name.includes("google")) score += 30;
+  if (name.includes("online")) score += 12;
+  if (/\b(ava|aria|jenny|samantha|allison|nathan|joanna|emma|guy)\b/.test(name)) score += 8;
+  if (name.includes("compact")) score -= 40;
+  if (voice.localService === false) score += 8;
+  return score;
+}
+
 function pickVoice(): SpeechSynthesisVoice | null {
-  const voices = window.speechSynthesis?.getVoices?.() || [];
-  return (
-    voices.find((v) => v.lang.toLowerCase().startsWith("en-us")) ||
-    voices.find((v) => v.lang.toLowerCase().startsWith("en")) ||
-    null
-  );
+  if (!cachedVoices.length) warmVoices();
+  let best: SpeechSynthesisVoice | null = null;
+  let bestScore = -1;
+  for (const voice of cachedVoices) {
+    const score = voiceScore(voice);
+    if (score > bestScore) {
+      bestScore = score;
+      best = voice;
+    }
+  }
+  return best;
 }
 
 export function hushVoice() {
@@ -97,10 +149,14 @@ export function speakLine(text: string) {
     if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "en-US";
-    u.rate = 1.02;
+    u.rate = 1;
     u.pitch = 1;
+    u.volume = 1;
     const voice = pickVoice();
-    if (voice) u.voice = voice;
+    if (voice) {
+      u.voice = voice;
+      u.lang = voice.lang || "en-US";
+    }
     window.speechSynthesis.speak(u);
   } catch {
     /* mute / blocked */

@@ -299,17 +299,57 @@ export function formatMeters(meters: number): string {
   return `${km.toFixed(2)} km`;
 }
 
+export function stepInstruction(step: NavStep | undefined): string {
+  if (!step) return "Follow the route";
+  if (step.type === "arrive") return "Arrive at destination";
+  const name = step.name?.trim() || "";
+  const mod = `${step.modifier || ""}`.toLowerCase();
+  const type = `${step.type || ""}`.toLowerCase();
+  let verb = "Continue";
+  if (mod.includes("uturn") || mod.includes("u-turn")) verb = "Make a U-turn";
+  else if (type.includes("roundabout") || type.includes("rotary")) verb = "Enter the roundabout";
+  else if (mod.includes("sharp") && mod.includes("left")) verb = "Turn sharp left";
+  else if (mod.includes("sharp") && mod.includes("right")) verb = "Turn sharp right";
+  else if (mod.includes("slight") && mod.includes("left")) verb = "Keep left";
+  else if (mod.includes("slight") && mod.includes("right")) verb = "Keep right";
+  else if (mod.includes("left")) verb = "Turn left";
+  else if (mod.includes("right")) verb = "Turn right";
+  else if (type === "merge") verb = "Merge";
+  else if (type === "depart") verb = name ? "Head out" : "Head toward the route";
+  if (!name) return verb === "Continue" ? "Continue straight" : verb;
+  if (verb === "Continue") return `Continue on ${name}`;
+  if (verb === "Head out") return `Head out on ${name}`;
+  return `${verb} onto ${name}`;
+}
+
+/**
+ * Upcoming maneuvers for the HUD. The first entry is the turn the rider is
+ * approaching (reached in `stepRemain` meters); later entries follow it, each
+ * with the leg length that separates it from the previous maneuver.
+ */
 export function maneuverPreviews(
   route: DriveRoute,
   stepI: number,
   stepRemain: number,
   count = 3,
 ): ManeuverPreview[] {
-  return route.steps.slice(Math.max(0, stepI), Math.max(0, stepI) + count).map((step, index) => ({
-    step,
-    label: stepToward(step),
-    distance: index === 0 ? Math.max(0, stepRemain) : Math.max(0, step.distance),
-  }));
+  const steps = route.steps;
+  if (!steps.length) return [];
+  const base = Math.max(0, Math.min(stepI, steps.length - 1));
+  let distance = Math.max(0, stepRemain);
+  let index = base + 1;
+  if (index >= steps.length) {
+    const last = steps[steps.length - 1];
+    return [{ step: last, label: stepInstruction(last), distance }];
+  }
+  const list: ManeuverPreview[] = [];
+  while (index < steps.length && list.length < count) {
+    const step = steps[index];
+    list.push({ step, label: stepInstruction(step), distance });
+    distance = Math.max(0, step.distance);
+    index += 1;
+  }
+  return list;
 }
 
 export function stepToward(step: NavStep | undefined): string {

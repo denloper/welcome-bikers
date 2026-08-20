@@ -21,9 +21,15 @@ const OSRM = {
           steps: [
             {
               name: "Bulevar",
-              distance: 1400,
-              duration: 200,
+              distance: 600,
+              duration: 90,
               maneuver: { type: "depart", modifier: "straight", location: [START.longitude, START.latitude] },
+            },
+            {
+              name: "Bridge",
+              distance: 800,
+              duration: 110,
+              maneuver: { type: "turn", modifier: "left", location: [19.271, 42.436] },
             },
             {
               name: "Destination",
