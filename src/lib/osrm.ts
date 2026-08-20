@@ -200,6 +200,23 @@ export async function osrmRoute(
   return fetchValhalla(points, !avoidTolls);
 }
 
+export async function planRoute(
+  points: LatLon[],
+  opts?: { excludeToll?: boolean },
+): Promise<DriveRoute | null> {
+  try {
+    const { googleRoute } = await import("./groute");
+    const g = await Promise.race([
+      googleRoute(points, opts),
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 5500)),
+    ]);
+    if (g) return g;
+  } catch {
+    /* OSM fallback */
+  }
+  return osrmRoute(points, opts);
+}
+
 export async function osrmDrive(points: LatLon[]): Promise<[number, number][]> {
   const r = await osrmRoute(points);
   if (r?.geometry.length) return r.geometry;

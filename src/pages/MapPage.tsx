@@ -20,14 +20,15 @@ import {
 import { Stars } from "../components/Stars";
 import { PlacePhoto } from "../components/PlacePhoto";
 import { loadPlaces } from "../lib/data";
-import { bearingDeg, haversineKm, pointAhead, validCoords } from "../lib/geo";
-import { MIN_NAV_METERS, remainingAlong, tripTooShort } from "../lib/nav";
+import { bearingDeg, closestOnPolyline, haversineKm, pointAhead, validCoords } from "../lib/geo";
+import { LOOK_AHEAD_M, MIN_NAV_METERS, OFF_ROUTE_M, remainingAlong, tripTooShort } from "../lib/nav";
+import { freshVoiceState, hushVoice, nextVoice, speakLine } from "../lib/voice";
 import { createWbMap, NAV_ZOOM, type MapKind, type WbMap } from "../lib/wbmap";
 import {
   formatArrival,
   formatDriveTime,
   formatMeters,
-  osrmRoute,
+  planRoute,
   stepThen,
   stepToward,
   type DriveRoute,
@@ -111,9 +112,25 @@ function TurnArrow({ turn }: { turn: string }) {
   );
 }
 
+let wakeLock: WakeLockSentinel | null = null;
+
+async function setWake(on: boolean) {
+  try {
+    if (on) {
+      wakeLock = (await navigator.wakeLock?.request("screen")) ?? null;
+    } else {
+      await wakeLock?.release();
+      wakeLock = null;
+    }
+  } catch {
+    wakeLock = null;
+  }
+}
+
 function setGoChrome(on: boolean) {
   document.body.classList.toggle("wb-nav-go", on);
   document.querySelector(".app")?.classList.toggle("no-nav", on);
+  void setWake(on);
 }
 
 function mapKind(light: boolean, sat: boolean): MapKind {
@@ -144,7 +161,11 @@ export function MapPage() {
   const [picked, setPicked] = useState<Place | null>(null);
   const [ready, setReady] = useState(false);
   const [stops, setStops] = useState<Stop[] | null>(null);
+  const stopsRef = useRef(stops);
+  stopsRef.current = stops;
   const [tolls, setTolls] = useState(false);
+  const tollsRef = useRef(tolls);
+  tollsRef.current = tolls;
   const [drive, setDrive] = useState<DriveRoute | null>(null);
   const driveRef = useRef<DriveRoute | null>(null);
   driveRef.current = drive;
@@ -152,6 +173,8 @@ export function MapPage() {
   const [navigating, setNavigating] = useState(false);
   const navigatingRef = useRef(false);
   navigatingRef.current = navigating;
+  const voiceRef = useRef(freshVoiceState());
+  const voiceRouteRef = useRef(0);
   const [pickMode, setPickMode] = useState<null | "start" | "via">(null);
   const pickModeRef = useRef(pickMode);
   pickModeRef.current = pickMode;
@@ -183,6 +206,29 @@ export function MapPage() {
   const nowStep: NavStep | undefined = drive?.steps[live?.stepI ?? 0];
   const nextStep: NavStep | undefined = drive?.steps[(live?.stepI ?? 0) + 1];
   const then = stepThen(nextStep);
+
+  useEffect(() => {
+    if (!navigating) {
+      hushVoice();
+      voiceRef.current = freshVoiceState();
+      return;
+    }
+    const sig = drive?.geometry.length || 0;
+    if (sig !== voiceRouteRef.current) {
+      voiceRouteRef.current = sig;
+      voiceRef.current = freshVoiceState();
+    }
+    if (!live) return;
+    const announce = nextStep && nextStep.type !== "depart" ? nextStep : nowStep;
+    const { state, line } = nextVoice(voiceRef.current, {
+      arrived: Boolean(live.arrived),
+      stepI: live.stepI,
+      stepRemain: live.stepRemain,
+      next: announce,
+    });
+    voiceRef.current = state;
+    if (line) speakLine(line);
+  }, [navigating, drive?.geometry.length, live?.arrived, live?.stepI, live?.stepRemain, nextStep, nowStep]);
 
   useEffect(() => {
     loadPlaces().then(setPlaces);
@@ -329,7 +375,7 @@ export function MapPage() {
       return;
     }
     let cancelled = false;
-    osrmRoute(stops, { excludeToll: !tolls }).then((route) => {
+    planRoute(stops, { excludeToll: !tolls }).then((route) => {
       if (cancelled) return;
       setDrive(route);
       setRoutingErr(!route);
@@ -374,8 +420,13 @@ export function MapPage() {
     setGoChrome(navigating);
     wbRef.current?.setNav(navigating);
     const t = window.setTimeout(() => wbRef.current?.resize(), 50);
+    const onVis = () => {
+      if (document.visibilityState === "visible" && navigating) void setWake(true);
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       window.clearTimeout(t);
+      document.removeEventListener("visibilitychange", onVis);
       setGoChrome(false);
     };
   }, [navigating]);
@@ -390,12 +441,19 @@ export function MapPage() {
       return;
     }
     const lastFix = { lat: NaN, lon: NaN };
+    let offSince = 0;
+    let lastReroute = 0;
+    let rerouting = false;
     const placeMe = (lat: number, lon: number, gpsHeading?: number | null, speed?: number | null) => {
       const gps = { lat, lon };
       setHere(gps);
       const geom = driveRef.current?.geometry;
+      const snap = geom && geom.length >= 2 ? closestOnPolyline(geom, gps) : null;
+      const onRoad = Boolean(snap && snap.distKm * 1000 <= OFF_ROUTE_M);
+      const rider = onRoad && snap ? { lat: snap.lat, lon: snap.lon } : gps;
       let br: number | null = null;
       if (
+        !onRoad &&
         gpsHeading != null &&
         Number.isFinite(gpsHeading) &&
         gpsHeading >= 0 &&
@@ -406,13 +464,32 @@ export function MapPage() {
         const moved = haversineKm(lastFix, gps) * 1000;
         if (moved > 3) br = (bearingDeg(lastFix, gps) + 360) % 360;
       }
-      if (br == null && geom && geom.length >= 2) {
-        const look = pointAhead(geom, gps, 80);
-        br = (bearingDeg(gps, look) + 360) % 360;
-      }
+      const look =
+        geom && geom.length >= 2 ? pointAhead(geom, rider, LOOK_AHEAD_M) : null;
+      if (br == null && look) br = (bearingDeg(rider, look) + 360) % 360;
       lastFix.lat = lat;
       lastFix.lon = lon;
-      wb.follow(gps.lon, gps.lat, br);
+      wb.follow(rider.lon, rider.lat, br, look ? { lon: look.lon, lat: look.lat } : undefined);
+
+      if (snap && snap.distKm * 1000 > OFF_ROUTE_M) {
+        if (!offSince) offSince = Date.now();
+        if (!rerouting && Date.now() - offSince > 2200 && Date.now() - lastReroute > 8000) {
+          const list = stopsRef.current;
+          if (list && list.length >= 2) {
+            rerouting = true;
+            lastReroute = Date.now();
+            void planRoute([{ lat, lon }, ...list.slice(1)], { excludeToll: !tollsRef.current }).then((route) => {
+              rerouting = false;
+              if (route && navigatingRef.current) {
+                offSince = 0;
+                setDrive(route);
+              }
+            });
+          }
+        }
+      } else {
+        offSince = 0;
+      }
     };
     getHere().then((p) => {
       if (p) placeMe(p.lat, p.lon);
@@ -423,7 +500,7 @@ export function MapPage() {
         (pos) =>
           placeMe(pos.coords.latitude, pos.coords.longitude, pos.coords.heading, pos.coords.speed),
         () => {},
-        { enableHighAccuracy: true, maximumAge: 800 },
+        { enableHighAccuracy: true, maximumAge: 500, timeout: 12_000 },
       );
     }
     return () => {

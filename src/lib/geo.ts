@@ -92,20 +92,59 @@ export function nearestIndex(
   return bestI;
 }
 
+export function closestOnPolyline(
+  pts: [number, number][],
+  here: { lat: number; lon: number },
+): { lat: number; lon: number; index: number; distKm: number } {
+  if (!pts.length) return { lat: here.lat, lon: here.lon, index: 0, distKm: 0 };
+  let best = { lat: pts[0][0], lon: pts[0][1], index: 0, distKm: Infinity };
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = { lat: pts[i][0], lon: pts[i][1] };
+    const b = { lat: pts[i + 1][0], lon: pts[i + 1][1] };
+    const p = projectOnSegment(here, a, b);
+    const d = haversineKm(here, p);
+    if (d < best.distKm) best = { ...p, index: i, distKm: d };
+  }
+  if (!Number.isFinite(best.distKm)) {
+    const last = pts[pts.length - 1];
+    return { lat: last[0], lon: last[1], index: Math.max(0, pts.length - 2), distKm: 0 };
+  }
+  return best;
+}
+
+function projectOnSegment(
+  p: { lat: number; lon: number },
+  a: { lat: number; lon: number },
+  b: { lat: number; lon: number },
+) {
+  const dx = b.lon - a.lon;
+  const dy = b.lat - a.lat;
+  const len2 = dx * dx + dy * dy;
+  if (len2 < 1e-12) return a;
+  const t = Math.max(0, Math.min(1, ((p.lon - a.lon) * dx + (p.lat - a.lat) * dy) / len2));
+  return { lat: a.lat + t * dy, lon: a.lon + t * dx };
+}
+
 export function pointAhead(
   pts: [number, number][],
   here: { lat: number; lon: number },
   meters: number,
 ): { lat: number; lon: number } {
   if (!pts.length) return here;
-  let i = nearestIndex(pts, here);
+  const snap = closestOnPolyline(pts, here);
+  let i = snap.index;
+  let from = { lat: snap.lat, lon: snap.lon };
   let left = meters / 1000;
   while (i < pts.length - 1 && left > 0) {
-    const a = { lat: pts[i][0], lon: pts[i][1] };
     const b = { lat: pts[i + 1][0], lon: pts[i + 1][1] };
-    const d = haversineKm(a, b);
-    if (d >= left || i === pts.length - 2) return b;
+    const d = haversineKm(from, b);
+    if (d >= left || i === pts.length - 2) {
+      if (d < 1e-9) return b;
+      const t = Math.min(1, left / d);
+      return { lat: from.lat + (b.lat - from.lat) * t, lon: from.lon + (b.lon - from.lon) * t };
+    }
     left -= d;
+    from = b;
     i += 1;
   }
   const last = pts[pts.length - 1];

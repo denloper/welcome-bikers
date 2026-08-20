@@ -557,7 +557,7 @@ export function createLibreMap(
       el.dataset.pick = on ? "1" : "0";
       setPinVisibility(map, !navOn && !on);
     },
-    follow(lon, lat, bearing) {
+    follow(lon, lat, bearing, look) {
       const cam: {
         center: [number, number];
         pitch: number;
@@ -566,7 +566,7 @@ export function createLibreMap(
         duration: number;
         essential: boolean;
       } = {
-        center: [lon, lat],
+        center: [look?.lon ?? lon, look?.lat ?? lat],
         pitch: NAV_TILT,
         duration: 180,
         essential: true,

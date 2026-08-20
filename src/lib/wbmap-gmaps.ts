@@ -15,12 +15,16 @@ function mapsKey() {
   return String(import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "").trim();
 }
 
-function loadGoogle() {
+export function loadGoogle() {
   const key = mapsKey();
   if (!key) return Promise.reject(new Error("no-gmaps-key"));
   if (!boot) {
     setOptions({ key, v: "weekly", mapIds: [LIGHT_MAP_ID, DARK_MAP_ID] });
-    boot = Promise.all([importLibrary("maps"), importLibrary("marker")]).then(() => undefined);
+    boot = Promise.all([
+      importLibrary("maps"),
+      importLibrary("marker"),
+      importLibrary("routes").catch(() => undefined),
+    ]).then(() => undefined);
   }
   return boot;
 }
@@ -449,9 +453,9 @@ export async function createGoogleMap(
       el.dataset.pick = on ? "1" : "0";
       paintPlaces();
     },
-    follow(lon, lat, bearing) {
+    follow(lon, lat, bearing, look) {
       const next: google.maps.CameraOptions = {
-        center: { lat, lng: lon },
+        center: look ? { lat: look.lat, lng: look.lon } : { lat, lng: lon },
         tilt: NAV_TILT,
         zoom: Math.max(gmap.getZoom() ?? NAV_ZOOM, NAV_ZOOM),
       };
