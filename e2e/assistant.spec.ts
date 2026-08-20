@@ -43,7 +43,25 @@ test.describe("Real Bro assistant", () => {
     await expect(card.getByTestId("assistant-ride")).toBeVisible();
   });
 
-  test("explains what it can do on an unclear request", async ({ page }) => {
+  test("answers unclear chat with OpenRouter Real Bro AI", async ({ page }) => {
+    await page.route("https://openrouter.ai/api/v1/chat/completions", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  reply: 'Weather? Bro, I am not AccuWeather. Say "ride to Podgorica" to build a route, or ask what bars are in Montenegro.',
+                  intent: "chat",
+                }),
+              },
+            },
+          ],
+        }),
+      });
+    });
     await page.goto("/#/");
     await page.getByTestId("assistant-row").tap();
     await page.getByTestId("assistant-input").fill("how is the weather?");

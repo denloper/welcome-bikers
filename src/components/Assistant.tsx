@@ -12,8 +12,9 @@ import {
   unknownReply,
 } from "../lib/assistant";
 import { loadPlaces } from "../lib/data";
+import { askRealBro, type BroChatTurn } from "../lib/openrouter";
 import { hushVoice, speakText, warmVoices } from "../lib/voice";
-import type { Place } from "../types";
+import type { Place, PlaceType } from "../types";
 
 type Phase = "idle" | "listening" | "speaking";
 
@@ -292,6 +293,39 @@ export function RealBro() {
     speakToken.current++;
   }
 
+  async function answerRide(query: string, aiReply?: string) {
+    const places = await loadPlaces();
+    const found = matchPlaces(places, query);
+    if (found.length) {
+      const reply = aiReply || rideReply(found[0].name, false);
+      push({ role: "bro", text: reply, cards: found.map(placeCard) });
+      say(reply);
+      return;
+    }
+    const geo = await geocodePlace(query);
+    if (geo) {
+      const reply = aiReply || rideReply(geo.name, false);
+      push({
+        role: "bro",
+        text: reply,
+        cards: [{ key: `geo-${geo.lat}`, name: geo.name, sub: "Point on the map", lat: geo.lat, lon: geo.lon }],
+      });
+      say(reply);
+      return;
+    }
+    const reply = aiReply || notFoundReply(query, false);
+    push({ role: "bro", text: reply });
+    say(reply);
+  }
+
+  async function answerCategory(type: PlaceType, country?: string, aiReply?: string) {
+    const places = await loadPlaces();
+    const list = topByCategory(places, type, country);
+    const reply = aiReply || categoryReply(list.length, type, country, false);
+    push({ role: "bro", text: reply, cards: list.map(placeCard) });
+    say(reply);
+  }
+
   async function handleQuery(raw: string) {
     const text = raw.trim();
     if (!text || busy) return;
@@ -300,39 +334,29 @@ export function RealBro() {
     try {
       const intent = parseIntent(text);
       if (intent.kind === "ride") {
-        const places = await loadPlaces();
-        const found = matchPlaces(places, intent.query);
-        if (found.length) {
-          const reply = rideReply(found[0].name, false);
-          push({ role: "bro", text: reply, cards: found.map(placeCard) });
-          say(reply);
-        } else {
-          const geo = await geocodePlace(intent.query);
-          if (geo) {
-            const reply = rideReply(geo.name, false);
-            push({
-              role: "bro",
-              text: reply,
-              cards: [{ key: `geo-${geo.lat}`, name: geo.name, sub: "Point on the map", lat: geo.lat, lon: geo.lon }],
-            });
-            say(reply);
-          } else {
-            const reply = notFoundReply(intent.query, false);
-            push({ role: "bro", text: reply });
-            say(reply);
-          }
-        }
-      } else if (intent.kind === "category") {
-        const places = await loadPlaces();
-        const list = topByCategory(places, intent.type, intent.country);
-        const reply = categoryReply(list.length, intent.type, intent.country, false);
-        push({ role: "bro", text: reply, cards: list.map(placeCard) });
-        say(reply);
-      } else {
-        const reply = unknownReply(false);
-        push({ role: "bro", text: reply });
-        say(reply);
+        await answerRide(intent.query);
+        return;
       }
+      if (intent.kind === "category") {
+        await answerCategory(intent.type, intent.country);
+        return;
+      }
+
+      const history: BroChatTurn[] = msgs
+        .slice(-8)
+        .map((m) => ({ role: m.role === "bro" ? "assistant" : "user", content: m.text }));
+      const ai = await askRealBro(text, history);
+      if (ai?.intent === "ride" && ai.query) {
+        await answerRide(ai.query, ai.reply);
+        return;
+      }
+      if (ai?.intent === "category" && ai.type) {
+        await answerCategory(ai.type, ai.country, ai.reply);
+        return;
+      }
+      const reply = ai?.reply || unknownReply(false);
+      push({ role: "bro", text: reply });
+      say(reply);
     } finally {
       setBusy(false);
     }
