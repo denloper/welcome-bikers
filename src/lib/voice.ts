@@ -189,6 +189,8 @@ export function speakText(text: string, lang: string, onDone?: () => void): bool
     onDone?.();
     return false;
   }
+  // Stop any prior neural + Web Speech so fallback cannot overlap with a new line.
+  hushVoice();
   // Fire-and-forget neural path; keep a sync boolean for callers that check start.
   let started = true;
   void speakBroNeural(text, onDone, (plain, done) => speakTextWeb(plain, lang, done)).then((ok) => {

@@ -69,7 +69,8 @@ export function loadGoogle() {
   const key = mapsKey();
   if (!key) return Promise.reject(new Error("no-gmaps-key"));
   if (!boot) {
-    setOptions({ key, v: "weekly", mapIds: [LIGHT_MAP_ID, DARK_MAP_ID] });
+    // Always English labels / directions, independent of device UI language.
+    setOptions({ key, v: "weekly", language: "en", region: "US", mapIds: [LIGHT_MAP_ID, DARK_MAP_ID] });
     boot = Promise.all([
       importLibrary("maps"),
       importLibrary("marker"),

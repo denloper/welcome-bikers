@@ -214,8 +214,16 @@ export function localChatReply(text: string): string {
   if (/weather|погод/i.test(t)) {
     return 'Weather? Not my lane. I build rides and drop place cards. Try "ride to Kotor" or "what hotels are in Montenegro".';
   }
-  if (/^(hi|hey|hello|yo|sup|привет|здаров|здравств)\b/i.test(t) || t === "hello" || t === "hi") {
+  if (
+    /^(hi|hey|hello|yo|sup|привет|здаров|здравств)\b/i.test(t) ||
+    /^(what'?s\s+up|whats\s+up|wassup|how\s+are\s+you|how\s+r\s+you)\b/i.test(t) ||
+    t === "hello" ||
+    t === "hi"
+  ) {
     return 'Yo. Real Bro online. Want a route — say "ride to Podgorica". Want places — "what bars are in Montenegro?"';
+  }
+  if (/\b(what('?s|\s+is)\s+your\s+name|who\s+are\s+you|как\s+тебя\s+зовут|как\s+зовут)\b/i.test(t)) {
+    return "Name's Real Bro — in-app ride buddy. Say \"ride to Kotor\" or \"what bars are in Montenegro\" and I lock the cards.";
   }
   return unknownReply(false);
 }
@@ -237,8 +245,10 @@ export type GeoHit = { lat: number; lon: number; name: string };
 /** Single Nominatim lookup used when the places base has no match. */
 export async function geocodePlace(query: string): Promise<GeoHit | null> {
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&accept-language=en`;
+    const res = await fetch(url, {
+      headers: { Accept: "application/json", "Accept-Language": "en" },
+    });
     if (!res.ok) return null;
     const rows = (await res.json()) as { lat: string; lon: string; display_name?: string }[];
     const hit = rows?.[0];

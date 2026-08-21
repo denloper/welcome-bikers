@@ -48,10 +48,11 @@ export async function resolveProxyBase(): Promise<string> {
       /* fall through */
     }
   }
-  if (resolved !== undefined) return resolved || "";
+  if (resolved) return resolved;
   if (!resolving) {
     resolving = discoverProxyBase().then((base) => {
-      resolved = base || null;
+      // Cache successes only — ephemeral tunnels / cold start must be retriable.
+      resolved = base || undefined;
       resolving = null;
       return base;
     });

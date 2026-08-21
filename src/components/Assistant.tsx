@@ -152,6 +152,7 @@ export function RealBro() {
   const restartTimer = useRef(0);
   const silenceTimer = useRef(0);
   const handleQueryRef = useRef<(raw: string) => Promise<void>>(async () => undefined);
+  const lastSubmitRef = useRef({ text: "", at: 0 });
   const listRef = useRef<HTMLDivElement>(null);
   const hasMic = recognizerCtor() !== null;
 
@@ -181,6 +182,8 @@ export function RealBro() {
   function beginRec() {
     const Ctor = recognizerCtor();
     if (!Ctor || !wantListen.current) return;
+    // Drop silence timers from a previous session so restart + silence cannot double-submit.
+    window.clearTimeout(silenceTimer.current);
     const prev = recRef.current;
     recRef.current = null;
     try {
@@ -266,6 +269,7 @@ export function RealBro() {
 
   function say(text: string) {
     const token = ++speakToken.current;
+    hushVoice();
     const done = () => {
       if (speakToken.current === token) setPhase("idle");
     };
@@ -331,7 +335,12 @@ export function RealBro() {
   async function handleQuery(raw: string) {
     const text = raw.trim();
     if (!text || busy) return;
+    const now = Date.now();
+    // Voice silence + send (or overlapping recognizers) used to fire the same line twice.
+    if (text === lastSubmitRef.current.text && now - lastSubmitRef.current.at < 2200) return;
+    lastSubmitRef.current = { text, at: now };
     setBusy(true);
+    hushVoice();
     push({ role: "user", text });
     try {
       const intent = parseIntent(text);
