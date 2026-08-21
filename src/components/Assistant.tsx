@@ -152,10 +152,12 @@ export function RealBro() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [voiceNotice, setVoiceNotice] = useState("");
   const recRef = useRef<SpeechRecognitionLike | null>(null);
   const captureRef = useRef<RecSession | null>(null);
   const useRecordRef = useRef(false);
   const startingRef = useRef(false);
+  const voiceTokenRef = useRef(0);
   const speakToken = useRef(0);
   const wantListen = useRef(false);
   const heardRef = useRef("");
@@ -189,19 +191,28 @@ export function RealBro() {
   async function finishRecord(submit: boolean) {
     const session = captureRef.current;
     captureRef.current = null;
+    const token = ++voiceTokenRef.current;
     clearListenTimers();
     wantListen.current = false;
     startingRef.current = false;
     setPhase("idle");
     if (!session) return;
-    setInput("…");
     const blob = await session.stop();
     if (!submit || !blob || !blob.size) {
       setInput("");
+      if (token === voiceTokenRef.current) {
+        setVoiceNotice(submit ? "No audio was captured. Check microphone access and try again." : "");
+      }
       return;
     }
+    if (token === voiceTokenRef.current) setVoiceNotice("Transcribing…");
     const text = await transcribeAudioBlob(blob, session.format);
     setInput("");
+    if (token === voiceTokenRef.current) {
+      setVoiceNotice(
+        text ? "" : "Couldn’t transcribe that. Check your connection, then tap the mic and try again.",
+      );
+    }
     if (text) void handleQueryRef.current(text);
   }
 
@@ -263,12 +274,16 @@ export function RealBro() {
     rec.onerror = (err) => {
       const code = err.error || "";
       if (!wantListen.current || code === "not-allowed" || code === "service-not-allowed") {
-        if (code === "not-allowed" || code === "service-not-allowed") stopListening(false);
+        if (code === "not-allowed" || code === "service-not-allowed") {
+          stopListening(false);
+          setVoiceNotice("Microphone access is blocked. Allow it in browser settings and try again.");
+        }
         return;
       }
       if ((code === "network" || code === "audio-capture" || code === "aborted") && canMediaRecord()) {
         useRecordRef.current = true;
         stopSpeechRecOnly();
+        setVoiceNotice("Switching to reliable voice recording…");
         void beginRecord();
         return;
       }
@@ -290,6 +305,7 @@ export function RealBro() {
     };
     recRef.current = rec;
     setPhase("listening");
+    setVoiceNotice("Speak now.");
     try {
       rec.start();
     } catch {
@@ -322,6 +338,7 @@ export function RealBro() {
       startingRef.current = false;
       setPhase("listening");
       setInput("");
+      setVoiceNotice("Speak, then tap the red mic again to send.");
       let heardVoice = false;
       let quietMs = 0;
       const startedAt = Date.now();
@@ -344,6 +361,7 @@ export function RealBro() {
       startingRef.current = false;
       setPhase("idle");
       setInput("");
+      setVoiceNotice("Microphone unavailable. Check its permission and close other recording apps.");
     }
   }
 
@@ -518,12 +536,14 @@ export function RealBro() {
       stopListening(true);
       return;
     }
+    voiceTokenRef.current++;
     hushVoice();
     speakToken.current++;
     heardRef.current = "";
     wantListen.current = true;
     startingRef.current = false;
     setInput("");
+    setVoiceNotice(useRecordRef.current ? "Starting microphone…" : "Starting voice input…");
     if (useRecordRef.current) void beginRecord();
     else beginRec();
   }
@@ -560,6 +580,11 @@ export function RealBro() {
               </button>
             </div>
             <VoiceWaveform active={phase === "listening"} />
+            {voiceNotice && (
+              <div className="rb-voice-notice" data-testid="assistant-voice-notice" role="status">
+                {voiceNotice}
+              </div>
+            )}
 
             <div className="rb-msgs" ref={listRef}>
               {msgs.map((m) => (

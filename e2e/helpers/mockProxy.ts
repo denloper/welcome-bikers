@@ -39,7 +39,11 @@ export async function mockProxySpeech(
   });
 }
 
-export async function mockProxyTranscribe(page: Page, texts: string[] | string = "what bars are in Montenegro") {
+export async function mockProxyTranscribe(
+  page: Page,
+  texts: string[] | string = "what bars are in Montenegro",
+  onHit?: (body: Record<string, unknown>) => void,
+) {
   const queue = Array.isArray(texts) ? [...texts] : [texts];
   let i = 0;
   await page.route(/\/transcribe\/?$/, async (route) => {
@@ -47,6 +51,8 @@ export async function mockProxyTranscribe(page: Page, texts: string[] | string =
       await route.fulfill({ status: 204, headers: cors() });
       return;
     }
+    const body = (route.request().postDataJSON() || {}) as Record<string, unknown>;
+    onHit?.(body);
     const text = queue[Math.min(i, queue.length - 1)] || "";
     i += 1;
     await route.fulfill({

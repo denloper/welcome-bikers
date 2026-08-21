@@ -1,4 +1,4 @@
-/** Mobile STT: MediaRecorder + Whisper. iOS Web Speech dies after the first take. */
+/** Mobile STT: MediaRecorder + Whisper. Mobile Web Speech is not reliable enough. */
 
 import { resolveProxyBase, transcribeUrl } from "./orProxy";
 
@@ -11,26 +11,46 @@ export function isAppleMobile(): boolean {
   return navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
 }
 
-export function canMediaRecord(): boolean {
-  if (typeof window === "undefined") return false;
-  return Boolean(navigator.mediaDevices && typeof MediaRecorder !== "undefined");
+export function isMobileSttDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const nav = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
+  if (nav.userAgentData?.mobile) return true;
+  if (isAppleMobile()) return true;
+  return /Android|Mobile|Tablet|Silk|Kindle/i.test(navigator.userAgent || "");
 }
 
-/** Prefer recording on Apple / when SpeechRecognition is missing. */
+export function canMediaRecord(): boolean {
+  if (typeof window === "undefined") return false;
+  return Boolean(
+    navigator.mediaDevices &&
+      typeof navigator.mediaDevices.getUserMedia === "function" &&
+      typeof MediaRecorder !== "undefined",
+  );
+}
+
+/** Prefer deterministic server STT on every phone/tablet, not only Apple devices. */
 export function preferRecordStt(hasSpeechApi: boolean): boolean {
   if (!canMediaRecord()) return false;
-  if (isAppleMobile()) return true;
+  if (isMobileSttDevice()) return true;
   return !hasSpeechApi;
 }
 
 function pickMime(): { mime: string; format: string } {
-  const candidates: { mime: string; format: string }[] = [
-    { mime: "audio/mp4", format: "m4a" },
-    { mime: "audio/aac", format: "aac" },
-    { mime: "audio/webm;codecs=opus", format: "webm" },
-    { mime: "audio/webm", format: "webm" },
-    { mime: "audio/ogg;codecs=opus", format: "ogg" },
-  ];
+  const apple = isAppleMobile();
+  const candidates: { mime: string; format: string }[] = apple
+    ? [
+        { mime: "audio/mp4", format: "m4a" },
+        { mime: "audio/aac", format: "aac" },
+        { mime: "audio/webm;codecs=opus", format: "webm" },
+        { mime: "audio/webm", format: "webm" },
+      ]
+    : [
+        { mime: "audio/webm;codecs=opus", format: "webm" },
+        { mime: "audio/webm", format: "webm" },
+        { mime: "audio/ogg;codecs=opus", format: "ogg" },
+        { mime: "audio/mp4", format: "m4a" },
+        { mime: "audio/aac", format: "aac" },
+      ];
   for (const c of candidates) {
     try {
       if (typeof MediaRecorder.isTypeSupported === "function" && MediaRecorder.isTypeSupported(c.mime)) {
@@ -66,27 +86,37 @@ function blobToBase64(blob: Blob): Promise<string> {
 
 export async function transcribeAudioBlob(blob: Blob, formatHint: string): Promise<string | null> {
   if (!blob.size) return null;
-  const base = await resolveProxyBase();
-  if (!base) return null;
   const format = formatFromBlob(blob, formatHint);
-  try {
-    const data = await blobToBase64(blob);
-    const res = await fetch(transcribeUrl(base), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: STT_MODEL,
-        language: "en",
-        input_audio: { data, format },
-      }),
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { text?: string };
-    const text = String(json.text || "").trim();
-    return text || null;
-  } catch {
-    return null;
+  const data = await blobToBase64(blob);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const base = await resolveProxyBase(attempt > 0);
+    if (!base) continue;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 45_000);
+    try {
+      const res = await fetch(transcribeUrl(base), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: STT_MODEL,
+          // No language hint: riders can speak in their own language.
+          input_audio: { data, format },
+        }),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { text?: string };
+        const text = String(json.text || "").trim();
+        return text || null;
+      }
+      if (res.status < 500 && res.status !== 408 && res.status !== 429) return null;
+    } catch {
+      /* Refresh an expired tunnel URL and retry once. */
+    } finally {
+      window.clearTimeout(timer);
+    }
   }
+  return null;
 }
 
 export type RecSession = {
@@ -125,9 +155,10 @@ export async function startMicCapture(): Promise<RecSession> {
   } catch {
     rec = new MediaRecorder(stream);
   }
-  const usedFormat =
-    format ||
-    formatFromBlob(new Blob([], { type: rec.mimeType || mime }), "");
+  const actualMime = rec.mimeType || mime;
+  const usedFormat = rec.mimeType
+    ? formatFromBlob(new Blob([], { type: actualMime }), "")
+    : format || formatFromBlob(new Blob([], { type: actualMime }), "");
 
   rec.ondataavailable = (e) => {
     if (e.data?.size) chunks.push(e.data);
@@ -151,9 +182,8 @@ export async function startMicCapture(): Promise<RecSession> {
     /* level meter optional — tap-to-send still works */
   }
 
-  // timeslice is ignored or empties the final blob on several iOS versions
-  if (apple) rec.start();
-  else rec.start(200);
+  // One final chunk is the most compatible path across Safari and Android WebViews.
+  rec.start();
 
   const teardown = () => {
     stream.getTracks().forEach((t) => {
@@ -193,7 +223,7 @@ export async function startMicCapture(): Promise<RecSession> {
           return;
         }
         rec.onstop = finish;
-        window.setTimeout(finish, 1500);
+        window.setTimeout(finish, 3000);
         try {
           rec.stop();
         } catch {

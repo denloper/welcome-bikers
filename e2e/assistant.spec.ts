@@ -61,6 +61,8 @@ test.describe("Real Bro assistant", () => {
 
   test("records in English and shows a live waveform", async ({ page }) => {
     await page.addInitScript(() => {
+      // Exercise the Web Speech fallback even though the test project emulates Android.
+      Object.defineProperty(window, "MediaRecorder", { value: undefined, configurable: true });
       class FakeRecognition {
         lang = "";
         continuous = false;

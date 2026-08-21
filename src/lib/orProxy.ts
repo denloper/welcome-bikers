@@ -2,7 +2,7 @@
 
 const DISCOVERY_URLS = [
   "https://raw.githubusercontent.com/denloper/welcome-bikers/proxy-url/public/or-proxy.json",
-  "https://denloper.github.io/welcome-bikers/or-proxy.json",
+  "https://api.github.com/repos/denloper/welcome-bikers/contents/public/or-proxy.json?ref=proxy-url",
 ];
 
 let resolved: string | null | undefined;
@@ -21,13 +21,37 @@ export function hasProxyEnv(): boolean {
   return proxyBaseFromEnv().length > 0;
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 5_000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+function baseFromDiscoveryPayload(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const data = payload as { base?: unknown; content?: unknown; encoding?: unknown };
+  if (typeof data.base === "string") return normalizeBase(data.base);
+  if (data.encoding !== "base64" || typeof data.content !== "string") return "";
+  try {
+    const decoded = atob(data.content.replace(/\s/g, ""));
+    const nested = JSON.parse(decoded) as { base?: unknown };
+    return normalizeBase(typeof nested.base === "string" ? nested.base : "");
+  } catch {
+    return "";
+  }
+}
+
 async function discoverProxyBase(): Promise<string> {
   for (const url of DISCOVERY_URLS) {
     try {
-      const res = await fetch(`${url}?t=${Date.now()}`, { cache: "no-store" });
+      const separator = url.includes("?") ? "&" : "?";
+      const res = await fetchWithTimeout(`${url}${separator}t=${Date.now()}`, { cache: "no-store" });
       if (!res.ok) continue;
-      const data = (await res.json()) as { base?: string };
-      const base = normalizeBase(String(data.base || ""));
+      const base = baseFromDiscoveryPayload(await res.json());
       if (/^https:\/\//i.test(base)) return base;
     } catch {
       /* try next */
@@ -37,18 +61,30 @@ async function discoverProxyBase(): Promise<string> {
 }
 
 /** Resolve proxy base: env first (stable hosts), else published discovery JSON. */
-export async function resolveProxyBase(): Promise<string> {
+export async function resolveProxyBase(forceRefresh = false): Promise<string> {
+  if (forceRefresh) {
+    resolved = undefined;
+    resolving = null;
+  }
   const fromEnv = proxyBaseFromEnv();
   if (fromEnv) {
     // Prefer env, but fall back to discovery if the baked URL is dead (ephemeral tunnels).
     try {
-      const res = await fetch(`${fromEnv}/health`, { cache: "no-store" });
+      const res = await fetchWithTimeout(`${fromEnv}/health`, { cache: "no-store" }, 4_000);
       if (res.ok) return fromEnv;
     } catch {
       /* fall through */
     }
   }
-  if (resolved) return resolved;
+  if (resolved) {
+    try {
+      const res = await fetchWithTimeout(`${resolved}/health`, { cache: "no-store" }, 4_000);
+      if (res.ok) return resolved;
+    } catch {
+      /* rediscover a rotated tunnel */
+    }
+    resolved = undefined;
+  }
   if (!resolving) {
     resolving = discoverProxyBase().then((base) => {
       // Cache successes only — ephemeral tunnels / cold start must be retriable.

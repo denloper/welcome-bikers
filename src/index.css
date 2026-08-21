@@ -1289,6 +1289,13 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   border-radius: 12px;
   background: #161616;
 }
+.rb-voice-notice {
+  margin: -3px 2px 9px;
+  color: #aeb7c4;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+}
 .rb-msgs {
   flex: 1;
   overflow-y: auto;

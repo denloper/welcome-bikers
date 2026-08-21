@@ -1,15 +1,33 @@
 import { expect, test, type Page } from "@playwright/test";
 import { fulfillChatJson, mockProxyChat, mockProxySpeech, mockProxyTranscribe } from "./helpers/mockProxy";
-import { canMediaRecord, isAppleMobile, preferRecordStt } from "../src/lib/stt";
+import { canMediaRecord, isAppleMobile, isMobileSttDevice, preferRecordStt } from "../src/lib/stt";
 
-async function installIphoneRecordMocks(page: Page) {
-  await page.addInitScript(() => {
+async function installMobileRecordMocks(
+  page: Page,
+  device: "iphone" | "android" = "iphone",
+  proxyBases = ["https://proxy.test"],
+  micFailure = false,
+) {
+  const profile =
+    device === "iphone"
+      ? {
+          userAgent:
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+          platform: "iPhone",
+          mime: "audio/mp4",
+        }
+      : {
+          userAgent:
+            "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36",
+          platform: "Linux armv8l",
+          mime: "audio/webm;codecs=opus",
+        };
+  await page.addInitScript(({ userAgent, platform, mime, micFailure }) => {
     Object.defineProperty(navigator, "userAgent", {
       configurable: true,
-      get: () =>
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      get: () => userAgent,
     });
-    Object.defineProperty(navigator, "platform", { configurable: true, get: () => "iPhone" });
+    Object.defineProperty(navigator, "platform", { configurable: true, get: () => platform });
     Object.defineProperty(navigator, "maxTouchPoints", { configurable: true, get: () => 5 });
 
     delete (window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition;
@@ -20,20 +38,23 @@ async function installIphoneRecordMocks(page: Page) {
         return true;
       }
       state: "inactive" | "recording" = "inactive";
-      mimeType = "audio/mp4";
+      mimeType: string;
       ondataavailable: ((e: { data: Blob }) => void) | null = null;
       onstop: (() => void) | null = null;
+      constructor(_stream: MediaStream, options?: { mimeType?: string }) {
+        this.mimeType = options?.mimeType || mime;
+      }
       start() {
         this.state = "recording";
         queueMicrotask(() => {
           this.ondataavailable?.({
-            data: new Blob([new Uint8Array([1, 2, 3, 4])], { type: "audio/mp4" }),
+            data: new Blob([new Uint8Array([1, 2, 3, 4])], { type: this.mimeType }),
           });
         });
       }
       requestData() {
         this.ondataavailable?.({
-          data: new Blob([new Uint8Array([5, 6])], { type: "audio/mp4" }),
+          data: new Blob([new Uint8Array([5, 6])], { type: this.mimeType }),
         });
       }
       stop() {
@@ -44,25 +65,49 @@ async function installIphoneRecordMocks(page: Page) {
     (window as unknown as { MediaRecorder: typeof FakeMediaRecorder }).MediaRecorder = FakeMediaRecorder;
 
     const md = navigator.mediaDevices || ({} as MediaDevices);
-    md.getUserMedia = async () =>
-      ({
+    md.getUserMedia = async () => {
+      if (micFailure) throw new DOMException("Permission denied", "NotAllowedError");
+      return {
         getTracks: () => [{ stop() {}, kind: "audio", readyState: "live" }],
-      }) as unknown as MediaStream;
+      } as unknown as MediaStream;
+    };
     Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: md });
+  }, { ...profile, micFailure });
 
-    // Bake a proxy base so resolveProxyBase does not hit the network.
-    (window as unknown as { __WB_PROXY__?: string }).__WB_PROXY__ = "https://proxy.test";
-  });
-
+  let discoveryHit = 0;
   await page.route("**/or-proxy.json*", async (route) => {
+    const base = proxyBases[Math.min(discoveryHit, proxyBases.length - 1)];
+    discoveryHit += 1;
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ base: "https://proxy.test" }),
+      body: JSON.stringify({ base }),
     });
   });
-  await page.route("https://proxy.test/health", async (route) => {
-    await route.fulfill({ status: 200, contentType: "application/json", body: '{"ok":true}' });
+  for (const base of new Set(proxyBases)) {
+    await page.route(`${base}/health`, async (route) => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: '{"ok":true}' });
+    });
+  }
+}
+
+async function installSpeechRecognitionSpy(page: Page) {
+  await page.addInitScript(() => {
+    class FakeRecognition {
+      lang = "";
+      continuous = false;
+      interimResults = false;
+      maxAlternatives = 1;
+      onresult = null;
+      onerror = null;
+      onend: (() => void) | null = null;
+      start() {
+        (window as unknown as { __recognitionLang?: string }).__recognitionLang = this.lang;
+      }
+      stop() {}
+    }
+    Object.defineProperty(window, "webkitSpeechRecognition", { value: FakeRecognition, configurable: true });
+    Object.defineProperty(window, "SpeechRecognition", { value: FakeRecognition, configurable: true });
   });
 }
 
@@ -72,6 +117,7 @@ test.describe("STT helpers", () => {
     // Prefer behavior contract: no Speech → prefer record if MediaRecorder exists.
     expect(typeof preferRecordStt).toBe("function");
     expect(typeof isAppleMobile).toBe("function");
+    expect(typeof isMobileSttDevice).toBe("function");
     expect(typeof canMediaRecord).toBe("function");
     // In Playwright Node context MediaRecorder may be missing → false is OK.
     const prefer = preferRecordStt(false);
@@ -79,26 +125,10 @@ test.describe("STT helpers", () => {
   });
 });
 
-test.describe("Real Bro iPhone voice (MediaRecorder path)", () => {
+test.describe("Real Bro mobile voice (MediaRecorder path)", () => {
   test("uses MediaRecorder even when webkitSpeechRecognition exists", async ({ page }) => {
-    await installIphoneRecordMocks(page);
-    await page.addInitScript(() => {
-      class FakeRecognition {
-        lang = "";
-        continuous = false;
-        interimResults = false;
-        maxAlternatives = 1;
-        onresult = null;
-        onerror = null;
-        onend: (() => void) | null = null;
-        start() {
-          (window as unknown as { __recognitionLang?: string }).__recognitionLang = this.lang;
-        }
-        stop() {}
-      }
-      Object.defineProperty(window, "webkitSpeechRecognition", { value: FakeRecognition, configurable: true });
-      Object.defineProperty(window, "SpeechRecognition", { value: FakeRecognition, configurable: true });
-    });
+    await installMobileRecordMocks(page);
+    await installSpeechRecognitionSpy(page);
     await mockProxyTranscribe(page, "ride to Magnus Moto");
     await mockProxySpeech(page);
     await page.goto("/#/");
@@ -110,8 +140,89 @@ test.describe("Real Bro iPhone voice (MediaRecorder path)", () => {
     ).toBeUndefined();
   });
 
+  test("uses Whisper recording on Android and lets it auto-detect language", async ({ page }) => {
+    await installMobileRecordMocks(page, "android");
+    await installSpeechRecognitionSpy(page);
+    let requestBody: Record<string, unknown> = {};
+    await mockProxyTranscribe(page, "ride to Magnus Moto", (body) => {
+      requestBody = body;
+    });
+    await mockProxySpeech(page);
+
+    await page.goto("/#/");
+    await page.getByTestId("assistant-row").tap();
+    const mic = page.getByLabel("Voice input");
+    await mic.tap();
+    await expect(page.getByTestId("assistant-voice-notice")).toContainText(/tap the red mic/i);
+    await mic.tap();
+
+    await expect(page.locator(".rb-bubble.user").filter({ hasText: /Magnus Moto/i })).toBeVisible();
+    expect(
+      await page.evaluate(() => (window as unknown as { __recognitionLang?: string }).__recognitionLang),
+    ).toBeUndefined();
+    expect((requestBody.input_audio as { format?: string } | undefined)?.format).toBe("webm");
+    expect(requestBody.language).toBeUndefined();
+  });
+
+  test("refreshes an expired proxy URL and retries transcription", async ({ page }) => {
+    await installMobileRecordMocks(page, "iphone", [
+      "https://proxy-old.test",
+      "https://proxy-new.test",
+    ]);
+    let oldHits = 0;
+    let newHits = 0;
+    await page.route("https://proxy-old.test/transcribe", async (route) => {
+      oldHits += 1;
+      await route.fulfill({ status: 503, contentType: "application/json", body: '{"error":"expired"}' });
+    });
+    await page.route("https://proxy-new.test/transcribe", async (route) => {
+      newHits += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: '{"text":"ride to Magnus Moto"}',
+      });
+    });
+    await mockProxySpeech(page);
+
+    await page.goto("/#/");
+    await page.getByTestId("assistant-row").tap();
+    const mic = page.getByLabel("Voice input");
+    await mic.tap();
+    await mic.tap();
+
+    await expect(page.locator(".rb-bubble.user").filter({ hasText: /Magnus Moto/i })).toBeVisible();
+    expect(oldHits).toBe(1);
+    expect(newHits).toBe(1);
+  });
+
+  test("shows a useful message when transcription is unavailable", async ({ page }) => {
+    await installMobileRecordMocks(page);
+    await page.route("https://proxy.test/transcribe", async (route) => {
+      await route.fulfill({ status: 503, contentType: "application/json", body: '{"error":"offline"}' });
+    });
+
+    await page.goto("/#/");
+    await page.getByTestId("assistant-row").tap();
+    const mic = page.getByLabel("Voice input");
+    await mic.tap();
+    await mic.tap();
+
+    await expect(page.getByTestId("assistant-voice-notice")).toContainText(/check your connection/i);
+  });
+
+  test("explains when the browser blocks microphone access", async ({ page }) => {
+    await installMobileRecordMocks(page, "iphone", ["https://proxy.test"], true);
+
+    await page.goto("/#/");
+    await page.getByTestId("assistant-row").tap();
+    await page.getByLabel("Voice input").tap();
+
+    await expect(page.getByTestId("assistant-voice-notice")).toContainText(/microphone unavailable/i);
+  });
+
   test("mic shows and two consecutive takes both submit", async ({ page }) => {
-    await installIphoneRecordMocks(page);
+    await installMobileRecordMocks(page);
     await mockProxyTranscribe(page, ["ride to Magnus Moto", "what bars are in Montenegro?"]);
     await mockProxySpeech(page);
     await mockProxyChat(page, async (route, last) => {
@@ -150,7 +261,7 @@ test.describe("Real Bro iPhone voice (MediaRecorder path)", () => {
   });
 
   test("queues a second voice line while the first reply is still busy", async ({ page }) => {
-    await installIphoneRecordMocks(page);
+    await installMobileRecordMocks(page);
     await mockProxyTranscribe(page, ["hello bro", "ride to Magnus Moto"]);
     await mockProxySpeech(page);
     await mockProxyChat(page, async (route, last) => {
