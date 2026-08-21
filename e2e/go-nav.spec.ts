@@ -191,6 +191,43 @@ test.describe("GO navigation", () => {
     await page.screenshot({ path: "test-results/go-exit.png", fullPage: true });
   });
 
+  test("does not re-enable GO chrome after leaving during a delayed GPS read", async ({ page, context }) => {
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation(START);
+    await mockRouting(page);
+    await page.goto(`/#/map?to=${DEST.lat},${DEST.lon}&name=Delayed%20GPS`);
+    await expect(page.locator(".route-go")).toBeEnabled();
+    await page.evaluate(() => {
+      const geolocation = navigator.geolocation;
+      const original = geolocation.getCurrentPosition.bind(geolocation);
+      Object.defineProperty(geolocation, "getCurrentPosition", {
+        configurable: true,
+        value(
+          success: PositionCallback,
+          error?: PositionErrorCallback | null,
+          options?: PositionOptions,
+        ) {
+          window.setTimeout(() => {
+            (window as typeof window & { __geoDelayDone?: boolean }).__geoDelayDone = true;
+            original(success, error, options);
+          }, 700);
+        },
+      });
+    });
+
+    await page.locator(".route-go").click();
+    await expect(page.locator(".map-page.is-nav")).toBeVisible();
+    await page.evaluate(() => {
+      window.location.hash = "#/";
+    });
+    await expect(page.locator(".map-page")).toHaveCount(0);
+    await expect
+      .poll(() => page.evaluate(() => Boolean((window as typeof window & { __geoDelayDone?: boolean }).__geoDelayDone)))
+      .toBe(true);
+    await expect(page.locator("body")).not.toHaveClass(/wb-nav-go/);
+    await expect(page.locator(".app")).not.toHaveClass(/no-nav/);
+  });
+
   test("keeps the redesigned GO HUD legible in dark mode", async ({ page, context }) => {
     await context.grantPermissions(["geolocation"]);
     await context.setGeolocation(START);

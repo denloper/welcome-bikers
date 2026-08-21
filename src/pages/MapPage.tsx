@@ -21,13 +21,20 @@ import { NavHud, type NavRouteState } from "../components/NavHud";
 import { Stars } from "../components/Stars";
 import { PlacePhoto } from "../components/PlacePhoto";
 import { loadPlaces } from "../lib/data";
-import { bearingDeg, closestOnPolyline, haversineKm, pointAhead, validCoords } from "../lib/geo";
+import { bearingDeg, haversineKm, pointAhead, validCoords } from "../lib/geo";
 import { filterGpsFix, freshGpsState } from "../lib/gps";
 import { readLocation, watchLocation, type LocationWatch } from "../lib/location";
 import { angleDelta, navLookAheadMeters } from "../lib/nav-camera";
-import { freshRerouteState, MIN_NAV_METERS, OFF_ROUTE_M, remainingAlong, tripTooShort, updateReroute } from "../lib/nav";
+import {
+  freshRerouteState,
+  MIN_NAV_METERS,
+  navTrackingTarget,
+  remainingAlong,
+  tripTooShort,
+  updateReroute,
+} from "../lib/nav";
 import { freshVoiceState, hushVoice, nextVoice, speakLine, warmVoices } from "../lib/voice";
-import { createWbMap, NAV_TILT, NAV_ZOOM, type MapKind, type WbMap } from "../lib/wbmap";
+import { createWbMap, NAV_TILT, type MapKind, type WbMap } from "../lib/wbmap";
 import {
   formatArrival,
   formatDriveTime,
@@ -100,17 +107,24 @@ function nearestPlace(places: Place[], lat: number, lon: number): Place | null {
 }
 
 let wakeLock: WakeLockSentinel | null = null;
+let wakeGeneration = 0;
 
 async function setWake(on: boolean) {
+  const generation = ++wakeGeneration;
   try {
-    if (on) {
-      wakeLock = (await navigator.wakeLock?.request("screen")) ?? null;
-    } else {
+    if (!on) {
       await wakeLock?.release();
       wakeLock = null;
+      return;
     }
+    const requested = (await navigator.wakeLock?.request("screen")) ?? null;
+    if (generation !== wakeGeneration) {
+      await requested?.release();
+      return;
+    }
+    wakeLock = requested;
   } catch {
-    wakeLock = null;
+    if (generation === wakeGeneration) wakeLock = null;
   }
 }
 
@@ -151,6 +165,7 @@ export function MapPage() {
   const wbRef = useRef<WbMap | null>(null);
   const watchRef = useRef<LocationWatch | null>(null);
   const pickGen = useRef(0);
+  const goStartGen = useRef(0);
   const [places, setPlaces] = useState<Place[]>([]);
   const placesRef = useRef(places);
   placesRef.current = places;
@@ -262,6 +277,12 @@ export function MapPage() {
   const maneuvers = navigating && drive && live
     ? maneuverPreviews(drive, live.stepI, live.stepRemain, 3)
     : [];
+
+  function stopNavigation() {
+    goStartGen.current += 1;
+    navigatingRef.current = false;
+    setNavigating(false);
+  }
 
   useEffect(() => {
     if (!navigating) {
@@ -394,6 +415,8 @@ export function MapPage() {
     wbRef.current = wb;
     setReady(true);
     return () => {
+      goStartGen.current += 1;
+      navigatingRef.current = false;
       wb.remove();
       wbRef.current = null;
     };
@@ -423,12 +446,12 @@ export function MapPage() {
           setStops(null);
           setDrive(null);
           setRouteChoices([]);
-          setNavigating(false);
+          stopNavigation();
         }
         return;
       }
       setPicked(null);
-      setNavigating(false);
+      stopNavigation();
       const geo = await getHere();
       if (cancelled) return;
       if (geo) setHere(geo);
@@ -561,6 +584,7 @@ export function MapPage() {
     setGoChrome(navigating);
     if (!navigating) {
       setOffRoute(false);
+      setRerouting(false);
       setFollowing(true);
     }
     wbRef.current?.setNav(navigating);
@@ -666,6 +690,7 @@ export function MapPage() {
       accuracy = 50,
       timestamp = Date.now(),
     ) => {
+      if (!active || !navigatingRef.current) return;
       const filteredFix = filterGpsFix(gpsState, {
         lat,
         lon,
@@ -683,29 +708,30 @@ export function MapPage() {
         setHere(gps);
       }
       const geom = driveRef.current?.geometry;
-      const snap = geom && geom.length >= 2 ? closestOnPolyline(geom, gps) : null;
-      const roadThreshold = Math.max(OFF_ROUTE_M, Math.min(180, fix.accuracy * 2));
-      const onRoad = Boolean(snap && snap.distKm * 1000 <= roadThreshold);
-      const rider = onRoad && snap ? { lat: snap.lat, lon: snap.lon } : gps;
-      const look =
-        geom && geom.length >= 2 ? pointAhead(geom, rider, navLookAheadMeters(fix.speed)) : null;
+      const tracking = navTrackingTarget(geom || [], gps, fix.accuracy, fix.speed);
       let br = compassHeadingRef.current ?? fix.heading;
-      if (br == null && look) br = (bearingDeg(rider, look) + 360) % 360;
-      wb.follow(rider.lon, rider.lat, br, {
-        camera: look ? { lat: look.lat, lon: look.lon } : rider,
+      if (
+        br == null &&
+        tracking.onRoad &&
+        (tracking.camera.lat !== tracking.rider.lat || tracking.camera.lon !== tracking.rider.lon)
+      ) {
+        br = (bearingDeg(tracking.rider, tracking.camera) + 360) % 360;
+      }
+      wb.follow(tracking.rider.lon, tracking.rider.lat, br, {
+        camera: tracking.camera,
         speed: fix.speed,
         accuracy: fix.accuracy,
       });
 
-      if (snap) {
+      if (Number.isFinite(tracking.distanceM)) {
         const decision = updateReroute(rerouteState, {
           now: timestamp,
-          distanceM: snap.distKm * 1000,
+          distanceM: tracking.distanceM,
           accuracyM: fix.accuracy,
           pending: reroutePending,
         });
         rerouteState = decision.state;
-        setOffRoute(snap.distKm * 1000 > decision.thresholdM);
+        setOffRoute(decision.offRoute);
         if (decision.trigger) {
           const list = stopsRef.current;
           if (!list || list.length < 2) return;
@@ -727,6 +753,7 @@ export function MapPage() {
       }
     };
     getHere().then((p) => {
+      if (!active || !navigatingRef.current) return;
       if (p) placeMe(p.lat, p.lon, null, null, 25);
       else if (stops?.[0]) placeMe(stops[0].lat, stops[0].lon, null, null, 25);
     });
@@ -778,19 +805,22 @@ export function MapPage() {
 
   function locate() {
     const wb = wbRef.current;
+    const wasNavigating = navigatingRef.current;
+    if (wasNavigating) wb?.resumeFollow();
     void readLocation({ timeout: 5_000, maximumAge: 5_000 }).then((fix) => {
+      if (wasNavigating && !navigatingRef.current) return;
       if (!fix) {
-        if (here) wb?.flyTo(here.lat, here.lon, navigating ? NAV_ZOOM : 11);
+        const current = hereRef.current;
+        if (!wasNavigating && current) wb?.flyTo(current.lat, current.lon, 11);
         return;
       }
       const geo = { lat: fix.lat, lon: fix.lon };
       setHere(geo);
       if (navigatingRef.current) {
         const geom = driveRef.current?.geometry;
-        const look = geom && geom.length >= 2 ? pointAhead(geom, geo, navLookAheadMeters(null)) : null;
-        wb?.resumeFollow();
-        wb?.follow(geo.lon, geo.lat, wb.map.getBearing(), {
-          camera: look ? { lat: look.lat, lon: look.lon } : geo,
+        const tracking = navTrackingTarget(geom || [], geo, fix.accuracy, fix.speed);
+        wb?.follow(tracking.rider.lon, tracking.rider.lat, wb.map.getBearing(), {
+          camera: tracking.camera,
           speed: fix.speed,
           accuracy: fix.accuracy,
         });
@@ -1021,10 +1051,7 @@ export function MapPage() {
           progress={live?.progress ?? 0}
           onToggleMute={() => setVoiceMuted((current) => !current)}
           onRecenter={locate}
-          onExit={() => {
-            setGoChrome(false);
-            setNavigating(false);
-          }}
+          onExit={stopNavigation}
         />
       )}
       {!navigating && <div className={`map-tools${trip ? " route-tools" : ""}`}>
@@ -1182,14 +1209,16 @@ export function MapPage() {
               onClick={() => {
                 if (!canGo) return;
                 requestCompassAccess();
-                void (async () => {
-                  const geo = await getHere();
-                  if (geo && stops && haversineKm(geo, stops[0]) > 0.25) {
-                    setStops(applyGpsStart(stops, geo));
+                const generation = ++goStartGen.current;
+                navigatingRef.current = true;
+                setNavigating(true);
+                void getHere().then((geo) => {
+                  if (generation !== goStartGen.current || !navigatingRef.current) return;
+                  const currentStops = stopsRef.current;
+                  if (geo && currentStops && haversineKm(geo, currentStops[0]) > 0.25) {
+                    setStops(applyGpsStart(currentStops, geo));
                   }
-                  setGoChrome(true);
-                  setNavigating(true);
-                })();
+                });
               }}
             >
               <IconGo />

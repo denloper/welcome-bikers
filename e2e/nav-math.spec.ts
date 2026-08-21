@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { maneuverKind } from "../src/components/NavHud";
+import { displayedManeuverKind, maneuverKind } from "../src/components/NavHud";
 import { closestOnPolyline } from "../src/lib/geo";
 import { filterGpsFix, freshGpsState, lerpAngle } from "../src/lib/gps";
 import {
@@ -18,8 +18,15 @@ import {
   navZoomForSpeed,
 } from "../src/lib/nav-camera";
 import { NAV_TILT, NAV_ZOOM } from "../src/lib/wbmap-types";
-import { freshRerouteState, remainingAlong, tripTooShort, updateReroute } from "../src/lib/nav";
+import {
+  freshRerouteState,
+  navTrackingTarget,
+  remainingAlong,
+  tripTooShort,
+  updateReroute,
+} from "../src/lib/nav";
 import { formatDriveTime, formatMeters, maneuverPreviews, type DriveRoute } from "../src/lib/osrm";
+import { withArrivalStep } from "../src/lib/routing-types";
 import { nextVoice, voiceLine, voiceScore } from "../src/lib/voice";
 
 const iconStep = (type: string, modifier = "") => ({
@@ -199,6 +206,19 @@ test("navigation look-ahead and zoom adapt smoothly to speed", () => {
   expect(navZoomForSpeed(20)).toBeLessThan(navZoomForSpeed(5));
 });
 
+test("navigation camera looks ahead on-route and centers the real rider off-route", () => {
+  const onRoute = navTrackingTarget(route.geometry, { lat: 42.441, lon: 19.2626 }, 8, 12);
+  expect(onRoute.onRoad).toBe(true);
+  expect(onRoute.rider).not.toEqual(onRoute.camera);
+
+  const gps = { lat: 42.436, lon: 19.281 };
+  const offRoute = navTrackingTarget(route.geometry, gps, 8, 12);
+  expect(offRoute.distanceM).toBeGreaterThan(400);
+  expect(offRoute.onRoad).toBe(false);
+  expect(offRoute.rider).toEqual(gps);
+  expect(offRoute.camera).toEqual(gps);
+});
+
 test("GO HUD covers the complete maneuver icon set", () => {
   expect(maneuverKind(iconStep("continue", "straight"))).toBe("straight");
   expect(maneuverKind(iconStep("turn", "left"))).toBe("left");
@@ -213,6 +233,18 @@ test("GO HUD covers the complete maneuver icon set", () => {
   expect(maneuverKind(iconStep("fork", "left"))).toBe("fork-left");
   expect(maneuverKind(iconStep("off ramp", "right"))).toBe("fork-right");
   expect(maneuverKind(iconStep("arrive", "straight"))).toBe("arrive");
+  expect(displayedManeuverKind(iconStep("turn", "left"), true)).toBe("arrive");
+});
+
+test("route providers append exactly one destination maneuver", () => {
+  const completed = withArrivalStep(route.steps.slice(0, 1), { lat: 42.43, lon: 19.28 });
+  expect(completed).toHaveLength(2);
+  expect(completed[1]).toMatchObject({
+    type: "arrive",
+    name: "Destination",
+    location: [42.43, 19.28],
+  });
+  expect(withArrivalStep(completed, { lat: 42.43, lon: 19.28 })).toBe(completed);
 });
 
 test("remaining route exposes a stable visual progress point", () => {
@@ -224,6 +256,14 @@ test("remaining route exposes a stable visual progress point", () => {
   expect(live.progress).toBeLessThan(0.75);
 });
 
+test("far off-route progress stays consistent with remaining distance and time", () => {
+  const here = { lat: 42.436, lon: 19.281 };
+  expect(closestOnPolyline(route.geometry, here).distKm).toBeGreaterThan(0.4);
+  const live = remainingAlong(route, here);
+  expect(live.progress + live.distance / route.distance).toBeCloseTo(1, 3);
+  expect(live.progress + live.duration / route.duration).toBeCloseTo(1, 3);
+});
+
 test("reroute waits for a sustained accurate off-route position", () => {
   const first = updateReroute(freshRerouteState(), {
     now: 20_000,
@@ -232,6 +272,21 @@ test("reroute waits for a sustained accurate off-route position", () => {
     pending: false,
   });
   expect(first.trigger).toBe(false);
+  expect(first.offRoute).toBe(true);
+  const hysteresis = updateReroute(first.state, {
+    now: 22_000,
+    distanceM: 70,
+    accuracyM: 12,
+    pending: false,
+  });
+  expect(hysteresis.offRoute).toBe(true);
+  const recovered = updateReroute(hysteresis.state, {
+    now: 23_000,
+    distanceM: 50,
+    accuracyM: 12,
+    pending: false,
+  });
+  expect(recovered.offRoute).toBe(false);
   const ready = updateReroute(first.state, {
     now: 24_000,
     distanceM: 130,
@@ -246,6 +301,7 @@ test("reroute waits for a sustained accurate off-route position", () => {
     pending: false,
   });
   expect(poor.trigger).toBe(false);
+  expect(poor.offRoute).toBe(false);
 });
 
 test("HUD previews upcoming maneuvers, not the road already driven", () => {

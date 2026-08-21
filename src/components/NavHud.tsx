@@ -38,8 +38,20 @@ export function maneuverKind(step?: NavStep): ManeuverKind {
   return "straight";
 }
 
-export function NavManeuverIcon({ step, compact = false }: { step?: NavStep; compact?: boolean }) {
-  const kind = maneuverKind(step);
+export function displayedManeuverKind(step?: NavStep, arrived = false): ManeuverKind {
+  return arrived ? "arrive" : maneuverKind(step);
+}
+
+export function NavManeuverIcon({
+  step,
+  compact = false,
+  arrived = false,
+}: {
+  step?: NavStep;
+  compact?: boolean;
+  arrived?: boolean;
+}) {
+  const kind = displayedManeuverKind(step, arrived);
   const right = kind === "right" || kind === "slight-right" || kind === "sharp-right" || kind === "fork-right";
   const base = right ? kind.replace("right", "left") : kind;
   const path =
@@ -140,7 +152,7 @@ export function NavHud({
     <div className="nav-ui" data-route-state={routeState} data-following={following ? "1" : "0"}>
       <div className="nav-top-stack">
         <section className="nav-banner" data-testid="nav-primary">
-          <NavManeuverIcon step={primary?.step} />
+          <NavManeuverIcon step={primary?.step} arrived={arrived} />
           <div className="nav-primary-copy">
             <b>{arrived ? "Now" : formatMeters(primary?.distance ?? remainingDistance)}</b>
             <span>{instruction}</span>

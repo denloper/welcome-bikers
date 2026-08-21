@@ -5,6 +5,7 @@ import {
   type LatLon,
   type NavStep,
   type RoutingOptions,
+  withArrivalStep,
 } from "./routing-types";
 
 function stripHtml(html: string) {
@@ -61,6 +62,11 @@ function fromGoogleRoute(
       });
     }
   }
+  const finalLeg = route.legs?.[route.legs.length - 1];
+  const destination = finalLeg?.end_location;
+  const completedSteps = destination
+    ? withArrivalStep(steps, { lat: destination.lat(), lon: destination.lng() })
+    : steps;
   if (geometry.length < 2) {
     for (const p of route.overview_path || []) geometry.push([p.lat(), p.lng()]);
   }
@@ -79,7 +85,7 @@ function fromGoogleRoute(
     geometry,
     distance,
     duration,
-    steps,
+    steps: completedSteps,
   };
 }
 

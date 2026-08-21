@@ -28,6 +28,21 @@ export type NavStep = {
   location: [number, number];
 };
 
+export function withArrivalStep(steps: NavStep[], destination: LatLon): NavStep[] {
+  if (steps[steps.length - 1]?.type === "arrive") return steps;
+  return [
+    ...steps,
+    {
+      name: "Destination",
+      distance: 0,
+      duration: 0,
+      type: "arrive",
+      modifier: "straight",
+      location: [destination.lat, destination.lon],
+    },
+  ];
+}
+
 export type DriveRoute = {
   id: string;
   provider: RouteProvider;

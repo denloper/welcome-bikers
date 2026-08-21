@@ -1,4 +1,5 @@
-import { closestOnPolyline, haversineKm } from "./geo";
+import { closestOnPolyline, haversineKm, pointAhead } from "./geo";
+import { navLookAheadMeters } from "./nav-camera";
 import type { DriveRoute } from "./osrm";
 
 export const MIN_NAV_METERS = 80;
@@ -15,18 +16,41 @@ export function freshRerouteState(): RerouteState {
   return { offSince: 0, lastReroute: 0 };
 }
 
+export function routeDeviationThreshold(accuracyM: number): number {
+  return Math.max(OFF_ROUTE_M, Math.min(180, Math.max(0, accuracyM) * 2));
+}
+
+export function navTrackingTarget(
+  points: [number, number][],
+  gps: { lat: number; lon: number },
+  accuracyM: number,
+  speedMps?: number | null,
+) {
+  if (points.length < 2) {
+    return { rider: gps, camera: gps, onRoad: false, distanceM: Number.POSITIVE_INFINITY };
+  }
+  const snap = closestOnPolyline(points, gps);
+  const distanceM = snap.distKm * 1000;
+  const onRoad = distanceM <= routeDeviationThreshold(accuracyM);
+  const rider = onRoad ? { lat: snap.lat, lon: snap.lon } : gps;
+  const camera = onRoad ? pointAhead(points, rider, navLookAheadMeters(speedMps)) : rider;
+  return { rider, camera, onRoad, distanceM };
+}
+
 export function updateReroute(
   state: RerouteState,
   input: { now: number; distanceM: number; accuracyM: number; pending: boolean },
-): { state: RerouteState; trigger: boolean; thresholdM: number } {
-  const thresholdM = Math.max(OFF_ROUTE_M, Math.min(180, input.accuracyM * 2));
+): { state: RerouteState; trigger: boolean; thresholdM: number; offRoute: boolean } {
+  const thresholdM = routeDeviationThreshold(input.accuracyM);
   if (!Number.isFinite(input.distanceM) || input.accuracyM > 120) {
-    return { state, trigger: false, thresholdM };
+    return { state, trigger: false, thresholdM, offRoute: false };
   }
   if (input.distanceM <= thresholdM * 0.72) {
-    return { state: { ...state, offSince: 0 }, trigger: false, thresholdM };
+    return { state: { ...state, offSince: 0 }, trigger: false, thresholdM, offRoute: false };
   }
-  if (input.distanceM <= thresholdM) return { state, trigger: false, thresholdM };
+  if (input.distanceM <= thresholdM) {
+    return { state, trigger: false, thresholdM, offRoute: state.offSince > 0 };
+  }
   const offSince = state.offSince || input.now;
   const ready =
     !input.pending &&
@@ -36,6 +60,7 @@ export function updateReroute(
     state: ready ? { offSince, lastReroute: input.now } : { ...state, offSince },
     trigger: ready,
     thresholdM,
+    offRoute: true,
   };
 }
 
@@ -72,18 +97,6 @@ export function remainingAlong(route: DriveRoute, here: { lat: number; lon: numb
       routeIndex: pts.length - 1,
       routePoint: last,
       progress: 1,
-    };
-  }
-  if (snap.distKm > 0.4) {
-    return {
-      distance: route.distance,
-      duration: route.duration,
-      stepI: 0,
-      stepRemain: route.distance,
-      arrived: false,
-      routeIndex: snap.index,
-      routePoint: [snap.lat, snap.lon] as [number, number],
-      progress: Math.min(0.98, Math.max(0, snap.index / Math.max(1, pts.length - 1))),
     };
   }
   const nextI = Math.min(snap.index + 1, pts.length - 1);

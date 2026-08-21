@@ -839,6 +839,7 @@ export function createLibreMap(
       paintMe();
     },
     follow(lon, lat, bearing, extra?: WbFollowOptions) {
+      if (!navOn) return;
       const camera = extra?.camera || { lat, lon };
       const target = {
         lat,
