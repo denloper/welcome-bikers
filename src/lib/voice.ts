@@ -1,4 +1,5 @@
 import type { NavStep } from "./osrm";
+import { hushNeuralVoice, speakBroNeural } from "./tts";
 
 export type VoicePhase = "approach" | "now" | "arrived";
 
@@ -150,6 +151,7 @@ function pickVoice(): SpeechSynthesisVoice | null {
 }
 
 export function hushVoice() {
+  hushNeuralVoice();
   try {
     window.speechSynthesis?.cancel();
   } catch {
@@ -178,11 +180,24 @@ function qualityScoreFor(voice: { name: string; lang: string; localService?: boo
 }
 
 /**
- * Speak in an explicit language (assistant replies can be Russian). Keeps
- * speakLine untouched: that one is tuned for English driving prompts.
- * Returns true when speech actually started; onDone always fires once.
+ * Speak Real Bro lines. Prefers OpenRouter neural TTS (deep male / bass),
+ * falls back to Web Speech when the API is unavailable.
+ * Returns true when speech was started; onDone always fires once.
  */
 export function speakText(text: string, lang: string, onDone?: () => void): boolean {
+  if (!text || typeof window === "undefined") {
+    onDone?.();
+    return false;
+  }
+  // Fire-and-forget neural path; keep a sync boolean for callers that check start.
+  let started = true;
+  void speakBroNeural(text, onDone, (plain, done) => speakTextWeb(plain, lang, done)).then((ok) => {
+    if (!ok) started = false;
+  });
+  return started;
+}
+
+function speakTextWeb(text: string, lang: string, onDone?: () => void): boolean {
   if (!text || typeof window === "undefined" || !window.speechSynthesis) {
     onDone?.();
     return false;

@@ -269,12 +269,14 @@ export function RealBro() {
     const done = () => {
       if (speakToken.current === token) setPhase("idle");
     };
+    setPhase("speaking");
     const started = speakText(text, "en-US", done);
-    if (started) {
-      setPhase("speaking");
-      // Safety net: headless / muted browsers may never fire onend.
-      window.setTimeout(done, Math.min(15_000, 1500 + text.length * 90));
+    if (!started) {
+      setPhase("idle");
+      return;
     }
+    // Neural TTS needs time to fetch + play; headless may never fire onend.
+    window.setTimeout(done, Math.min(45_000, 4_000 + text.length * 120));
   }
 
   function openSheet() {

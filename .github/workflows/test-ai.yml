@@ -35,9 +35,13 @@ jobs:
       - name: Unit + mocked assistant suite
         env:
           VITE_OPENROUTER_API_KEY: ${{ secrets.VITE_OPENROUTER_API_KEY }}
-        run: npx playwright test e2e/assistant-brain.spec.ts e2e/assistant.spec.ts e2e/assistant-ai.spec.ts --reporter=list
+        run: npx playwright test e2e/assistant-brain.spec.ts e2e/assistant.spec.ts e2e/assistant-ai.spec.ts e2e/assistant-tts.spec.ts --reporter=list
       - name: Live OpenRouter Real Bro
         env:
           LIVE_OPENROUTER: "1"
           VITE_OPENROUTER_API_KEY: ${{ secrets.VITE_OPENROUTER_API_KEY }}
         run: npx playwright test e2e/assistant-live.spec.ts --reporter=list
+      - name: Probe neural TTS from GitHub
+        env:
+          VITE_OPENROUTER_API_KEY: ${{ secrets.VITE_OPENROUTER_API_KEY }}
+        run: node scripts/probe-tts.mjs
