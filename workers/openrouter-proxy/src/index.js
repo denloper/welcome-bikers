@@ -1,10 +1,9 @@
 /**
  * Welcome Bikers — OpenRouter proxy (CORS + server-side API key).
  * Routes:
- *   POST /chat       -> https://openrouter.ai/api/v1/chat/completions
- *   POST /speech     -> https://openrouter.ai/api/v1/audio/speech
- *   POST /transcribe -> https://openrouter.ai/api/v1/audio/transcriptions
- *   OPTIONS /*       -> CORS preflight
+ *   POST /chat   -> https://openrouter.ai/api/v1/chat/completions
+ *   POST /speech -> https://openrouter.ai/api/v1/audio/speech
+ *   OPTIONS /*   -> CORS preflight
  */
 
 const ALLOWED = [
@@ -63,19 +62,16 @@ export default {
       upstream = "https://openrouter.ai/api/v1/chat/completions";
     } else if (path === "/speech" || path.endsWith("/speech")) {
       upstream = "https://openrouter.ai/api/v1/audio/speech";
-    } else if (path === "/transcribe" || path.endsWith("/transcribe")) {
-      upstream = "https://openrouter.ai/api/v1/audio/transcriptions";
     } else {
-      return json(404, { error: "Not found. Use POST /chat, /speech, or /transcribe" }, origin);
+      return json(404, { error: "Not found. Use POST /chat or POST /speech" }, origin);
     }
 
     const body = await request.arrayBuffer();
-    const contentType = request.headers.get("Content-Type") || "application/json";
     const upstreamRes = await fetch(upstream, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${key}`,
-        "Content-Type": contentType,
+        "Content-Type": "application/json",
         "HTTP-Referer": "https://denloper.github.io/welcome-bikers/",
         "X-Title": "Welcome Bikers",
         "User-Agent": "WelcomeBikersProxy/1.0 (+https://denloper.github.io/welcome-bikers/)",

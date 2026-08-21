@@ -1,6 +1,6 @@
 /**
  * Welcome Bikers OpenRouter proxy — Node (Railway / local / GitHub runner).
- * POST /chat, POST /speech, POST /transcribe; OPTIONS for CORS. Key stays server-side.
+ * POST /chat, POST /speech; OPTIONS for CORS. Key stays server-side.
  */
 import http from "node:http";
 
@@ -77,20 +77,18 @@ const server = http.createServer(async (req, res) => {
   let upstream;
   if (path === "/chat") upstream = "https://openrouter.ai/api/v1/chat/completions";
   else if (path === "/speech") upstream = "https://openrouter.ai/api/v1/audio/speech";
-  else if (path === "/transcribe") upstream = "https://openrouter.ai/api/v1/audio/transcriptions";
   else {
-    sendJson(res, 404, { error: "Not found. Use POST /chat, /speech, or /transcribe" }, origin);
+    sendJson(res, 404, { error: "Not found. Use POST /chat or POST /speech" }, origin);
     return;
   }
 
   try {
     const body = await readBody(req);
-    const contentType = String(req.headers["content-type"] || "application/json");
     const upstreamRes = await fetch(upstream, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${KEY}`,
-        "Content-Type": contentType,
+        "Content-Type": "application/json",
         "HTTP-Referer": "https://denloper.github.io/welcome-bikers/",
         "X-Title": "Welcome Bikers",
       },

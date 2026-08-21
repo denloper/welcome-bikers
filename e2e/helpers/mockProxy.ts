@@ -39,21 +39,6 @@ export async function mockProxySpeech(
   });
 }
 
-export async function mockProxyTranscribe(page: Page, text = "what bars are in Montenegro") {
-  await page.route(/\/transcribe\/?$/, async (route) => {
-    if (route.request().method() === "OPTIONS") {
-      await route.fulfill({ status: 204, headers: cors() });
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      headers: cors(),
-      body: JSON.stringify({ text }),
-    });
-  });
-}
-
 function cors(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": "*",

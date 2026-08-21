@@ -67,7 +67,3 @@ export function chatUrl(base: string): string {
 export function speechUrl(base: string): string {
   return `${normalizeBase(base)}/speech`;
 }
-
-export function transcribeUrl(base: string): string {
-  return `${normalizeBase(base)}/transcribe`;
-}
