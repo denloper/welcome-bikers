@@ -12,15 +12,36 @@ import {
   NAV_FOLLOW_RESUME_MS,
   NAV_HEADING_MS,
   NAV_MOVE_MS,
+  navZoomForSpeed,
   type NavPoint,
 } from "./nav-camera";
-import { HOME, HOME_ZOOM, NAV_TILT, NAV_ZOOM, USER_PIN_HTML, type MapKind, type WbMap, type WbRouteLine } from "./wbmap-types";
+import {
+  HOME,
+  HOME_ZOOM,
+  NAV_PUCK_HTML,
+  NAV_TILT,
+  NAV_ZOOM,
+  USER_PIN_HTML,
+  type MapKind,
+  type WbFollowOptions,
+  type WbMap,
+  type WbMapOptions,
+  type WbRouteLine,
+  type WbRouteProgress,
+} from "./wbmap-types";
 
 const LIGHT_MAP_ID = "a7dbf0e5d7ceea8629f41e1e";
 const DARK_MAP_ID = "a7dbf0e5d7ceea8614b0b9ae";
 
-const ARROW = `<span class="wb-gl-me wb-garrow"><svg viewBox="0 0 24 32" width="28" height="36"><path d="M12 2 L22 30 L12 23 L2 30 Z" fill="#3DADF3" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></span>`;
+const ARROW = NAV_PUCK_HTML;
 const ME_STAR = USER_PIN_HTML;
+
+type FollowTarget = NavPoint & {
+  bearing: number | null;
+  camera: NavPoint;
+  zoom: number;
+  accuracy: number | null;
+};
 
 let boot: Promise<void> | null = null;
 let webglState: boolean | null = null;
@@ -100,10 +121,7 @@ function onTap(node: HTMLElement, fn: () => void) {
 
 export async function createGoogleMap(
   el: HTMLElement,
-  opts: {
-    onPlace?: (id: string) => void;
-    onMap?: (lat: number, lon: number) => void;
-  },
+  opts: WbMapOptions,
 ): Promise<WbMap> {
   const boot = el.dataset.boot || "";
   await loadGoogle();
@@ -134,8 +152,11 @@ export async function createGoogleMap(
   let clusterer: MarkerClusterer | null = null;
   let pinMarkers: google.maps.marker.AdvancedMarkerElement[] = [];
   let routePolylines: google.maps.Polyline[] = [];
+  let progressPolylines: google.maps.Polyline[] = [];
+  let routeProgress: WbRouteProgress | null = null;
   let trafficLayer: google.maps.TrafficLayer | null = null;
   let arrow: google.maps.marker.AdvancedMarkerElement | null = null;
+  let arrowNode: HTMLElement | null = null;
   let meMark: google.maps.marker.AdvancedMarkerElement | null = null;
   let lastMe: { lat: number; lon: number } | null = null;
   const listeners: google.maps.MapsEventListener[] = [];
@@ -149,7 +170,7 @@ export async function createGoogleMap(
   let gestureTimer = 0;
   let systemCameraUntil = 0;
   let shownPoint: NavPoint | null = null;
-  let lastFollow: (NavPoint & { bearing: number | null }) | null = null;
+  let lastFollow: FollowTarget | null = null;
   let firstFollow = true;
   let navPhase: "off" | "entering" | "active" = "off";
   let navPhaseTimer = 0;
@@ -188,6 +209,8 @@ export async function createGoogleMap(
     pinMarkers = [];
     routePolylines.forEach((line) => line.setMap(null));
     routePolylines = [];
+    progressPolylines.forEach((line) => line.setMap(null));
+    progressPolylines = [];
     trafficLayer?.setMap(null);
     trafficLayer = null;
     if (arrow) arrow.map = null;
@@ -204,9 +227,9 @@ export async function createGoogleMap(
       const border = new google.maps.Polyline({
         path,
         geodesic: true,
-        strokeColor: lastRouteDark ? "#FFCC00" : "#000099",
+        strokeColor: lastRouteDark ? "#102d57" : "#143d86",
         strokeOpacity: selected ? 1 : 0.26,
-        strokeWeight: selected ? 9 : 6,
+        strokeWeight: selected ? 11 : 6,
         map: gmap,
         clickable: false,
         zIndex: selected ? 3 : 1,
@@ -214,16 +237,58 @@ export async function createGoogleMap(
       const line = new google.maps.Polyline({
         path,
         geodesic: true,
-        strokeColor: lastRouteDark ? "#FFFF00" : "#0033FF",
-        strokeOpacity: selected ? 0.8 : 0.32,
-        strokeWeight: selected ? 4 : 3,
+        strokeColor: lastRouteDark ? "#75c7ff" : "#2389ff",
+        strokeOpacity: selected ? 0.96 : 0.32,
+        strokeWeight: selected ? 6 : 3,
         map: gmap,
         clickable: false,
         zIndex: selected ? 4 : 2,
       });
       routePolylines.push(border, line);
     }
+    paintRouteProgress();
   };
+
+  const progressPath = () => {
+    if (!navOn || !routeProgress) return null;
+    const route = lastRoutes.find((item) => item.id === routeProgress?.routeId);
+    if (!route || route.points.length < 2) return null;
+    const index = Math.max(0, Math.min(route.points.length - 1, routeProgress.index));
+    const points = route.points.slice(0, index + 1);
+    const last = points[points.length - 1];
+    if (!last || last[0] !== routeProgress.point[0] || last[1] !== routeProgress.point[1]) {
+      points.push(routeProgress.point);
+    }
+    return points.map(([lat, lon]) => ({ lat, lng: lon }));
+  };
+
+  function paintRouteProgress() {
+    progressPolylines.forEach((line) => line.setMap(null));
+    progressPolylines = [];
+    const path = progressPath();
+    if (!path || path.length < 2) return;
+    const border = new google.maps.Polyline({
+      path,
+      geodesic: true,
+      strokeColor: "#2b3440",
+      strokeOpacity: 0.95,
+      strokeWeight: 11,
+      map: gmap,
+      clickable: false,
+      zIndex: 7,
+    });
+    const line = new google.maps.Polyline({
+      path,
+      geodesic: true,
+      strokeColor: lastRouteDark ? "#687582" : "#8b98a6",
+      strokeOpacity: 0.96,
+      strokeWeight: 6,
+      map: gmap,
+      clickable: false,
+      zIndex: 8,
+    });
+    progressPolylines = [border, line];
+  }
 
   const fitRoute = () => {
     const route = lastRoutes.find((item) => item.id === selectedRouteId) || lastRoutes[0];
@@ -320,11 +385,19 @@ export async function createGoogleMap(
     if (arrow) return arrow;
     const node = document.createElement("div");
     node.innerHTML = ARROW;
+    arrowNode = node.firstElementChild as HTMLElement;
     arrow = new google.maps.marker.AdvancedMarkerElement({
-      content: node.firstElementChild as HTMLElement,
+      content: arrowNode,
       zIndex: 999999,
     });
     return arrow;
+  };
+
+  const paintPuckQuality = (accuracy: number | null) => {
+    if (!arrowNode) return;
+    const value = accuracy != null && Number.isFinite(accuracy) ? Math.max(0, accuracy) : 25;
+    arrowNode.dataset.quality = value <= 18 ? "good" : value <= 55 ? "fair" : "poor";
+    arrowNode.style.setProperty("--wb-accuracy-scale", String(Math.min(2.15, 0.92 + value / 95)));
   };
 
   const clearFollowResume = () => {
@@ -337,7 +410,7 @@ export async function createGoogleMap(
   const cameraIsSystemDriven = () => Date.now() < systemCameraUntil;
 
   const animateFollow = (
-    target: NavPoint & { bearing: number | null },
+    target: FollowTarget,
     requestedDuration: number,
     moveCamera = true,
   ) => {
@@ -356,7 +429,7 @@ export async function createGoogleMap(
     const startTilt = gmap.getTilt() || 0;
     const targetTilt = entering ? 0 : NAV_TILT;
     const startZoom = gmap.getZoom() ?? NAV_ZOOM;
-    const targetZoom = entering || startZoom < NAV_ZOOM ? NAV_ZOOM : startZoom;
+    const targetZoom = entering ? NAV_ZOOM : target.zoom;
     const markerJump = shownPoint ? haversineKm(shownPoint, target) * 1000 > 100 : false;
     const markerDuration = markerJump ? 0 : requestedDuration;
     const cameraDuration = requestedDuration;
@@ -371,9 +444,10 @@ export async function createGoogleMap(
       shownPoint = markerPoint;
       marker.position = { lat: markerPoint.lat, lng: markerPoint.lon };
       marker.map = gmap;
+      paintPuckQuality(target.accuracy);
 
       if (moveCamera && navOn && !followPaused) {
-        const center = interpolatePoint(cameraStart, target, cameraEase);
+        const center = interpolatePoint(cameraStart, target.camera, cameraEase);
         systemCameraUntil = Date.now() + 180;
         gmap.moveCamera({
           center: { lat: center.lat, lng: center.lon },
@@ -381,6 +455,7 @@ export async function createGoogleMap(
           tilt: startTilt + (targetTilt - startTilt) * cameraEase,
           zoom: startZoom + (targetZoom - startZoom) * cameraEase,
         });
+        el.dataset.cameraOffset = target.camera.lat === target.lat && target.camera.lon === target.lon ? "center" : "ahead";
       }
 
       if (cameraProgress < 1 || markerProgress < 1) {
@@ -410,6 +485,7 @@ export async function createGoogleMap(
     clearFollowResume();
     followPaused = false;
     el.dataset.follow = navOn ? "on" : "off";
+    opts.onFollowChange?.(navOn);
     if (navOn && lastFollow) animateFollow(lastFollow, NAV_ENTER_MS);
   };
 
@@ -417,6 +493,7 @@ export async function createGoogleMap(
     if (!navOn) return;
     followPaused = true;
     el.dataset.follow = "paused";
+    opts.onFollowChange?.(false);
     clearFollowResume();
     followResumeTimer = window.setTimeout(resumeFollow, NAV_FOLLOW_RESUME_MS);
   };
@@ -642,12 +719,21 @@ export async function createGoogleMap(
         fitRoute();
       }
     },
+    setRouteProgress(progress) {
+      routeProgress = progress;
+      el.dataset.routeProgress = progress ? progress.fraction.toFixed(3) : "0";
+      paintRouteProgress();
+    },
     clearRoute() {
       lastRoutes = [];
       selectedRouteId = null;
+      routeProgress = null;
       pendingFit = false;
       routePolylines.forEach((line) => line.setMap(null));
       routePolylines = [];
+      progressPolylines.forEach((line) => line.setMap(null));
+      progressPolylines = [];
+      el.dataset.routeProgress = "0";
     },
     setTraffic(on) {
       trafficOn = on;
@@ -659,6 +745,7 @@ export async function createGoogleMap(
       followPaused = false;
       clearFollowResume();
       el.dataset.follow = on ? "on" : "off";
+      opts.onFollowChange?.(on);
       clearNavPhaseTimer();
       if (on) {
         navPhase = "entering";
@@ -676,6 +763,7 @@ export async function createGoogleMap(
         window.cancelAnimationFrame(followFrame);
         if (arrow) arrow.map = null;
       }
+      paintRouteProgress();
       paintPlaces();
       paintMe();
       requestAnimationFrame(() => {
@@ -692,12 +780,17 @@ export async function createGoogleMap(
       lastMe = pt;
       paintMe();
     },
-    follow(lon, lat, bearing) {
+    follow(lon, lat, bearing, extra?: WbFollowOptions) {
+      const camera = extra?.camera || { lat, lon };
       const target = {
         lat,
         lon,
         bearing: bearing != null && Number.isFinite(bearing) ? bearing : null,
+        camera,
+        zoom: navZoomForSpeed(extra?.speed),
+        accuracy: extra?.accuracy != null && Number.isFinite(extra.accuracy) ? extra.accuracy : null,
       };
+      el.dataset.navSpeed = extra?.speed != null && Number.isFinite(extra.speed) ? String(Math.round(extra.speed * 3.6)) : "0";
       animateFollow(
         target,
         firstFollow && navPhase === "entering" ? NAV_FLAT_ENTRY_MS : firstFollow ? NAV_ENTER_MS : NAV_MOVE_MS,

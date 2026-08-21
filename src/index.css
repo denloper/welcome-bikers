@@ -1955,3 +1955,472 @@ label.lbl { font-size: 13px; color: var(--muted); display: block; margin-bottom:
   font-weight: 600;
   pointer-events: none;
 }
+
+/* GO navigation: Google-like hierarchy with Welcome Bikers identity. */
+body.wb-nav-go,
+body.wb-nav-go #root,
+body.wb-nav-go .app,
+.map-page.is-nav {
+  height: var(--wb-map-vh, 100dvh);
+  min-height: var(--wb-map-vh, 100dvh);
+  max-height: var(--wb-map-vh, 100dvh);
+  overflow: hidden;
+}
+.nav-ui {
+  --nav-surface: rgba(255, 255, 255, .96);
+  --nav-surface-2: rgba(246, 248, 251, .97);
+  --nav-text: #111827;
+  --nav-muted: #64748b;
+  --nav-border: rgba(15, 23, 42, .1);
+  --nav-blue: #2389ff;
+  --nav-blue-deep: #143d86;
+  position: absolute;
+  inset: 0;
+  z-index: 1980;
+  pointer-events: none;
+  color: var(--nav-text);
+}
+.nav-top-stack {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: calc(env(safe-area-inset-left, 0px) + 10px);
+  right: calc(env(safe-area-inset-right, 0px) + 10px);
+  z-index: 540;
+  width: min(560px, calc(100% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 20px));
+  margin: 0 auto;
+  display: grid;
+  gap: 7px;
+}
+.nav-ui .nav-banner {
+  position: relative;
+  inset: auto;
+  min-height: 92px;
+  padding: 10px 14px 10px 10px;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--nav-border);
+  border-radius: 22px;
+  background: var(--nav-surface);
+  color: var(--nav-text);
+  box-shadow: 0 10px 34px rgba(15, 23, 42, .24), 0 2px 8px rgba(15, 23, 42, .12);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+}
+.nav-primary-copy {
+  min-width: 0;
+}
+.nav-ui .nav-banner .nav-primary-copy b {
+  display: block;
+  color: var(--nav-blue-deep);
+  font-size: clamp(23px, 7vw, 32px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.03em;
+}
+.nav-ui .nav-banner .nav-primary-copy span {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--nav-text);
+  font-size: clamp(14px, 4vw, 18px);
+  font-weight: 850;
+  line-height: 1.14;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-ui .nav-banner .nav-primary-copy small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--nav-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-maneuver-icon {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 17px;
+  background: linear-gradient(145deg, #2389ff, #1463d3);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25), 0 5px 15px rgba(35, 137, 255, .28);
+}
+.nav-maneuver-icon svg {
+  width: 54px;
+  height: 54px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 4.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.nav-maneuver-icon[data-maneuver="arrive"] svg {
+  fill: currentColor;
+  stroke-width: 1.5;
+}
+.nav-maneuver-icon.compact {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  box-shadow: none;
+}
+.nav-maneuver-icon.compact svg {
+  width: 27px;
+  height: 27px;
+  stroke-width: 4.5;
+}
+.nav-ui .nav-next-list {
+  position: relative;
+  inset: auto;
+  display: grid;
+  gap: 5px;
+  pointer-events: none;
+}
+.nav-ui .nav-then {
+  min-height: 43px;
+  padding: 5px 9px 5px 6px;
+  display: grid;
+  grid-template-columns: 37px 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--nav-border);
+  border-radius: 14px;
+  background: var(--nav-surface-2);
+  color: var(--nav-text);
+  box-shadow: 0 5px 16px rgba(15, 23, 42, .16);
+  font-size: 11px;
+  font-weight: 750;
+}
+.nav-ui .nav-then > span {
+  color: var(--nav-muted);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.nav-ui .nav-then b {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-ui .nav-then small {
+  color: var(--nav-muted);
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.nav-ui .nav-status {
+  position: relative;
+  inset: auto;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 7px 12px 7px 9px;
+  transform: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 999px;
+  background: rgba(17, 24, 39, .92);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+  font-size: 11px;
+  font-weight: 800;
+  backdrop-filter: blur(12px);
+}
+.nav-ui .nav-status i {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #fbbf24;
+  box-shadow: 0 0 0 4px rgba(251, 191, 36, .18);
+}
+.nav-ui[data-route-state="rerouting"] .nav-status i {
+  background: var(--nav-blue);
+  box-shadow: 0 0 0 4px rgba(35, 137, 255, .2);
+  animation: nav-status-pulse 1s ease-in-out infinite;
+}
+.nav-ui[data-route-state="off-route"] .nav-banner {
+  border-color: rgba(225, 6, 0, .45);
+}
+.nav-ui[data-route-state="off-route"] .nav-maneuver-icon {
+  background: linear-gradient(145deg, #ef332d, #b70d08);
+}
+.nav-ui .nav-hud {
+  position: absolute;
+  left: calc(env(safe-area-inset-left, 0px) + 10px);
+  right: calc(env(safe-area-inset-right, 0px) + 10px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+  z-index: 2000;
+  width: min(620px, calc(100% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 20px));
+  margin: 0 auto;
+  padding: 0;
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--nav-border);
+  border-radius: 22px;
+  background: var(--nav-surface);
+  color: var(--nav-text);
+  box-shadow: 0 12px 40px rgba(15, 23, 42, .3), 0 2px 8px rgba(15, 23, 42, .14);
+  pointer-events: auto;
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+}
+.nav-progress {
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  background: rgba(100, 116, 139, .18);
+}
+.nav-progress i {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(90deg, #1463d3, #35a7ff);
+  box-shadow: 0 0 10px rgba(35, 137, 255, .5);
+  transition: width 500ms cubic-bezier(.2, .8, .2, 1);
+}
+.nav-hud-main {
+  min-height: 76px;
+  padding: 9px 10px 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.nav-hud-stats {
+  min-width: 0;
+}
+.nav-ui .nav-hud-time {
+  margin: 0;
+  color: #0a9852;
+  font-size: clamp(21px, 6vw, 27px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.03em;
+}
+.nav-hud-meta {
+  margin: 5px 0 0;
+  display: flex;
+  gap: 9px;
+  color: var(--nav-muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+.nav-hud-arrival::before {
+  content: "ETA ";
+}
+.nav-ui .nav-hud-km {
+  margin: 0;
+  color: var(--nav-muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+.nav-hud-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.nav-control,
+.nav-ui .nav-exit {
+  height: 48px;
+  border: 0;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav-control {
+  width: 48px;
+  flex: 0 0 48px;
+  background: #edf1f6;
+  color: #1e293b;
+}
+.nav-control svg {
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.nav-control.is-muted {
+  color: #e10600;
+}
+.nav-recenter {
+  color: var(--nav-blue);
+  box-shadow: inset 0 0 0 1px rgba(35, 137, 255, .2);
+}
+.nav-recenter.is-following {
+  background: var(--nav-blue);
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(35, 137, 255, .28);
+}
+.nav-ui .nav-exit {
+  min-width: 62px;
+  padding: 0 13px;
+  background: #e10600;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  box-shadow: 0 5px 14px rgba(225, 6, 0, .25);
+}
+.map-page.is-nav.is-dark .nav-ui {
+  --nav-surface: rgba(17, 24, 39, .95);
+  --nav-surface-2: rgba(24, 33, 47, .96);
+  --nav-text: #f8fafc;
+  --nav-muted: #a7b2c1;
+  --nav-border: rgba(255, 255, 255, .1);
+  --nav-blue-deep: #8fd3ff;
+}
+.map-page.is-nav.is-dark .nav-control {
+  background: #283345;
+  color: #e5edf7;
+}
+.map-page.is-nav.is-dark .nav-control.is-muted {
+  color: #ff746f;
+}
+.map-page.is-nav.is-dark .nav-recenter.is-following {
+  background: var(--nav-blue);
+  color: #fff;
+}
+.map-page.is-nav .nav-ui .nav-banner,
+.map-page.is-nav .nav-ui .nav-next-list {
+  animation: none;
+}
+.map-page.is-nav .nav-top-stack {
+  animation: nav-slide-down 360ms cubic-bezier(.2, .8, .2, 1) both;
+}
+.map-page.is-nav .nav-hud {
+  animation: nav-slide-up 380ms cubic-bezier(.2, .8, .2, 1) both;
+}
+@keyframes nav-status-pulse {
+  50% { opacity: .45; transform: scale(.8); }
+}
+
+/* Branded navigation puck shared by Google and MapLibre. */
+.wb-nav-puck {
+  --wb-accuracy-scale: 1;
+  position: relative;
+  width: 44px;
+  height: 54px;
+  display: block;
+  line-height: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .48));
+  isolation: isolate;
+}
+.wb-nav-puck svg {
+  position: relative;
+  z-index: 2;
+  width: 44px;
+  height: 54px;
+}
+.wb-puck-shell {
+  fill: #fff;
+  stroke: #0f172a;
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+}
+.wb-puck-core {
+  fill: #2389ff;
+  stroke: #1463d3;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+.wb-puck-star {
+  fill: #e10600;
+  stroke: #fff;
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+.wb-nav-accuracy {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 48%;
+  width: 42px;
+  height: 42px;
+  border: 2px solid rgba(35, 137, 255, .42);
+  border-radius: 50%;
+  background: rgba(35, 137, 255, .11);
+  transform: translate(-50%, -50%) scale(var(--wb-accuracy-scale));
+  transition: transform 500ms ease, border-color 250ms ease, background 250ms ease;
+}
+.wb-nav-puck[data-quality="fair"] .wb-nav-accuracy {
+  border-color: rgba(251, 191, 36, .55);
+  background: rgba(251, 191, 36, .12);
+}
+.wb-nav-puck[data-quality="poor"] .wb-nav-accuracy {
+  border-color: rgba(225, 6, 0, .58);
+  background: rgba(225, 6, 0, .12);
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .nav-top-stack {
+    left: calc(env(safe-area-inset-left, 0px) + 10px);
+    right: auto;
+    width: min(52vw, 520px);
+  }
+  .nav-ui .nav-banner {
+    min-height: 76px;
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+  .nav-maneuver-icon {
+    width: 58px;
+    height: 58px;
+  }
+  .nav-maneuver-icon svg {
+    width: 44px;
+    height: 44px;
+  }
+  .nav-ui .nav-then:nth-child(n+2) {
+    display: none;
+  }
+  .nav-ui .nav-hud {
+    left: auto;
+    width: min(440px, 55vw);
+  }
+}
+@media (max-width: 360px) {
+  .nav-hud-main {
+    padding-left: 11px;
+    gap: 6px;
+  }
+  .nav-hud-actions {
+    gap: 5px;
+  }
+  .nav-control {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+  }
+  .nav-ui .nav-exit {
+    min-width: 56px;
+    height: 44px;
+    padding: 0 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-page.is-nav .nav-top-stack,
+  .map-page.is-nav .nav-hud,
+  .nav-ui[data-route-state="rerouting"] .nav-status i {
+    animation: none;
+  }
+  .nav-progress i,
+  .wb-nav-accuracy {
+    transition: none;
+  }
+}

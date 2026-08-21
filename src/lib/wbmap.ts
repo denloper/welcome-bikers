@@ -1,4 +1,4 @@
-import { HOME_ZOOM, type WbMap } from "./wbmap-types";
+import { HOME_ZOOM, type WbMap, type WbMapOptions } from "./wbmap-types";
 
 export {
   HOME,
@@ -12,10 +12,7 @@ export {
 
 export function createWbMap(
   el: HTMLElement,
-  opts: {
-    onPlace?: (id: string) => void;
-    onMap?: (lat: number, lon: number) => void;
-  },
+  opts: WbMapOptions,
 ): WbMap {
   let impl: WbMap | null = null;
   const wait: Array<(m: WbMap) => void> = [];
@@ -40,6 +37,9 @@ export function createWbMap(
     setRoutes(routes, selectedId, dark, extra) {
       use((m) => m.setRoutes(routes, selectedId, dark, extra));
     },
+    setRouteProgress(progress) {
+      use((m) => m.setRouteProgress(progress));
+    },
     clearRoute() {
       use((m) => m.clearRoute());
     },
@@ -55,8 +55,8 @@ export function createWbMap(
     setMe(pt) {
       use((m) => m.setMe(pt));
     },
-    follow(lon, lat, bearing) {
-      use((m) => m.follow(lon, lat, bearing));
+    follow(lon, lat, bearing, extra) {
+      use((m) => m.follow(lon, lat, bearing, extra));
     },
     orient(bearing) {
       use((m) => m.orient(bearing));

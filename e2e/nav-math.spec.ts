@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { maneuverKind } from "../src/components/NavHud";
 import { closestOnPolyline } from "../src/lib/geo";
 import { filterGpsFix, freshGpsState, lerpAngle } from "../src/lib/gps";
 import {
@@ -8,12 +9,27 @@ import {
   interpolatePoint,
   NAV_FLAT_ENTRY_MS,
   NAV_FOLLOW_RESUME_MS,
+  NAV_LOOK_AHEAD_MAX_M,
+  NAV_LOOK_AHEAD_MIN_M,
   NAV_MOVE_MS,
+  NAV_ZOOM_MAX,
+  NAV_ZOOM_MIN,
+  navLookAheadMeters,
+  navZoomForSpeed,
 } from "../src/lib/nav-camera";
-import { NAV_ZOOM } from "../src/lib/wbmap-types";
+import { NAV_TILT, NAV_ZOOM } from "../src/lib/wbmap-types";
 import { freshRerouteState, remainingAlong, tripTooShort, updateReroute } from "../src/lib/nav";
 import { formatDriveTime, formatMeters, maneuverPreviews, type DriveRoute } from "../src/lib/osrm";
 import { nextVoice, voiceLine, voiceScore } from "../src/lib/voice";
+
+const iconStep = (type: string, modifier = "") => ({
+  name: "",
+  distance: 100,
+  duration: 10,
+  type,
+  modifier,
+  location: [42, 19] as [number, number],
+});
 
 const route: DriveRoute = {
   id: "test-route",
@@ -160,6 +176,7 @@ test("navigation camera interpolates GPS and heading without jumps", () => {
   expect(NAV_MOVE_MS).toBe(480);
   expect(NAV_FLAT_ENTRY_MS).toBe(600);
   expect(NAV_ZOOM).toBe(18);
+  expect(NAV_TILT).toBe(50);
   expect(NAV_FOLLOW_RESUME_MS).toBe(10_000);
   expect(easeInOutCubic(0)).toBe(0);
   expect(easeInOutCubic(0.5)).toBe(0.5);
@@ -171,6 +188,40 @@ test("navigation camera interpolates GPS and heading without jumps", () => {
   expect(angleDelta(350, 10)).toBe(20);
   expect(angleDelta(10, 350)).toBe(-20);
   expect(interpolateAngle(350, 10, 0.5)).toBeCloseTo(0, 5);
+});
+
+test("navigation look-ahead and zoom adapt smoothly to speed", () => {
+  expect(navLookAheadMeters(0)).toBe(NAV_LOOK_AHEAD_MIN_M);
+  expect(navLookAheadMeters(35)).toBe(NAV_LOOK_AHEAD_MAX_M);
+  expect(navLookAheadMeters(12)).toBeGreaterThan(navLookAheadMeters(3));
+  expect(navZoomForSpeed(0)).toBe(NAV_ZOOM_MAX);
+  expect(navZoomForSpeed(35)).toBe(NAV_ZOOM_MIN);
+  expect(navZoomForSpeed(20)).toBeLessThan(navZoomForSpeed(5));
+});
+
+test("GO HUD covers the complete maneuver icon set", () => {
+  expect(maneuverKind(iconStep("continue", "straight"))).toBe("straight");
+  expect(maneuverKind(iconStep("turn", "left"))).toBe("left");
+  expect(maneuverKind(iconStep("turn", "right"))).toBe("right");
+  expect(maneuverKind(iconStep("turn", "slight left"))).toBe("slight-left");
+  expect(maneuverKind(iconStep("turn", "slight right"))).toBe("slight-right");
+  expect(maneuverKind(iconStep("turn", "sharp left"))).toBe("sharp-left");
+  expect(maneuverKind(iconStep("turn", "sharp right"))).toBe("sharp-right");
+  expect(maneuverKind(iconStep("turn", "uturn"))).toBe("uturn");
+  expect(maneuverKind(iconStep("roundabout", "right"))).toBe("roundabout");
+  expect(maneuverKind(iconStep("merge", "slight right"))).toBe("merge");
+  expect(maneuverKind(iconStep("fork", "left"))).toBe("fork-left");
+  expect(maneuverKind(iconStep("off ramp", "right"))).toBe("fork-right");
+  expect(maneuverKind(iconStep("arrive", "straight"))).toBe("arrive");
+});
+
+test("remaining route exposes a stable visual progress point", () => {
+  const live = remainingAlong(route, { lat: 42.436, lon: 19.271 });
+  expect([0, 1]).toContain(live.routeIndex);
+  expect(live.routePoint[0]).toBeCloseTo(42.436, 3);
+  expect(live.routePoint[1]).toBeCloseTo(19.271, 3);
+  expect(live.progress).toBeGreaterThan(0.25);
+  expect(live.progress).toBeLessThan(0.75);
 });
 
 test("reroute waits for a sustained accurate off-route position", () => {

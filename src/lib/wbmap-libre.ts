@@ -11,9 +11,23 @@ import {
   NAV_FOLLOW_RESUME_MS,
   NAV_HEADING_MS,
   NAV_MOVE_MS,
+  navZoomForSpeed,
   type NavPoint,
 } from "./nav-camera";
-import { HOME, HOME_ZOOM, NAV_TILT, NAV_ZOOM, USER_PIN_HTML, type MapKind, type WbMap, type WbRouteLine } from "./wbmap-types";
+import {
+  HOME,
+  HOME_ZOOM,
+  NAV_PUCK_HTML,
+  NAV_TILT,
+  NAV_ZOOM,
+  USER_PIN_HTML,
+  type MapKind,
+  type WbFollowOptions,
+  type WbMap,
+  type WbMapOptions,
+  type WbRouteLine,
+  type WbRouteProgress,
+} from "./wbmap-types";
 
 setWorkerUrl(workerUrl);
 
@@ -31,8 +45,15 @@ const PIN_TYPES: PlaceType[] = [
 const TONES = ["friendly", "black", "white"] as const;
 const pinCache: Record<string, ImageData> = {};
 
-const ARROW = `<span class="wb-gl-me wb-garrow"><svg viewBox="0 0 24 32" width="28" height="36"><path d="M12 2 L22 30 L12 23 L2 30 Z" fill="#3DADF3" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></span>`;
+const ARROW = NAV_PUCK_HTML;
 const ME_STAR = USER_PIN_HTML;
+
+type FollowTarget = NavPoint & {
+  bearing: number | null;
+  camera: NavPoint;
+  zoom: number;
+  accuracy: number | null;
+};
 
 function vectorStyle(dark: boolean) {
   return dark ? "https://tiles.openfreemap.org/styles/dark" : "https://tiles.openfreemap.org/styles/liberty";
@@ -125,6 +146,30 @@ function routeFc(routes: WbRouteLine[], selectedId: string | null) {
   };
 }
 
+function progressFc(routes: WbRouteLine[], progress: WbRouteProgress | null, navOn = true) {
+  if (!navOn || !progress) return { type: "FeatureCollection" as const, features: [] };
+  const route = routes.find((item) => item.id === progress.routeId);
+  if (!route || route.points.length < 2) return { type: "FeatureCollection" as const, features: [] };
+  const index = Math.max(0, Math.min(route.points.length - 1, progress.index));
+  const points = route.points.slice(0, index + 1);
+  const last = points[points.length - 1];
+  if (!last || last[0] !== progress.point[0] || last[1] !== progress.point[1]) points.push(progress.point);
+  if (points.length < 2) return { type: "FeatureCollection" as const, features: [] };
+  return {
+    type: "FeatureCollection" as const,
+    features: [
+      {
+        type: "Feature" as const,
+        properties: {},
+        geometry: {
+          type: "LineString" as const,
+          coordinates: points.map(([lat, lon]) => [lon, lat]),
+        },
+      },
+    ],
+  };
+}
+
 async function rasterize(url: string, w: number, h: number) {
   const hit = pinCache[url];
   if (hit) return hit;
@@ -190,8 +235,11 @@ function addBuildings(map: MapLibreMap, dark: boolean) {
 
 function paintRoute(map: MapLibreMap, dark: boolean) {
   if (!map.getLayer("wb-route-line")) return;
-  map.setPaintProperty("wb-route-line", "line-color", dark ? "#FFFF00" : "#0033FF");
-  map.setPaintProperty("wb-route-border", "line-color", dark ? "#FFCC00" : "#000099");
+  map.setPaintProperty("wb-route-line", "line-color", dark ? "#75c7ff" : "#2389ff");
+  map.setPaintProperty("wb-route-border", "line-color", dark ? "#102d57" : "#143d86");
+  if (map.getLayer("wb-route-progress-line")) {
+    map.setPaintProperty("wb-route-progress-line", "line-color", dark ? "#687582" : "#8b98a6");
+  }
 }
 
 function addOverlays(map: MapLibreMap, routeDark: boolean) {
@@ -269,14 +317,42 @@ function addOverlays(map: MapLibreMap, routeDark: boolean) {
       source: "wb-route",
       layout: { "line-join": "round", "line-cap": "round" },
       paint: {
-        "line-color": "#0033FF",
+        "line-color": "#2389ff",
         "line-width": [
           "case",
           ["==", ["get", "selected"], 1],
           ["interpolate", ["linear"], ["zoom"], 4, 1.5, 10, 3, 16, 5],
           ["interpolate", ["linear"], ["zoom"], 4, 1, 10, 2, 16, 3],
         ],
-        "line-opacity": ["case", ["==", ["get", "selected"], 1], 0.8, 0.32],
+        "line-opacity": ["case", ["==", ["get", "selected"], 1], 0.96, 0.32],
+      },
+    });
+  }
+  if (!map.getSource("wb-route-progress")) {
+    map.addSource("wb-route-progress", {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+    });
+    map.addLayer({
+      id: "wb-route-progress-border",
+      type: "line",
+      source: "wb-route-progress",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#2b3440",
+        "line-opacity": 0.95,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 4, 3, 10, 6, 16, 11],
+      },
+    });
+    map.addLayer({
+      id: "wb-route-progress-line",
+      type: "line",
+      source: "wb-route-progress",
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: {
+        "line-color": "#8b98a6",
+        "line-opacity": 0.96,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 4, 1.5, 10, 3, 16, 6],
       },
     });
   }
@@ -293,10 +369,7 @@ function setPinVisibility(map: MapLibreMap, show: boolean) {
 
 export function createLibreMap(
   el: HTMLElement,
-  opts: {
-    onPlace?: (id: string) => void;
-    onMap?: (lat: number, lon: number) => void;
-  },
+  opts: WbMapOptions,
 ): WbMap {
   el.dataset.pitch = "0";
   el.dataset.kind = "vector-light";
@@ -330,12 +403,14 @@ export function createLibreMap(
   let pickOn = false;
   let kind: MapKind = "vector-light";
   let marker: Marker | null = null;
+  let markerNode: HTMLElement | null = null;
   let meMark: Marker | null = null;
   let lastMe: { lat: number; lon: number } | null = null;
   let lastPlaces: Place[] = [];
   let lastDarkPins = false;
   let lastRoutes: WbRouteLine[] = [];
   let selectedRouteId: string | null = null;
+  let routeProgress: WbRouteProgress | null = null;
   let lastRouteDark = false;
   let pendingFit = false;
   let pendingView: { center: [number, number]; zoom: number; bearing: number; pitch: number } | null = null;
@@ -346,7 +421,7 @@ export function createLibreMap(
   let followResumeTimer = 0;
   let markerFrame = 0;
   let shownPoint: NavPoint | null = null;
-  let lastFollow: (NavPoint & { bearing: number | null }) | null = null;
+  let lastFollow: FollowTarget | null = null;
   let firstFollow = true;
   let navPhase: "off" | "entering" | "active" = "off";
   let navPhaseTimer = 0;
@@ -377,8 +452,16 @@ export function createLibreMap(
     if (marker) return marker;
     const node = document.createElement("div");
     node.innerHTML = ARROW;
-    marker = new Marker({ element: node.firstElementChild as HTMLElement, anchor: "center" });
+    markerNode = node.firstElementChild as HTMLElement;
+    marker = new Marker({ element: markerNode, anchor: "center" });
     return marker;
+  };
+
+  const paintPuckQuality = (accuracy: number | null) => {
+    if (!markerNode) return;
+    const value = accuracy != null && Number.isFinite(accuracy) ? Math.max(0, accuracy) : 25;
+    markerNode.dataset.quality = value <= 18 ? "good" : value <= 55 ? "fair" : "poor";
+    markerNode.style.setProperty("--wb-accuracy-scale", String(Math.min(2.15, 0.92 + value / 95)));
   };
 
   const clearFollowResume = () => {
@@ -388,7 +471,7 @@ export function createLibreMap(
     }
   };
 
-  const animateMarker = (target: NavPoint, requestedDuration: number) => {
+  const animateMarker = (target: FollowTarget, requestedDuration: number) => {
     window.cancelAnimationFrame(markerFrame);
     const start = shownPoint || target;
     const jump = shownPoint ? haversineKm(shownPoint, target) * 1000 > 100 : false;
@@ -402,23 +485,25 @@ export function createLibreMap(
         lon: start.lon + (target.lon - start.lon) * eased,
       };
       arrow().setLngLat([shownPoint.lon, shownPoint.lat]).addTo(map);
+      paintPuckQuality(target.accuracy);
       if (progress < 1) markerFrame = window.requestAnimationFrame(drawFrame);
     };
     markerFrame = window.requestAnimationFrame(drawFrame);
   };
 
-  const moveCameraTo = (target: NavPoint & { bearing: number | null }, duration: number) => {
+  const moveCameraTo = (target: FollowTarget, duration: number) => {
     if (!navOn || followPaused) return;
     const entering = navPhase === "entering";
     map.easeTo({
-      center: [target.lon, target.lat],
+      center: [target.camera.lon, target.camera.lat],
       pitch: entering ? 0 : NAV_TILT,
-      zoom: entering || map.getZoom() < NAV_ZOOM ? NAV_ZOOM : map.getZoom(),
+      zoom: entering ? NAV_ZOOM : target.zoom,
       bearing: entering ? 0 : target.bearing ?? map.getBearing(),
       duration,
       easing: easeInOutCubic,
       essential: true,
     });
+    el.dataset.cameraOffset = target.camera.lat === target.lat && target.camera.lon === target.lon ? "center" : "ahead";
   };
 
   const clearNavPhaseTimer = () => {
@@ -441,6 +526,7 @@ export function createLibreMap(
     clearFollowResume();
     followPaused = false;
     el.dataset.follow = navOn ? "on" : "off";
+    opts.onFollowChange?.(navOn);
     if (navOn && lastFollow) moveCameraTo(lastFollow, NAV_ENTER_MS);
   };
 
@@ -448,6 +534,7 @@ export function createLibreMap(
     if (!navOn) return;
     followPaused = true;
     el.dataset.follow = "paused";
+    opts.onFollowChange?.(false);
     clearFollowResume();
     followResumeTimer = window.setTimeout(resumeFollow, NAV_FOLLOW_RESUME_MS);
   };
@@ -541,6 +628,9 @@ export function createLibreMap(
       }
       if (lastRoutes.some((route) => route.points.length >= 2)) {
         (map.getSource("wb-route") as GeoJSONSource | undefined)?.setData(routeFc(lastRoutes, selectedRouteId));
+        (map.getSource("wb-route-progress") as GeoJSONSource | undefined)?.setData(
+          progressFc(lastRoutes, routeProgress, navOn),
+        );
         paintRoute(map, lastRouteDark);
       }
       setPinVisibility(map, !navOn && !pickOn);
@@ -672,6 +762,9 @@ export function createLibreMap(
       selectedRouteId = selectedId;
       lastRouteDark = dark;
       (map.getSource("wb-route") as GeoJSONSource | undefined)?.setData(routeFc(routes, selectedId));
+      (map.getSource("wb-route-progress") as GeoJSONSource | undefined)?.setData(
+        progressFc(routes, routeProgress, navOn),
+      );
       paintRoute(map, dark);
       const selected = routes.find((route) => route.id === selectedId) || routes[0];
       if (extra?.fit && selected?.points.length >= 2 && !navOn) {
@@ -679,11 +772,24 @@ export function createLibreMap(
         fitRoute(selected.points);
       }
     },
+    setRouteProgress(progress) {
+      routeProgress = progress;
+      el.dataset.routeProgress = progress ? progress.fraction.toFixed(3) : "0";
+      (map.getSource("wb-route-progress") as GeoJSONSource | undefined)?.setData(
+        progressFc(lastRoutes, progress, navOn),
+      );
+    },
     clearRoute() {
       lastRoutes = [];
       selectedRouteId = null;
+      routeProgress = null;
       pendingFit = false;
       (map.getSource("wb-route") as GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: [] });
+      (map.getSource("wb-route-progress") as GeoJSONSource | undefined)?.setData({
+        type: "FeatureCollection",
+        features: [],
+      });
+      el.dataset.routeProgress = "0";
     },
     setTraffic(on) {
       el.dataset.traffic = on ? "unavailable" : "off";
@@ -693,6 +799,7 @@ export function createLibreMap(
       followPaused = false;
       clearFollowResume();
       el.dataset.follow = on ? "on" : "off";
+      opts.onFollowChange?.(on);
       clearNavPhaseTimer();
       if (on) {
         navPhase = "entering";
@@ -713,6 +820,9 @@ export function createLibreMap(
         window.cancelAnimationFrame(markerFrame);
         marker?.remove();
       }
+      (map.getSource("wb-route-progress") as GeoJSONSource | undefined)?.setData(
+        progressFc(lastRoutes, routeProgress, on),
+      );
       paintMe();
       requestAnimationFrame(() => {
         resize();
@@ -728,12 +838,17 @@ export function createLibreMap(
       lastMe = pt;
       paintMe();
     },
-    follow(lon, lat, bearing) {
+    follow(lon, lat, bearing, extra?: WbFollowOptions) {
+      const camera = extra?.camera || { lat, lon };
       const target = {
         lat,
         lon,
         bearing: bearing != null && Number.isFinite(bearing) ? bearing : null,
+        camera,
+        zoom: navZoomForSpeed(extra?.speed),
+        accuracy: extra?.accuracy != null && Number.isFinite(extra.accuracy) ? extra.accuracy : null,
       };
+      el.dataset.navSpeed = extra?.speed != null && Number.isFinite(extra.speed) ? String(Math.round(extra.speed * 3.6)) : "0";
       const duration =
         firstFollow && navPhase === "entering" ? NAV_FLAT_ENTRY_MS : firstFollow ? NAV_ENTER_MS : NAV_MOVE_MS;
       lastFollow = target;

@@ -1,7 +1,8 @@
-import { expect, test, type Page } from "@playwright/test";
+import { devices, expect, test, type Page } from "@playwright/test";
 
 const START = { latitude: 42.441, longitude: 19.2626 };
 const DEST = { lat: 42.43, lon: 19.28 };
+const { defaultBrowserType: _iphoneBrowser, ...IPHONE_13 } = devices["iPhone 13"];
 
 const OSRM = {
   code: "Ok",
@@ -122,7 +123,7 @@ test.describe("GO navigation", () => {
     expect(zoom).toBeLessThanOrEqual(6.5);
   });
 
-  test("uses a 45-degree 3D camera like the original, with side tools", async ({ page, context }) => {
+  test("uses the redesigned 50-degree GO camera, HUD, and branded tracker", async ({ page, context }) => {
     await context.grantPermissions(["geolocation"]);
     await context.setGeolocation(START);
     await mockRouting(page);
@@ -134,34 +135,48 @@ test.describe("GO navigation", () => {
     await expect(page.locator(".map-page.is-nav")).toBeVisible();
     await expect(page.locator(".map-gl")).toBeVisible();
     await expect(page.locator(".map-gl")).toHaveAttribute("data-nav-entry", "flat-to-3d");
-    await expect(page.locator(".map-gl")).toHaveAttribute("data-pitch", "45");
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-pitch", "50");
     await expect.poll(async () => Number(await page.locator(".map-gl").getAttribute("data-zoom") || "0")).toBeGreaterThanOrEqual(17.5);
     await expect(page.locator(".map-gl")).toHaveAttribute("data-follow", "on");
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-camera-offset", "ahead");
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-route-progress", /^[01]\.\d{3}$/);
     await expectMapVisible(page);
     await expect(page.locator(".nav-hud")).toBeVisible();
     await expect(page.locator(".nav-exit")).toBeVisible();
     await expect(page.locator(".nav-banner b")).not.toHaveText("0 m");
     await expect(page.locator(".nav-next-list")).toBeVisible();
+    await expect(page.locator('.nav-maneuver-icon[data-maneuver="left"]').first()).toBeVisible();
     await expect(page.locator(".bottom-nav")).toHaveCount(0);
 
     await expect(page.locator(".nav-hud-time")).not.toHaveText("Now");
     await expect(page.locator(".nav-hud-km")).not.toHaveText("0 m");
 
-    await expect(page.getByLabel("filters")).toBeVisible();
-    await expect(page.getByLabel("map theme")).toBeVisible();
-    await expect(page.getByLabel("Zoom in")).toBeVisible();
-    await expect(page.getByLabel("My location")).toBeVisible();
+    await expect(page.locator(".map-tools")).toHaveCount(0);
+    await expect(page.getByTestId("nav-mute")).toBeVisible();
+    await expect(page.getByTestId("nav-recenter")).toBeVisible();
     await expect(page.getByLabel("Build route")).toHaveCount(0);
     await expect(page.locator(".wb-me-star")).toHaveCount(0);
+    await expect(page.locator(".wb-nav-puck")).toBeVisible();
 
-    await page.getByLabel("Zoom in").tap();
+    await page.getByTestId("nav-mute").tap();
+    await expect(page.getByTestId("nav-mute")).toHaveAttribute("aria-pressed", "true");
+
+    const mapBox = await page.locator(".map-gl").boundingBox();
+    expect(mapBox).toBeTruthy();
+    await page.mouse.move((mapBox?.x || 0) + (mapBox?.width || 390) / 2, (mapBox?.y || 0) + 420);
+    await page.mouse.down();
+    await page.mouse.move((mapBox?.x || 0) + (mapBox?.width || 390) / 2 + 70, (mapBox?.y || 0) + 420, {
+      steps: 8,
+    });
+    await page.mouse.up();
     await expect(page.locator(".map-gl")).toHaveAttribute("data-follow", "paused");
-    await page.getByLabel("My location").tap();
+    await expect(page.getByText(/Free look/i)).toBeVisible();
+    await page.getByTestId("nav-recenter").tap();
     await expect(page.locator(".map-gl")).toHaveAttribute("data-follow", "on");
 
     await expect(page.locator(".map-gl")).toHaveAttribute("data-ready", "1", { timeout: 20_000 });
     await page.waitForTimeout(1500);
-    expect(await page.locator(".map-gl").getAttribute("data-pitch")).toBe("45");
+    expect(await page.locator(".map-gl").getAttribute("data-pitch")).toBe("50");
     const box = await page.locator(".map-gl").boundingBox();
     expect(box && box.width > 100 && box.height > 100).toBeTruthy();
     await page.screenshot({ path: "test-results/go-nav.png", fullPage: true });
@@ -174,6 +189,23 @@ test.describe("GO navigation", () => {
     await expect(page.locator(".route-go")).toBeEnabled();
 
     await page.screenshot({ path: "test-results/go-exit.png", fullPage: true });
+  });
+
+  test("keeps the redesigned GO HUD legible in dark mode", async ({ page, context }) => {
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation(START);
+    await mockRouting(page);
+    await page.goto(`/#/map?to=${DEST.lat},${DEST.lon}&name=Dark%20Route`);
+    await page.getByTestId("map-theme").tap();
+    await expect(page.getByTestId("map-theme")).toHaveAttribute("data-theme-mode", "dark");
+    await expect(page.locator(".route-go")).toBeEnabled();
+    await page.locator(".route-go").tap();
+
+    await expect(page.locator(".map-page.is-nav.is-dark")).toBeVisible();
+    await expect(page.getByTestId("nav-primary")).toBeVisible();
+    await expect(page.getByTestId("nav-mute")).toBeVisible();
+    await expect(page.locator(".wb-nav-puck")).toBeVisible();
+    await expect(page.locator(".nav-ui")).toHaveCSS("color", "rgb(248, 250, 252)");
   });
 
   test("does not start GO when GPS is already at the destination", async ({ page, context }) => {
@@ -319,6 +351,14 @@ test.describe("GO navigation", () => {
     await page.getByLabel("Route alternatives").getByRole("button").nth(1).tap();
     await expect(page.getByLabel("Route alternatives").getByRole("button").nth(1)).toHaveClass(/on/);
     await expect(page.locator(".map-gl")).toHaveAttribute("data-traffic", "unavailable");
+    await page.locator(".route-go").click();
+    await expect(page.locator(".map-page.is-nav")).toBeVisible();
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-engine", "libre");
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-pitch", "50");
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-camera-offset", "ahead");
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-route-progress", /^[01]\.\d{3}$/);
+    await expect(page.locator(".wb-nav-puck")).toBeVisible();
+    await expect(page.getByTestId("nav-recenter")).toBeVisible();
   });
 
   test("cycles Light, Dark, and Auto map themes", async ({ page }) => {
@@ -351,5 +391,46 @@ test.describe("GO navigation", () => {
     expect(manifest.name).toBe("Welcome Bikers");
     expect(manifest.display).toBe("standalone");
     expect(manifest.icons.length).toBeGreaterThan(0);
+  });
+});
+
+test.describe("iPhone GO layout", () => {
+  test.use(IPHONE_13);
+
+  test("keeps the full HUD touchable inside mobile safe bounds", async ({ page, context }) => {
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation(START);
+    await mockRouting(page);
+    await page.goto(`/#/map?to=${DEST.lat},${DEST.lon}&name=iPhone%20Route`);
+    await expect(page.locator(".route-go")).toBeEnabled();
+    await page.locator(".route-go").tap();
+
+    const top = page.locator(".nav-top-stack");
+    const bottom = page.locator(".nav-hud");
+    await expect(top).toBeVisible();
+    await expect(bottom).toBeVisible();
+    await expect
+      .poll(async () => {
+        const viewport = page.viewportSize();
+        const topBox = await top.boundingBox();
+        const bottomBox = await bottom.boundingBox();
+        return Boolean(
+          viewport &&
+            topBox &&
+            bottomBox &&
+            topBox.y >= 0 &&
+            bottomBox.y + bottomBox.height <= viewport.height + 1,
+        );
+      })
+      .toBe(true);
+
+    for (const id of ["nav-mute", "nav-recenter", "nav-exit"]) {
+      const box = await page.getByTestId(id).boundingBox();
+      expect(box && box.height >= 44 && box.width >= 44).toBeTruthy();
+    }
+    await page.getByTestId("nav-mute").tap();
+    await expect(page.getByTestId("nav-mute")).toHaveAttribute("aria-pressed", "true");
+    await page.getByTestId("nav-exit").tap();
+    await expect(page.locator(".map-page.is-nav")).toHaveCount(0);
   });
 });
