@@ -25,21 +25,31 @@ jobs:
         env:
           VITE_OPENROUTER_API_KEY: ${{ secrets.VITE_OPENROUTER_API_KEY }}
         run: node scripts/probe-openrouter.mjs
-      - name: Build with OpenRouter key
+      - name: Start local CORS proxy
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.VITE_OPENROUTER_API_KEY }}
+          PORT: "8787"
+        run: |
+          nohup node workers/openrouter-proxy/server.mjs > /tmp/or-proxy.log 2>&1 &
+          for i in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:8787/health && break
+            sleep 0.25
+          done
+      - name: Build with proxy URL (key stays on proxy)
         env:
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-          VITE_OPENROUTER_API_KEY: ${{ secrets.VITE_OPENROUTER_API_KEY }}
+          VITE_OPENROUTER_PROXY_URL: http://127.0.0.1:8787
         run: npm run build
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Unit + mocked assistant suite
         env:
-          VITE_OPENROUTER_API_KEY: ${{ secrets.VITE_OPENROUTER_API_KEY }}
+          VITE_OPENROUTER_PROXY_URL: http://127.0.0.1:8787
         run: npx playwright test e2e/assistant-brain.spec.ts e2e/assistant.spec.ts e2e/assistant-ai.spec.ts e2e/assistant-tts.spec.ts --reporter=list
-      - name: Live OpenRouter Real Bro
+      - name: Live OpenRouter Real Bro via proxy
         env:
           LIVE_OPENROUTER: "1"
-          VITE_OPENROUTER_API_KEY: ${{ secrets.VITE_OPENROUTER_API_KEY }}
+          VITE_OPENROUTER_PROXY_URL: http://127.0.0.1:8787
         run: npx playwright test e2e/assistant-live.spec.ts --reporter=list
       - name: Probe neural TTS from GitHub
         env:

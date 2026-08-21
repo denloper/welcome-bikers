@@ -1,6 +1,6 @@
 import type { PlaceType } from "../types";
+import { chatUrl, resolveProxyBase } from "./orProxy";
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 /** Fast + smart default; fallbacks listed in the request body. */
 const MODEL = "google/gemini-2.5-flash";
 const FALLBACK_MODELS = ["openai/gpt-4o-mini", "google/gemini-2.0-flash-001"];
@@ -37,12 +37,9 @@ Reply with JSON only, no markdown:
 {"reply":"...","intent":"chat"|"ride"|"category","query":"...","type":"...","country":"..."}
 Omit unused fields.`;
 
-function apiKey(): string {
-  return String(import.meta.env.VITE_OPENROUTER_API_KEY || "").trim();
-}
-
 export function hasOpenRouter(): boolean {
-  return apiKey().length > 0;
+  // Calls always go through the CORS proxy (env URL or runtime discovery).
+  return true;
 }
 
 function extractJson(raw: string): unknown {
@@ -63,42 +60,36 @@ function extractJson(raw: string): unknown {
   }
 }
 
-function normalizeResult(raw: unknown, fallbackReply: string): BroAiResult {
-  if (!raw || typeof raw !== "object") {
-    return { reply: fallbackReply || "Yo. Say where you wanna ride, bro.", intent: "chat" };
-  }
-  const o = raw as Record<string, unknown>;
-  const reply = String(o.reply || fallbackReply || "").trim() || "Yo. Say where you wanna ride, bro.";
-  const intentRaw = String(o.intent || "chat").toLowerCase();
+function normalizeResult(parsed: unknown, fallbackReply: string): BroAiResult {
+  const obj = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+  const reply = String(obj.reply ?? fallbackReply).trim() || fallbackReply;
+  const intentRaw = String(obj.intent ?? "chat").toLowerCase();
   const intent: BroAiResult["intent"] =
     intentRaw === "ride" || intentRaw === "category" ? intentRaw : "chat";
-  const query = o.query != null ? String(o.query).trim() : undefined;
-  const typeRaw = o.type != null ? String(o.type).trim().toLowerCase() : "";
-  const type = PLACE_TYPES.has(typeRaw as PlaceType) ? (typeRaw as PlaceType) : undefined;
-  const country = o.country != null ? String(o.country).trim() : undefined;
+  const query = obj.query != null ? String(obj.query).trim() : undefined;
+  const typeRaw = obj.type != null ? String(obj.type).trim() : undefined;
+  const type = typeRaw && PLACE_TYPES.has(typeRaw as PlaceType) ? (typeRaw as PlaceType) : undefined;
+  const country = obj.country != null ? String(obj.country).trim() : undefined;
   if (intent === "ride" && !query) return { reply, intent: "chat" };
   if (intent === "category" && !type) return { reply, intent: "chat" };
   return { reply, intent, query, type, country };
 }
 
-/** Ask Real Bro via OpenRouter. Returns null when the key is missing or the call fails. */
+/** Ask Real Bro via CORS proxy (OpenRouter key stays server-side). Returns null on failure. */
 export async function askRealBro(userText: string, history: BroChatTurn[] = []): Promise<BroAiResult | null> {
-  const key = apiKey();
-  if (!key || !userText.trim()) return null;
+  if (!userText.trim()) return null;
+  const base = await resolveProxyBase();
+  if (!base) return null;
+
   const messages: { role: string; content: string }[] = [
     { role: "system", content: SYSTEM },
     ...history.slice(-8).map((t) => ({ role: t.role, content: t.content })),
     { role: "user", content: userText.trim() },
   ];
   try {
-    const res = await fetch(OPENROUTER_URL, {
+    const res = await fetch(chatUrl(base), {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://denloper.github.io/welcome-bikers/",
-        "X-Title": "Welcome Bikers Real Bro",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: MODEL,
         models: FALLBACK_MODELS,

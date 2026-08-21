@@ -1,6 +1,6 @@
-/** Neural TTS for Real Bro via OpenRouter. Falls back to Web Speech. */
+/** Neural TTS for Real Bro via CORS proxy. Falls back to Web Speech. */
 
-const SPEECH_URL = "https://openrouter.ai/api/v1/audio/speech";
+import { resolveProxyBase, speechUrl } from "./orProxy";
 
 /** Deep male chain — bass / street energy when the provider allows. */
 const TTS_TRIES: { model: string; voice: string; format: "mp3" | "pcm"; speed?: number; prompt?: string }[] = [
@@ -29,12 +29,8 @@ let currentAudio: HTMLAudioElement | null = null;
 let currentObjectUrl: string | null = null;
 let playGen = 0;
 
-function apiKey(): string {
-  return String(import.meta.env.VITE_OPENROUTER_API_KEY || "").trim();
-}
-
 export function hasNeuralTts(): boolean {
-  return apiKey().length > 0;
+  return true;
 }
 
 export function hushNeuralVoice() {
@@ -61,7 +57,6 @@ export function hushNeuralVoice() {
 }
 
 function pcmToWav(pcm: ArrayBuffer, sampleRate = 24_000): Blob {
-  const samples = pcm.byteLength / 2;
   const buffer = new ArrayBuffer(44 + pcm.byteLength);
   const view = new DataView(buffer);
   const writeStr = (offset: number, s: string) => {
@@ -85,14 +80,16 @@ function pcmToWav(pcm: ArrayBuffer, sampleRate = 24_000): Blob {
 }
 
 async function fetchSpeech(text: string): Promise<Blob | null> {
-  const key = apiKey();
-  if (!key) return null;
+  const base = await resolveProxyBase();
+  if (!base) return null;
+
   const cached = cache.get(text);
   if (cached) {
     const res = await fetch(cached);
     if (res.ok) return res.blob();
   }
 
+  const endpoint = speechUrl(base);
   for (const tryCfg of TTS_TRIES) {
     try {
       const body: Record<string, unknown> = {
@@ -105,14 +102,9 @@ async function fetchSpeech(text: string): Promise<Blob | null> {
       if (tryCfg.prompt) {
         body.provider = { options: { google: { prompt: tryCfg.prompt } } };
       }
-      const res = await fetch(SPEECH_URL, {
+      const res = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://denloper.github.io/welcome-bikers/",
-          "X-Title": "Welcome Bikers Real Bro TTS",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       if (!res.ok) continue;
@@ -172,9 +164,6 @@ export async function speakBroNeural(
   if (!clean) {
     onDone?.();
     return false;
-  }
-  if (!hasNeuralTts()) {
-    return webSpeak?.(clean, onDone) ?? (onDone?.(), false);
   }
   try {
     const blob = await fetchSpeech(clean);

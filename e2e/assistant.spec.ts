@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { fulfillChatJson, mockProxyChat } from "./helpers/mockProxy";
 
 test.describe("Real Bro assistant", () => {
   test("opens from the main page with a greeting and text input", async ({ page }) => {
@@ -44,22 +45,11 @@ test.describe("Real Bro assistant", () => {
   });
 
   test("answers unclear chat with OpenRouter Real Bro AI", async ({ page }) => {
-    await page.route("https://openrouter.ai/api/v1/chat/completions", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify({
-                  reply: 'Weather? Bro, I am not AccuWeather. Say "ride to Podgorica" to build a route, or ask what bars are in Montenegro.',
-                  intent: "chat",
-                }),
-              },
-            },
-          ],
-        }),
+    await mockProxyChat(page, async (route) => {
+      await fulfillChatJson(route, {
+        reply:
+          'Weather? Bro, I am not AccuWeather. Say "ride to Podgorica" to build a route, or ask what bars are in Montenegro.',
+        intent: "chat",
       });
     });
     await page.goto("/#/");

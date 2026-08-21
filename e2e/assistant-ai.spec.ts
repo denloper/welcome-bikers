@@ -1,45 +1,20 @@
 import { expect, test } from "@playwright/test";
+import { fulfillChatJson, mockProxyChat } from "./helpers/mockProxy";
 
 test("OpenRouter Real Bro JSON normalizes ride and category intents", async ({ page }) => {
-  await page.route("https://openrouter.ai/api/v1/chat/completions", async (route) => {
-    const body = route.request().postDataJSON() as { messages?: { content?: string }[] };
-    const last = body.messages?.[body.messages.length - 1]?.content || "";
+  await mockProxyChat(page, async (route, last) => {
     if (/beer|бар/i.test(last)) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify({
-                  reply: "Beer run locked. Here are bikers bars in Montenegro.",
-                  intent: "category",
-                  type: "bars",
-                  country: "Montenegro",
-                }),
-              },
-            },
-          ],
-        }),
+      await fulfillChatJson(route, {
+        reply: "Beer run locked. Here are bikers bars in Montenegro.",
+        intent: "category",
+        type: "bars",
+        country: "Montenegro",
       });
       return;
     }
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                reply: "Easy, bro — I build routes and drop place cards. Weather is for softies.",
-                intent: "chat",
-              }),
-            },
-          },
-        ],
-      }),
+    await fulfillChatJson(route, {
+      reply: "Easy, bro — I build routes and drop place cards. Weather is for softies.",
+      intent: "chat",
     });
   });
 

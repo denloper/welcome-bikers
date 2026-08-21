@@ -200,6 +200,14 @@ export function unknownReply(ru: boolean): string {
 /** Offline / API-down replies so greetings do not all collapse to the weather canned line. */
 export function localChatReply(text: string): string {
   const t = text.toLowerCase().trim();
+  // Short acks must not fall through to unknownReply (that line mentions weather).
+  if (
+    /^(ok|okay|k|kk|ку|ок|окей|cool|nice|thanks|thank you|thx|ty|yes|yeah|yep|sure|got it|ага|угу|ладно|понял|спс|спасибо)[.!?]*$/i.test(
+      t,
+    )
+  ) {
+    return 'Solid. Want wheels — say "ride to Kotor". Want spots — "what bars are in Montenegro?"';
+  }
   if (/\b(ai|ии|chatgpt|gpt|бот|bot|robot|нейросет)/i.test(t)) {
     return "Yeah, bro — I am Real Bro, the in-app AI. Ask me where to ride or what bars are around, and I lock the cards.";
   }

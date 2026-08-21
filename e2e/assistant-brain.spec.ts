@@ -67,6 +67,9 @@ test("localChatReply answers hello and AI questions without the weather canned l
   expect(localChatReply("hello")).toMatch(/Real Bro online/i);
   expect(localChatReply("hello are you ai?")).toMatch(/in-app AI/i);
   expect(localChatReply("how is the weather?")).toMatch(/Weather/i);
+  expect(localChatReply("okay")).toMatch(/Solid/i);
+  expect(localChatReply("ку")).toMatch(/Solid/i);
+  expect(localChatReply("okay")).not.toMatch(/not your weather app/i);
 });
 
 test("matchPlaces finds a place by fuzzy name and skips pending", () => {

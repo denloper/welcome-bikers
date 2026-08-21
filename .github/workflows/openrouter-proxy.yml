@@ -1,0 +1,94 @@
+# Keeps a CORS OpenRouter proxy reachable (GitHub runner egress works; RF/CF Workers often 403).
+# Publishes public base URL to branch proxy-url for client discovery.
+
+name: OpenRouter proxy tunnel
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */5 * * *"
+
+concurrency:
+  group: openrouter-proxy-tunnel
+  cancel-in-progress: true
+
+jobs:
+  proxy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Start OpenRouter proxy
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.VITE_OPENROUTER_API_KEY }}
+          PORT: "8787"
+        run: |
+          set -euo pipefail
+          if [ -z "${OPENROUTER_API_KEY}" ]; then
+            echo "Missing VITE_OPENROUTER_API_KEY secret"
+            exit 1
+          fi
+          nohup node workers/openrouter-proxy/server.mjs > /tmp/proxy.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS "http://127.0.0.1:8787/health"; then echo; break; fi
+            sleep 0.5
+          done
+          curl -fsS "http://127.0.0.1:8787/health"
+          echo
+
+      - name: Install cloudflared
+        run: |
+          curl -fsSL -o /tmp/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x /tmp/cloudflared
+
+      - name: Start tunnel and publish discovery URL
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          /tmp/cloudflared tunnel --url http://127.0.0.1:8787 > /tmp/tunnel.log 2>&1 &
+          PROXY_URL=""
+          for i in $(seq 1 90); do
+            PROXY_URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.trycloudflare\.com' /tmp/tunnel.log | head -n1 || true)
+            if [ -n "$PROXY_URL" ]; then break; fi
+            sleep 1
+          done
+          if [ -z "$PROXY_URL" ]; then
+            echo "Tunnel URL not found"
+            cat /tmp/tunnel.log || true
+            cat /tmp/proxy.log || true
+            exit 1
+          fi
+          echo "PROXY_URL=$PROXY_URL"
+          echo "$PROXY_URL" > /tmp/proxy-url.txt
+          BODY=$(printf '{"base":"%s","updatedAt":"%s"}' "$PROXY_URL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
+          mkdir -p /tmp/disc/public
+          printf '%s\n' "$BODY" > /tmp/disc/public/or-proxy.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Dedicated discovery branch (raw.githubusercontent.com/.../proxy-url/...)
+          rm -rf /tmp/disc-repo
+          mkdir -p /tmp/disc-repo/public
+          cp /tmp/disc/public/or-proxy.json /tmp/disc-repo/public/or-proxy.json
+          git -C /tmp/disc-repo init
+          git -C /tmp/disc-repo checkout -b proxy-url
+          git -C /tmp/disc-repo add public/or-proxy.json
+          git -C /tmp/disc-repo -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "chore: refresh OpenRouter proxy tunnel URL"
+          git -C /tmp/disc-repo remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git -C /tmp/disc-repo push -f origin proxy-url
+          echo "Published discovery → https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/proxy-url/public/or-proxy.json"
+      - name: Keep tunnel alive
+        run: |
+          echo "Proxy up — holding runner ($(cat /tmp/proxy-url.txt))"
+          while true; do
+            curl -fsS "http://127.0.0.1:8787/health" >/dev/null || { echo "proxy died"; exit 1; }
+            sleep 60
+          done

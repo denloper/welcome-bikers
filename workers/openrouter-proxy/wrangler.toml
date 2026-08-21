@@ -1,0 +1,7 @@
+name = "welcome-bikers-openrouter"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+[vars]
+# API key is set via: wrangler secret put OPENROUTER_API_KEY
