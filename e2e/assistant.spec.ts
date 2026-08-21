@@ -95,7 +95,7 @@ test.describe("Real Bro assistant", () => {
     ).toBe("en-US");
     expect(
       await page.evaluate(() => (window as unknown as { __recognitionContinuous?: boolean }).__recognitionContinuous),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       await page.evaluate(() => (window as unknown as { __recognitionInterim?: boolean }).__recognitionInterim),
     ).toBe(true);

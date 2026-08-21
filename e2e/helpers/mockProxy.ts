@@ -39,6 +39,25 @@ export async function mockProxySpeech(
   });
 }
 
+export async function mockProxyTranscribe(page: Page, texts: string[] | string = "what bars are in Montenegro") {
+  const queue = Array.isArray(texts) ? [...texts] : [texts];
+  let i = 0;
+  await page.route(/\/transcribe\/?$/, async (route) => {
+    if (route.request().method() === "OPTIONS") {
+      await route.fulfill({ status: 204, headers: cors() });
+      return;
+    }
+    const text = queue[Math.min(i, queue.length - 1)] || "";
+    i += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: cors(),
+      body: JSON.stringify({ text }),
+    });
+  });
+}
+
 function cors(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": "*",

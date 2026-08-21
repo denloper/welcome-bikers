@@ -13,6 +13,13 @@ import {
 } from "../lib/assistant";
 import { loadPlaces } from "../lib/data";
 import { askRealBro, type BroChatTurn } from "../lib/openrouter";
+import {
+  canMediaRecord,
+  preferRecordStt,
+  startMicCapture,
+  transcribeAudioBlob,
+  type RecSession,
+} from "../lib/stt";
 import { hushVoice, speakText, warmVoices } from "../lib/voice";
 import type { Place, PlaceType } from "../types";
 
@@ -146,32 +153,69 @@ export function RealBro() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
+  const captureRef = useRef<RecSession | null>(null);
+  const useRecordRef = useRef(false);
+  const startingRef = useRef(false);
   const speakToken = useRef(0);
   const wantListen = useRef(false);
   const heardRef = useRef("");
   const restartTimer = useRef(0);
   const silenceTimer = useRef(0);
+  const levelPoll = useRef(0);
   const handleQueryRef = useRef<(raw: string) => Promise<void>>(async () => undefined);
   const lastSubmitRef = useRef({ text: "", at: 0 });
   const listRef = useRef<HTMLDivElement>(null);
-  const hasMic = recognizerCtor() !== null;
+  const hasSpeechApi = recognizerCtor() !== null;
+  const hasMic = hasSpeechApi || canMediaRecord();
+  useRecordRef.current = preferRecordStt(hasSpeechApi);
 
   function clearListenTimers() {
     window.clearTimeout(restartTimer.current);
     window.clearTimeout(silenceTimer.current);
+    window.clearInterval(levelPoll.current);
   }
 
-  function stopListening(submit: boolean) {
-    const text = heardRef.current.trim();
-    wantListen.current = false;
-    heardRef.current = "";
-    clearListenTimers();
+  function stopSpeechRecOnly() {
     try {
       recRef.current?.stop();
     } catch {
       /* already ended */
     }
     recRef.current = null;
+  }
+
+  async function finishRecord(submit: boolean) {
+    const session = captureRef.current;
+    captureRef.current = null;
+    clearListenTimers();
+    wantListen.current = false;
+    startingRef.current = false;
+    setPhase("idle");
+    if (!session) return;
+    setInput("…");
+    const blob = await session.stop();
+    // iOS needs a beat to release the audio session before the next take.
+    await new Promise((r) => window.setTimeout(r, 120));
+    if (!submit || !blob) {
+      setInput("");
+      return;
+    }
+    const text = await transcribeAudioBlob(blob, session.format);
+    setInput("");
+    if (text) void handleQueryRef.current(text);
+  }
+
+  function stopListening(submit: boolean) {
+    if (captureRef.current) {
+      void finishRecord(submit);
+      return;
+    }
+    const text = heardRef.current.trim();
+    wantListen.current = false;
+    startingRef.current = false;
+    heardRef.current = "";
+    clearListenTimers();
+    stopSpeechRecOnly();
     setPhase("idle");
     if (submit && text) {
       setInput("");
@@ -180,9 +224,9 @@ export function RealBro() {
   }
 
   function beginRec() {
+    if (useRecordRef.current) return;
     const Ctor = recognizerCtor();
-    if (!Ctor || !wantListen.current) return;
-    // Drop silence timers from a previous session so restart + silence cannot double-submit.
+    if (!Ctor || !wantListen.current || startingRef.current) return;
     window.clearTimeout(silenceTimer.current);
     const prev = recRef.current;
     recRef.current = null;
@@ -193,7 +237,9 @@ export function RealBro() {
     }
     const rec = new Ctor();
     rec.lang = "en-US";
-    rec.continuous = true;
+    // continuous restart is flaky on mobile WebViews; single utterance + silence is stabler.
+    const mobile = /Android|Mobile|iPhone|iPad/i.test(navigator.userAgent || "");
+    rec.continuous = !mobile;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     rec.onresult = (e) => {
@@ -211,7 +257,7 @@ export function RealBro() {
       if (heardRef.current) {
         silenceTimer.current = window.setTimeout(() => {
           if (wantListen.current && heardRef.current.trim()) stopListening(true);
-        }, 1600);
+        }, mobile ? 1200 : 1600);
       }
     };
     rec.onerror = (err) => {
@@ -220,17 +266,27 @@ export function RealBro() {
         if (code === "not-allowed" || code === "service-not-allowed") stopListening(false);
         return;
       }
+      if ((code === "network" || code === "audio-capture" || code === "aborted") && canMediaRecord()) {
+        useRecordRef.current = true;
+        stopSpeechRecOnly();
+        void beginRecord();
+        return;
+      }
       window.clearTimeout(restartTimer.current);
       restartTimer.current = window.setTimeout(() => {
         if (wantListen.current) beginRec();
-      }, 220);
+      }, 280);
     };
     rec.onend = () => {
       if (recRef.current !== rec || !wantListen.current) return;
+      if (heardRef.current.trim() && !rec.continuous) {
+        stopListening(true);
+        return;
+      }
       window.clearTimeout(restartTimer.current);
       restartTimer.current = window.setTimeout(() => {
         if (wantListen.current) beginRec();
-      }, 180);
+      }, 280);
     };
     recRef.current = rec;
     setPhase("listening");
@@ -240,7 +296,55 @@ export function RealBro() {
       window.clearTimeout(restartTimer.current);
       restartTimer.current = window.setTimeout(() => {
         if (wantListen.current) beginRec();
-      }, 280);
+      }, 320);
+    }
+  }
+
+  async function beginRecord() {
+    if (!wantListen.current || !canMediaRecord() || captureRef.current || startingRef.current) return;
+    startingRef.current = true;
+    stopSpeechRecOnly();
+    clearListenTimers();
+    try {
+      // Release any leftover Web Speech / TTS hold on the iOS audio session.
+      hushVoice();
+      await new Promise((r) => window.setTimeout(r, 100));
+      if (!wantListen.current) {
+        startingRef.current = false;
+        return;
+      }
+      const session = await startMicCapture();
+      if (!wantListen.current) {
+        await session.stop();
+        startingRef.current = false;
+        return;
+      }
+      captureRef.current = session;
+      startingRef.current = false;
+      setPhase("listening");
+      setInput("");
+      let heardVoice = false;
+      let quietMs = 0;
+      const startedAt = Date.now();
+      levelPoll.current = window.setInterval(() => {
+        if (!wantListen.current || !captureRef.current) return;
+        const lvl = captureRef.current.level();
+        if (lvl > 0.035) {
+          heardVoice = true;
+          quietMs = 0;
+        } else if (heardVoice) {
+          quietMs += 100;
+          if (quietMs >= 1400 && Date.now() - startedAt > 700) {
+            void finishRecord(true);
+          }
+        }
+        if (Date.now() - startedAt > 22_000) void finishRecord(true);
+      }, 100);
+    } catch {
+      wantListen.current = false;
+      startingRef.current = false;
+      setPhase("idle");
+      setInput("");
     }
   }
 
@@ -250,7 +354,9 @@ export function RealBro() {
 
   useEffect(() => {
     const onVis = () => {
-      if (document.visibilityState === "visible" && wantListen.current) beginRec();
+      if (document.visibilityState === "visible" && wantListen.current && !useRecordRef.current && !captureRef.current) {
+        beginRec();
+      }
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
@@ -381,8 +487,8 @@ export function RealBro() {
   }
 
   function startListening() {
-    if (!recognizerCtor()) return;
-    if (wantListen.current || phase === "listening") {
+    if (!hasMic || startingRef.current) return;
+    if (wantListen.current || phase === "listening" || captureRef.current) {
       stopListening(true);
       return;
     }
@@ -391,7 +497,8 @@ export function RealBro() {
     heardRef.current = "";
     wantListen.current = true;
     setInput("");
-    beginRec();
+    if (useRecordRef.current) void beginRecord();
+    else beginRec();
   }
 
   function rideTo(card: Card) {
