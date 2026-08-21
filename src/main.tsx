@@ -8,7 +8,14 @@ import "./index.css";
 void bootNativeShell();
 if (!isNativeApp()) {
   void import("virtual:pwa-register")
-    .then(({ registerSW }) => registerSW({ immediate: true }))
+    .then(({ registerSW }) => {
+      const update = registerSW({
+        immediate: true,
+        onNeedRefresh() {
+          void update(true);
+        },
+      });
+    })
     .catch(() => undefined);
 }
 

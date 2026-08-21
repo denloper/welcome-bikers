@@ -1,4 +1,4 @@
-/** Mobile-friendly STT: MediaRecorder + OpenRouter Whisper via CORS proxy (iOS Web Speech dies after 1st take). */
+/** Mobile STT: MediaRecorder + Whisper. iOS Web Speech dies after the first take. */
 
 import { resolveProxyBase, transcribeUrl } from "./orProxy";
 
@@ -25,7 +25,7 @@ export function preferRecordStt(hasSpeechApi: boolean): boolean {
 
 function pickMime(): { mime: string; format: string } {
   const candidates: { mime: string; format: string }[] = [
-    { mime: "audio/mp4", format: "mp4" },
+    { mime: "audio/mp4", format: "m4a" },
     { mime: "audio/aac", format: "aac" },
     { mime: "audio/webm;codecs=opus", format: "webm" },
     { mime: "audio/webm", format: "webm" },
@@ -40,7 +40,15 @@ function pickMime(): { mime: string; format: string } {
       /* try next */
     }
   }
-  return { mime: "", format: "webm" };
+  return { mime: "", format: isAppleMobile() ? "m4a" : "webm" };
+}
+
+function formatFromBlob(blob: Blob, hint: string): string {
+  if (hint) return hint;
+  const t = blob.type.toLowerCase();
+  if (t.includes("mp4") || t.includes("m4a") || t.includes("aac")) return "m4a";
+  if (t.includes("ogg")) return "ogg";
+  return "webm";
 }
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -60,9 +68,7 @@ export async function transcribeAudioBlob(blob: Blob, formatHint: string): Promi
   if (!blob.size) return null;
   const base = await resolveProxyBase();
   if (!base) return null;
-  const format =
-    formatHint ||
-    (blob.type.includes("mp4") ? "mp4" : blob.type.includes("ogg") ? "ogg" : "webm");
+  const format = formatFromBlob(blob, formatHint);
   try {
     const data = await blobToBase64(blob);
     const res = await fetch(transcribeUrl(base), {
@@ -86,26 +92,42 @@ export async function transcribeAudioBlob(blob: Blob, formatHint: string): Promi
 export type RecSession = {
   format: string;
   stop: () => Promise<Blob | null>;
-  /** RMS 0..1 for silence auto-stop */
   level: () => number;
 };
 
-/** Start mic capture. Must run inside a user gesture on iOS. */
-export async function startMicCapture(): Promise<RecSession> {
-  const stream = await navigator.mediaDevices.getUserMedia({
+async function openMicStream(): Promise<MediaStream> {
+  const detailed: MediaStreamConstraints = {
     audio: {
       echoCancellation: true,
       noiseSuppression: true,
       autoGainControl: true,
     },
-  });
+  };
+  try {
+    return await navigator.mediaDevices.getUserMedia(detailed);
+  } catch {
+    return navigator.mediaDevices.getUserMedia({ audio: true });
+  }
+}
 
+/**
+ * Must run inside the tap that starts listening.
+ * iOS drops the user-gesture if we await a timeout first.
+ */
+export async function startMicCapture(): Promise<RecSession> {
+  const apple = isAppleMobile();
+  const stream = await openMicStream();
   const { mime, format } = pickMime();
   const chunks: BlobPart[] = [];
-  const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+  let rec: MediaRecorder;
+  try {
+    rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+  } catch {
+    rec = new MediaRecorder(stream);
+  }
   const usedFormat =
     format ||
-    (rec.mimeType.includes("mp4") ? "mp4" : rec.mimeType.includes("ogg") ? "ogg" : "webm");
+    formatFromBlob(new Blob([], { type: rec.mimeType || mime }), "");
 
   rec.ondataavailable = (e) => {
     if (e.data?.size) chunks.push(e.data);
@@ -119,18 +141,30 @@ export async function startMicCapture(): Promise<RecSession> {
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     audioCtx = new AC();
-    await audioCtx.resume();
+    if (audioCtx.state === "suspended") await audioCtx.resume();
     const src = audioCtx.createMediaStreamSource(stream);
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 512;
     src.connect(analyser);
     data = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
   } catch {
-    /* level meter optional */
+    /* level meter optional — tap-to-send still works */
   }
 
-  // timeslice keeps chunks flowing; critical so stop() always yields audio on iOS
-  rec.start(200);
+  // timeslice is ignored or empties the final blob on several iOS versions
+  if (apple) rec.start();
+  else rec.start(200);
+
+  const teardown = () => {
+    stream.getTracks().forEach((t) => {
+      try {
+        t.stop();
+      } catch {
+        /* ignore */
+      }
+    });
+    void audioCtx?.close().catch(() => undefined);
+  };
 
   return {
     format: usedFormat,
@@ -146,16 +180,12 @@ export async function startMicCapture(): Promise<RecSession> {
     },
     stop: () =>
       new Promise((resolve) => {
+        let settled = false;
         const finish = () => {
-          stream.getTracks().forEach((t) => {
-            try {
-              t.stop();
-            } catch {
-              /* ignore */
-            }
-          });
-          void audioCtx?.close().catch(() => undefined);
-          const type = rec.mimeType || mime || "audio/webm";
+          if (settled) return;
+          settled = true;
+          teardown();
+          const type = rec.mimeType || mime || (apple ? "audio/mp4" : "audio/webm");
           resolve(chunks.length ? new Blob(chunks, { type }) : null);
         };
         if (rec.state === "inactive") {
@@ -163,8 +193,8 @@ export async function startMicCapture(): Promise<RecSession> {
           return;
         }
         rec.onstop = finish;
+        window.setTimeout(finish, 1500);
         try {
-          if (rec.state === "recording") rec.requestData?.();
           rec.stop();
         } catch {
           finish();

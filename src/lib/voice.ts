@@ -153,7 +153,20 @@ function pickVoice(): SpeechSynthesisVoice | null {
 export function hushVoice() {
   hushNeuralVoice();
   try {
-    window.speechSynthesis?.cancel();
+    const syn = window.speechSynthesis;
+    if (!syn) return;
+    syn.cancel();
+    // iOS keeps the audio session locked after cancel() unless we poke it.
+    try {
+      syn.pause();
+    } catch {
+      /* ignore */
+    }
+    try {
+      syn.cancel();
+    } catch {
+      /* ignore */
+    }
   } catch {
     /* ignore */
   }

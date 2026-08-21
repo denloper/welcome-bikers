@@ -164,6 +164,8 @@ export function RealBro() {
   const levelPoll = useRef(0);
   const handleQueryRef = useRef<(raw: string) => Promise<void>>(async () => undefined);
   const lastSubmitRef = useRef({ text: "", at: 0 });
+  const busyRef = useRef(false);
+  const queuedRef = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const hasSpeechApi = recognizerCtor() !== null;
   const hasMic = hasSpeechApi || canMediaRecord();
@@ -194,9 +196,7 @@ export function RealBro() {
     if (!session) return;
     setInput("…");
     const blob = await session.stop();
-    // iOS needs a beat to release the audio session before the next take.
-    await new Promise((r) => window.setTimeout(r, 120));
-    if (!submit || !blob) {
+    if (!submit || !blob || !blob.size) {
       setInput("");
       return;
     }
@@ -306,9 +306,8 @@ export function RealBro() {
     stopSpeechRecOnly();
     clearListenTimers();
     try {
-      // Release any leftover Web Speech / TTS hold on the iOS audio session.
+      // Same tap as startListening — do not await a timeout or iOS drops the gesture.
       hushVoice();
-      await new Promise((r) => window.setTimeout(r, 100));
       if (!wantListen.current) {
         startingRef.current = false;
         return;
@@ -368,6 +367,24 @@ export function RealBro() {
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [msgs]);
+
+  useEffect(() => {
+    if (!open) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const sync = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      document.documentElement.style.setProperty("--wb-kb", `${Math.round(inset)}px`);
+    };
+    sync();
+    vv.addEventListener("resize", sync);
+    vv.addEventListener("scroll", sync);
+    return () => {
+      vv.removeEventListener("resize", sync);
+      vv.removeEventListener("scroll", sync);
+      document.documentElement.style.setProperty("--wb-kb", "0px");
+    };
+  }, [open]);
 
   function push(msg: Omit<Msg, "id">) {
     setMsgs((m) => [...m, { ...msg, id: ++seq }]);
@@ -440,11 +457,16 @@ export function RealBro() {
 
   async function handleQuery(raw: string) {
     const text = raw.trim();
-    if (!text || busy) return;
+    if (!text) return;
+    if (busyRef.current) {
+      queuedRef.current = text;
+      return;
+    }
     const now = Date.now();
     // Voice silence + send (or overlapping recognizers) used to fire the same line twice.
     if (text === lastSubmitRef.current.text && now - lastSubmitRef.current.at < 2200) return;
     lastSubmitRef.current = { text, at: now };
+    busyRef.current = true;
     setBusy(true);
     hushVoice();
     push({ role: "user", text });
@@ -475,7 +497,11 @@ export function RealBro() {
       push({ role: "bro", text: reply });
       say(reply);
     } finally {
+      busyRef.current = false;
       setBusy(false);
+      const next = queuedRef.current;
+      queuedRef.current = null;
+      if (next) void handleQuery(next);
     }
   }
   handleQueryRef.current = handleQuery;
@@ -487,8 +513,8 @@ export function RealBro() {
   }
 
   function startListening() {
-    if (!hasMic || startingRef.current) return;
-    if (wantListen.current || phase === "listening" || captureRef.current) {
+    if (!hasMic) return;
+    if (wantListen.current || captureRef.current) {
       stopListening(true);
       return;
     }
@@ -496,6 +522,7 @@ export function RealBro() {
     speakToken.current++;
     heardRef.current = "";
     wantListen.current = true;
+    startingRef.current = false;
     setInput("");
     if (useRecordRef.current) void beginRecord();
     else beginRec();
@@ -582,7 +609,7 @@ export function RealBro() {
                   </svg>
                 </button>
               )}
-              <button className="rb-send" data-testid="assistant-send" aria-label="Send" onClick={handleSend}>
+              <button className="rb-send" data-testid="assistant-send" aria-label="Send" disabled={busy} onClick={handleSend}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 12h14M13 5l7 7-7 7" />
                 </svg>

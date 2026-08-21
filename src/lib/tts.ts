@@ -138,6 +138,10 @@ function playBlob(blob: Blob, onDone?: () => void): boolean {
   const url = URL.createObjectURL(blob);
   currentObjectUrl = url;
   const audio = new Audio(url);
+  audio.setAttribute("playsinline", "true");
+  audio.setAttribute("webkit-playsinline", "true");
+  (audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+  audio.preload = "auto";
   currentAudio = audio;
   let done = false;
   const finish = () => {

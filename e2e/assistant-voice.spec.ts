@@ -80,6 +80,36 @@ test.describe("STT helpers", () => {
 });
 
 test.describe("Real Bro iPhone voice (MediaRecorder path)", () => {
+  test("uses MediaRecorder even when webkitSpeechRecognition exists", async ({ page }) => {
+    await installIphoneRecordMocks(page);
+    await page.addInitScript(() => {
+      class FakeRecognition {
+        lang = "";
+        continuous = false;
+        interimResults = false;
+        maxAlternatives = 1;
+        onresult = null;
+        onerror = null;
+        onend: (() => void) | null = null;
+        start() {
+          (window as unknown as { __recognitionLang?: string }).__recognitionLang = this.lang;
+        }
+        stop() {}
+      }
+      Object.defineProperty(window, "webkitSpeechRecognition", { value: FakeRecognition, configurable: true });
+      Object.defineProperty(window, "SpeechRecognition", { value: FakeRecognition, configurable: true });
+    });
+    await mockProxyTranscribe(page, "ride to Magnus Moto");
+    await mockProxySpeech(page);
+    await page.goto("/#/");
+    await page.getByTestId("assistant-row").tap();
+    await page.getByLabel("Voice input").tap();
+    await expect(page.locator(".rb-state")).toHaveText("Listening…");
+    expect(
+      await page.evaluate(() => (window as unknown as { __recognitionLang?: string }).__recognitionLang),
+    ).toBeUndefined();
+  });
+
   test("mic shows and two consecutive takes both submit", async ({ page }) => {
     await installIphoneRecordMocks(page);
     await mockProxyTranscribe(page, ["ride to Magnus Moto", "what bars are in Montenegro?"]);
@@ -115,6 +145,39 @@ test.describe("Real Bro iPhone voice (MediaRecorder path)", () => {
     await mic.tap();
 
     await expect(page.locator(".rb-bubble.user").filter({ hasText: /bars.*Montenegro/i })).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test("queues a second voice line while the first reply is still busy", async ({ page }) => {
+    await installIphoneRecordMocks(page);
+    await mockProxyTranscribe(page, ["hello bro", "ride to Magnus Moto"]);
+    await mockProxySpeech(page);
+    await mockProxyChat(page, async (route, last) => {
+      if (/hello/i.test(last)) {
+        await new Promise((r) => setTimeout(r, 800));
+        await fulfillChatJson(route, { reply: "Yo.", intent: "chat" });
+        return;
+      }
+      await fulfillChatJson(route, { reply: "Route locked.", intent: "ride", query: "Magnus Moto" });
+    });
+
+    await page.goto("/#/");
+    await page.getByTestId("assistant-row").tap();
+    const mic = page.getByLabel("Voice input");
+
+    await mic.tap();
+    await expect(page.locator(".rb-state")).toHaveText("Listening…");
+    await mic.tap();
+    await expect(page.locator(".rb-bubble.user").filter({ hasText: /hello bro/i })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await mic.tap();
+    await expect(page.locator(".rb-state")).toHaveText("Listening…");
+    await mic.tap();
+
+    await expect(page.locator(".rb-bubble.user").filter({ hasText: /Magnus Moto/i })).toBeVisible({
       timeout: 15_000,
     });
   });
