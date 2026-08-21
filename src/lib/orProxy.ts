@@ -36,10 +36,18 @@ async function discoverProxyBase(): Promise<string> {
   return "";
 }
 
-/** Resolve proxy base: env first, then published discovery JSON. */
+/** Resolve proxy base: env first (stable hosts), else published discovery JSON. */
 export async function resolveProxyBase(): Promise<string> {
   const fromEnv = proxyBaseFromEnv();
-  if (fromEnv) return fromEnv;
+  if (fromEnv) {
+    // Prefer env, but fall back to discovery if the baked URL is dead (ephemeral tunnels).
+    try {
+      const res = await fetch(`${fromEnv}/health`, { cache: "no-store" });
+      if (res.ok) return fromEnv;
+    } catch {
+      /* fall through */
+    }
+  }
   if (resolved !== undefined) return resolved || "";
   if (!resolving) {
     resolving = discoverProxyBase().then((base) => {
