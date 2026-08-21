@@ -197,6 +197,21 @@ export function unknownReply(ru: boolean): string {
     : 'Easy, bro. I am Real Bro, not your weather app. Say "ride to Podgorica" to build a route, or "what bars are in Montenegro" and I drop the cards.';
 }
 
+/** Offline / API-down replies so greetings do not all collapse to the weather canned line. */
+export function localChatReply(text: string): string {
+  const t = text.toLowerCase().trim();
+  if (/\b(ai|ии|chatgpt|gpt|бот|bot|robot|нейросет)/i.test(t)) {
+    return "Yeah, bro — I am Real Bro, the in-app AI. Ask me where to ride or what bars are around, and I lock the cards.";
+  }
+  if (/weather|погод/i.test(t)) {
+    return 'Weather? Not my lane. I build rides and drop place cards. Try "ride to Kotor" or "what hotels are in Montenegro".';
+  }
+  if (/^(hi|hey|hello|yo|sup|привет|здаров|здравств)\b/i.test(t) || t === "hello" || t === "hi") {
+    return 'Yo. Real Bro online. Want a route — say "ride to Podgorica". Want places — "what bars are in Montenegro?"';
+  }
+  return unknownReply(false);
+}
+
 export function categoryReply(count: number, type: PlaceType, country: string | undefined, ru: boolean): string {
   if (ru) {
     const where = country ? ` в ${countryRu(country)}` : "";

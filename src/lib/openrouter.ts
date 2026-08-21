@@ -1,8 +1,9 @@
 import type { PlaceType } from "../types";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-/** Fast model; :nitro picks the highest-throughput provider. */
-const MODEL = "google/gemini-2.5-flash:nitro";
+/** Fast + smart default; fallbacks listed in the request body. */
+const MODEL = "google/gemini-2.5-flash";
+const FALLBACK_MODELS = ["openai/gpt-4o-mini", "google/gemini-2.0-flash-001"];
 
 const PLACE_TYPES = new Set<PlaceType>([
   "hotels",
@@ -100,7 +101,7 @@ export async function askRealBro(userText: string, history: BroChatTurn[] = []):
       },
       body: JSON.stringify({
         model: MODEL,
-        models: ["google/gemini-2.5-flash", "openai/gpt-4o-mini"],
+        models: FALLBACK_MODELS,
         temperature: 0.55,
         max_tokens: 220,
         messages,
@@ -108,14 +109,15 @@ export async function askRealBro(userText: string, history: BroChatTurn[] = []):
     });
     if (!res.ok) return null;
     const data = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
+      choices?: { message?: { content?: string | null } }[];
+      error?: { message?: string };
     };
-    const content = data.choices?.[0]?.message?.content ?? "";
+    if (data.error) return null;
+    const content = String(data.choices?.[0]?.message?.content ?? "").trim();
+    if (!content) return null;
     const parsed = extractJson(content);
     if (parsed) return normalizeResult(parsed, content);
-    const plain = content.trim();
-    if (!plain) return null;
-    return { reply: plain.replace(/^```(?:json)?|```$/g, "").trim(), intent: "chat" };
+    return { reply: content.replace(/^```(?:json)?|```$/g, "").trim(), intent: "chat" };
   } catch {
     return null;
   }

@@ -4,12 +4,12 @@ import {
   categoryReply,
   geocodePlace,
   greeting,
+  localChatReply,
   matchPlaces,
   notFoundReply,
   parseIntent,
   rideReply,
   topByCategory,
-  unknownReply,
 } from "../lib/assistant";
 import { loadPlaces } from "../lib/data";
 import { askRealBro, type BroChatTurn } from "../lib/openrouter";
@@ -354,7 +354,7 @@ export function RealBro() {
         await answerCategory(ai.type, ai.country, ai.reply);
         return;
       }
-      const reply = ai?.reply || unknownReply(false);
+      const reply = ai?.reply || localChatReply(text);
       push({ role: "bro", text: reply });
       say(reply);
     } finally {

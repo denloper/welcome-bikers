@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { categoryReply, matchPlaces, parseIntent, topByCategory } from "../src/lib/assistant";
+import { categoryReply, localChatReply, matchPlaces, parseIntent, topByCategory } from "../src/lib/assistant";
 import type { Place } from "../src/types";
 
 function fakePlace(over: Partial<Place>): Place {
@@ -61,6 +61,12 @@ test("parses category questions with a country", () => {
 test("falls back to unknown for small talk", () => {
   expect(parseIntent("привет как дела").kind).toBe("unknown");
   expect(parseIntent("").kind).toBe("unknown");
+});
+
+test("localChatReply answers hello and AI questions without the weather canned line", () => {
+  expect(localChatReply("hello")).toMatch(/Real Bro online/i);
+  expect(localChatReply("hello are you ai?")).toMatch(/in-app AI/i);
+  expect(localChatReply("how is the weather?")).toMatch(/Weather/i);
 });
 
 test("matchPlaces finds a place by fuzzy name and skips pending", () => {
