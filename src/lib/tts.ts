@@ -27,6 +27,7 @@ const TTS_TRIES: { model: string; voice: string; format: "mp3" | "pcm"; speed?: 
 const cache = new Map<string, string>();
 let currentAudio: HTMLAudioElement | null = null;
 let currentObjectUrl: string | null = null;
+let pendingSpeechAbort: AbortController | null = null;
 let playGen = 0;
 
 export function hasNeuralTts(): boolean {
@@ -35,12 +36,15 @@ export function hasNeuralTts(): boolean {
 
 export function hushNeuralVoice() {
   playGen++;
+  pendingSpeechAbort?.abort();
+  pendingSpeechAbort = null;
   try {
     if (currentAudio) {
       currentAudio.onended = null;
       currentAudio.onerror = null;
       currentAudio.pause();
-      currentAudio.src = "";
+      currentAudio.removeAttribute("src");
+      currentAudio.load();
       currentAudio = null;
     }
   } catch {
@@ -79,18 +83,19 @@ function pcmToWav(pcm: ArrayBuffer, sampleRate = 24_000): Blob {
   return new Blob([buffer], { type: "audio/wav" });
 }
 
-async function fetchSpeech(text: string): Promise<Blob | null> {
+async function fetchSpeech(text: string, signal: AbortSignal): Promise<Blob | null> {
   const base = await resolveProxyBase();
-  if (!base) return null;
+  if (!base || signal.aborted) return null;
 
   const cached = cache.get(text);
   if (cached) {
-    const res = await fetch(cached);
+    const res = await fetch(cached, { signal });
     if (res.ok) return res.blob();
   }
 
   const endpoint = speechUrl(base);
   for (const tryCfg of TTS_TRIES) {
+    if (signal.aborted) return null;
     try {
       const body: Record<string, unknown> = {
         model: tryCfg.model,
@@ -105,6 +110,7 @@ async function fetchSpeech(text: string): Promise<Blob | null> {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal,
         body: JSON.stringify(body),
       });
       if (!res.ok) continue;
@@ -126,6 +132,7 @@ async function fetchSpeech(text: string): Promise<Blob | null> {
       cache.set(text, url);
       return blob;
     } catch {
+      if (signal.aborted) return null;
       /* try next provider */
     }
   }
@@ -169,11 +176,25 @@ export async function speakBroNeural(
     onDone?.();
     return false;
   }
+  const requestGen = playGen;
+  pendingSpeechAbort?.abort();
+  const controller = new AbortController();
+  pendingSpeechAbort = controller;
+  const cancelled = () => controller.signal.aborted || requestGen !== playGen;
+  const finishCancelled = () => {
+    if (pendingSpeechAbort === controller) pendingSpeechAbort = null;
+    onDone?.();
+    return false;
+  };
   try {
-    const blob = await fetchSpeech(clean);
+    const blob = await fetchSpeech(clean, controller.signal);
+    if (cancelled()) return finishCancelled();
+    if (pendingSpeechAbort === controller) pendingSpeechAbort = null;
     if (!blob) return webSpeak?.(clean, onDone) ?? (onDone?.(), false);
     return playBlob(blob, onDone);
   } catch {
+    if (cancelled()) return finishCancelled();
+    if (pendingSpeechAbort === controller) pendingSpeechAbort = null;
     return webSpeak?.(clean, onDone) ?? (onDone?.(), false);
   }
 }

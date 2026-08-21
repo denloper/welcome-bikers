@@ -111,6 +111,19 @@ async function installSpeechRecognitionSpy(page: Page) {
   });
 }
 
+async function installAudioPlaySpy(page: Page) {
+  await page.addInitScript(() => {
+    Object.defineProperty(HTMLMediaElement.prototype, "play", {
+      configurable: true,
+      value() {
+        const w = window as unknown as { __audioPlayCount?: number };
+        w.__audioPlayCount = (w.__audioPlayCount || 0) + 1;
+        return Promise.resolve();
+      },
+    });
+  });
+}
+
 test.describe("STT helpers", () => {
   test("preferRecordStt is true on Apple and when Speech API is missing", () => {
     // Node/jsdom-less: these read navigator from the test runner environment.
@@ -162,6 +175,74 @@ test.describe("Real Bro mobile voice (MediaRecorder path)", () => {
     ).toBeUndefined();
     expect((requestBody.input_audio as { format?: string } | undefined)?.format).toBe("webm");
     expect(requestBody.language).toBeUndefined();
+  });
+
+  test("cancels delayed assistant audio when the mic starts", async ({ page }) => {
+    await installMobileRecordMocks(page);
+    await installAudioPlaySpy(page);
+    await mockProxyTranscribe(page, "hello bro");
+    await mockProxyChat(page, async (route) => {
+      await fulfillChatJson(route, { reply: "Delayed voice reply.", intent: "chat" });
+    });
+    let speechHits = 0;
+    await page.route(/\/speech\/?$/, async (route) => {
+      speechHits += 1;
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      try {
+        await route.fulfill({
+          status: 200,
+          contentType: "audio/mpeg",
+          headers: { "Access-Control-Allow-Origin": "*" },
+          body: Buffer.from([0xff, 0xfb, 0x90, 0x00]),
+        });
+      } catch {
+        // Aborting the pending TTS request is the behavior under test.
+      }
+    });
+
+    await page.goto("/#/");
+    await page.getByTestId("assistant-row").tap();
+    await page.getByTestId("assistant-input").fill("tell me something unusual");
+    await page.getByTestId("assistant-send").tap();
+    await expect.poll(() => speechHits).toBe(1);
+
+    await page.getByLabel("Voice input").tap();
+    await expect(page.locator(".rb-state")).toHaveText("Listening…");
+    await page.waitForTimeout(900);
+
+    expect(
+      await page.evaluate(() => (window as unknown as { __audioPlayCount?: number }).__audioPlayCount || 0),
+    ).toBe(0);
+    await expect(page.locator(".rb-state")).toHaveText("Listening…");
+    await page.getByLabel("Close assistant").tap();
+  });
+
+  test("does not start reply audio while a recording is active", async ({ page }) => {
+    await installMobileRecordMocks(page);
+    await installAudioPlaySpy(page);
+    let speechHits = 0;
+    await mockProxySpeech(page, () => {
+      speechHits += 1;
+    });
+    await mockProxyChat(page, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await fulfillChatJson(route, { reply: "This reply arrived during recording.", intent: "chat" });
+    });
+
+    await page.goto("/#/");
+    await page.getByTestId("assistant-row").tap();
+    await page.getByTestId("assistant-input").fill("give me a delayed answer");
+    await page.getByTestId("assistant-send").tap();
+    await page.getByLabel("Voice input").tap();
+    await expect(page.locator(".rb-state")).toHaveText("Listening…");
+
+    await expect(page.locator(".rb-bubble.bro").filter({ hasText: /arrived during recording/i })).toBeVisible();
+    await page.waitForTimeout(200);
+    expect(speechHits).toBe(0);
+    expect(
+      await page.evaluate(() => (window as unknown as { __audioPlayCount?: number }).__audioPlayCount || 0),
+    ).toBe(0);
+    await page.getByLabel("Close assistant").tap();
   });
 
   test("refreshes an expired proxy URL and retries transcription", async ({ page }) => {

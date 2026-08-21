@@ -409,6 +409,12 @@ export function RealBro() {
   }
 
   function say(text: string) {
+    // Never let a late assistant reply steal the mobile audio session from an active mic.
+    if (wantListen.current || captureRef.current || startingRef.current) {
+      hushVoice();
+      speakToken.current++;
+      return;
+    }
     const token = ++speakToken.current;
     hushVoice();
     const done = () => {
@@ -429,7 +435,7 @@ export function RealBro() {
     if (!msgs.length) {
       const hello = greeting();
       push({ role: "bro", text: hello });
-      say(hello);
+      // Keep opening silent: a delayed greeting used to start after the rider tapped the mic.
     }
   }
 
