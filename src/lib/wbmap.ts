@@ -34,6 +34,9 @@ export function createWbMap(
     setPlaces(places, darkPins) {
       use((m) => m.setPlaces(places, darkPins));
     },
+    setRouteStops(stops) {
+      use((m) => m.setRouteStops(stops));
+    },
     setRoutes(routes, selectedId, dark, extra) {
       use((m) => m.setRoutes(routes, selectedId, dark, extra));
     },

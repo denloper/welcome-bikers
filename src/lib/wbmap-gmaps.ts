@@ -21,6 +21,7 @@ import {
   NAV_PUCK_HTML,
   NAV_TILT,
   NAV_ZOOM,
+  routeStopMarkerNode,
   USER_PIN_HTML,
   type MapKind,
   type WbFollowOptions,
@@ -28,6 +29,7 @@ import {
   type WbMapOptions,
   type WbRouteLine,
   type WbRouteProgress,
+  type WbRouteStop,
 } from "./wbmap-types";
 
 const LIGHT_MAP_ID = "a7dbf0e5d7ceea8629f41e1e";
@@ -151,6 +153,8 @@ export async function createGoogleMap(
   let gmap: google.maps.Map;
   let clusterer: MarkerClusterer | null = null;
   let pinMarkers: google.maps.marker.AdvancedMarkerElement[] = [];
+  let lastRouteStops: WbRouteStop[] = [];
+  let routeStopMarkers: google.maps.marker.AdvancedMarkerElement[] = [];
   let routePolylines: google.maps.Polyline[] = [];
   let progressPolylines: google.maps.Polyline[] = [];
   let routeProgress: WbRouteProgress | null = null;
@@ -207,6 +211,10 @@ export async function createGoogleMap(
     clusterer?.clearMarkers();
     clusterer = null;
     pinMarkers = [];
+    routeStopMarkers.forEach((marker) => {
+      marker.map = null;
+    });
+    routeStopMarkers = [];
     routePolylines.forEach((line) => line.setMap(null));
     routePolylines = [];
     progressPolylines.forEach((line) => line.setMap(null));
@@ -319,7 +327,9 @@ export async function createGoogleMap(
     clusterer?.clearMarkers();
     clusterer = null;
     pinMarkers = [];
-    if (navOn || pickOn) return;
+    const visible = !navOn && !pickOn && lastRouteStops.length === 0;
+    el.dataset.placeMarkers = visible ? "visible" : "hidden";
+    if (!visible) return;
     const Advanced = google.maps.marker.AdvancedMarkerElement;
     pinMarkers = lastPlaces
       .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon))
@@ -379,6 +389,30 @@ export async function createGoogleMap(
         },
       },
     });
+  };
+
+  const paintRouteStops = () => {
+    routeStopMarkers.forEach((marker) => {
+      marker.map = null;
+    });
+    routeStopMarkers = [];
+    const stops = navOn ? [] : lastRouteStops;
+    el.dataset.routeStops = String(stops.length);
+    if (!stops.length) return;
+    const Advanced = google.maps.marker.AdvancedMarkerElement;
+    routeStopMarkers = stops
+      .filter((stop) => Number.isFinite(stop.lat) && Number.isFinite(stop.lon))
+      .map((stop, index) => {
+        const marker = new Advanced({
+          position: { lat: stop.lat, lng: stop.lon },
+          content: routeStopMarkerNode(stop, index),
+          title: stop.label,
+          zIndex: 800000 + index,
+          gmpClickable: false,
+        });
+        marker.map = gmap;
+        return marker;
+      });
   };
 
   const makeArrow = () => {
@@ -499,7 +533,7 @@ export async function createGoogleMap(
   };
 
   const paintMe = () => {
-    if (navOn || !lastMe) {
+    if (navOn || lastRouteStops.length > 0 || !lastMe) {
       if (meMark) meMark.map = null;
       return;
     }
@@ -552,6 +586,7 @@ export async function createGoogleMap(
   };
 
   const placeNearPixel = (x: number, y: number) => {
+    if (lastRouteStops.length > 0) return null;
     const proj = hitView?.getProjection();
     if (!proj || (gmap.getZoom() ?? 0) < 11) return null;
     let best: Place | null = null;
@@ -630,6 +665,7 @@ export async function createGoogleMap(
       el.dataset.ready = "1";
       keepHost();
       paintPlaces();
+      paintRouteStops();
       paintRoute();
       paintTraffic();
       paintMe();
@@ -658,6 +694,7 @@ export async function createGoogleMap(
     bind();
     waitIdle();
     paintPlaces();
+    paintRouteStops();
     paintRoute();
     paintTraffic();
     paintMe();
@@ -708,6 +745,12 @@ export async function createGoogleMap(
       lastPlaces = places;
       lastDarkPins = darkPins;
       paintPlaces();
+    },
+    setRouteStops(stops) {
+      lastRouteStops = stops;
+      paintPlaces();
+      paintRouteStops();
+      paintMe();
     },
     setRoutes(routes, selectedId, dark, extra) {
       lastRoutes = routes;
@@ -765,6 +808,7 @@ export async function createGoogleMap(
       }
       paintRouteProgress();
       paintPlaces();
+      paintRouteStops();
       paintMe();
       requestAnimationFrame(() => {
         resize();
@@ -827,6 +871,7 @@ export async function createGoogleMap(
         mapTypeId: next === "satellite" ? "hybrid" : "roadmap",
       });
       paintPlaces();
+      paintRouteStops();
       paintRoute();
       paintTraffic();
       if (pendingFit) fitRoute();

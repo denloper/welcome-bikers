@@ -244,7 +244,7 @@ export function MapPage() {
     darkPins: false,
     routes: [],
     selectedRouteId: null,
-    traffic: true,
+    traffic: false,
   });
 
   const filtered = useMemo(() => {
@@ -259,6 +259,8 @@ export function MapPage() {
   }, [places, q, on, friendly]);
 
   const trip = Boolean(stops && stops.length >= 2);
+  const multiStopPreview = Boolean(!navigating && stops && stops.length > 2);
+  const mapTraffic = trip && traffic;
   const darkPins = !light && !sat;
   const mapRoutes = (routeChoices.length ? routeChoices : drive ? [drive] : []).map((route) => ({
     id: route.id,
@@ -269,7 +271,7 @@ export function MapPage() {
     darkPins,
     routes: mapRoutes,
     selectedRouteId: drive?.id || null,
-    traffic,
+    traffic: mapTraffic,
   };
   const live = navigating && drive ? remainingAlong(drive, here || { lat: stops![0].lat, lon: stops![0].lon }) : null;
   const nowStep: NavStep | undefined = drive?.steps[live?.stepI ?? 0];
@@ -427,12 +429,16 @@ export function MapPage() {
   }, [filtered, darkPins, ready]);
 
   useEffect(() => {
+    wbRef.current?.setRouteStops(multiStopPreview && stops ? stops : []);
+  }, [multiStopPreview, stops, ready]);
+
+  useEffect(() => {
     wbRef.current?.setPick(Boolean(pickMode) && !navigating);
   }, [pickMode, navigating, ready]);
 
   useEffect(() => {
-    wbRef.current?.setMe(!navigating && here ? here : null);
-  }, [here, navigating, ready]);
+    wbRef.current?.setMe(!navigating && !multiStopPreview && here ? here : null);
+  }, [here, navigating, multiStopPreview, ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -560,8 +566,8 @@ export function MapPage() {
   ]);
 
   useEffect(() => {
-    wbRef.current?.setTraffic(traffic);
-  }, [traffic, ready]);
+    wbRef.current?.setTraffic(mapTraffic);
+  }, [mapTraffic, ready]);
 
   useEffect(() => {
     if (!ready) return;

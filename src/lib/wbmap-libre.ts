@@ -20,6 +20,7 @@ import {
   NAV_PUCK_HTML,
   NAV_TILT,
   NAV_ZOOM,
+  routeStopMarkerNode,
   USER_PIN_HTML,
   type MapKind,
   type WbFollowOptions,
@@ -27,6 +28,7 @@ import {
   type WbMapOptions,
   type WbRouteLine,
   type WbRouteProgress,
+  type WbRouteStop,
 } from "./wbmap-types";
 
 setWorkerUrl(workerUrl);
@@ -408,6 +410,8 @@ export function createLibreMap(
   let lastMe: { lat: number; lon: number } | null = null;
   let lastPlaces: Place[] = [];
   let lastDarkPins = false;
+  let lastRouteStops: WbRouteStop[] = [];
+  let routeStopMarkers: Marker[] = [];
   let lastRoutes: WbRouteLine[] = [];
   let selectedRouteId: string | null = null;
   let routeProgress: WbRouteProgress | null = null;
@@ -539,8 +543,28 @@ export function createLibreMap(
     followResumeTimer = window.setTimeout(resumeFollow, NAV_FOLLOW_RESUME_MS);
   };
 
+  const paintPlaceVisibility = () => {
+    const visible = !navOn && !pickOn && lastRouteStops.length === 0;
+    setPinVisibility(map, visible);
+    el.dataset.placeMarkers = visible ? "visible" : "hidden";
+  };
+
+  const paintRouteStops = () => {
+    routeStopMarkers.forEach((stop) => stop.remove());
+    routeStopMarkers = [];
+    const stops = navOn ? [] : lastRouteStops;
+    el.dataset.routeStops = String(stops.length);
+    routeStopMarkers = stops
+      .filter((stop) => Number.isFinite(stop.lat) && Number.isFinite(stop.lon))
+      .map((stop, index) =>
+        new Marker({ element: routeStopMarkerNode(stop, index), anchor: "bottom" })
+          .setLngLat([stop.lon, stop.lat])
+          .addTo(map),
+      );
+  };
+
   const paintMe = () => {
-    if (navOn || !lastMe) {
+    if (navOn || lastRouteStops.length > 0 || !lastMe) {
       meMark?.remove();
       return;
     }
@@ -633,7 +657,8 @@ export function createLibreMap(
         );
         paintRoute(map, lastRouteDark);
       }
-      setPinVisibility(map, !navOn && !pickOn);
+      paintPlaceVisibility();
+      paintRouteStops();
       if (pendingView) {
         map.jumpTo(pendingView);
         pendingView = null;
@@ -756,6 +781,13 @@ export function createLibreMap(
       lastPlaces = places;
       lastDarkPins = darkPins;
       (map.getSource("wb-places") as GeoJSONSource | undefined)?.setData(placesFc(places, darkPins));
+      paintPlaceVisibility();
+    },
+    setRouteStops(stops) {
+      lastRouteStops = stops;
+      paintPlaceVisibility();
+      paintRouteStops();
+      paintMe();
     },
     setRoutes(routes, selectedId, dark, extra) {
       lastRoutes = routes;
@@ -812,7 +844,8 @@ export function createLibreMap(
         navPhase = "off";
         el.dataset.cameraPhase = "off";
       }
-      setPinVisibility(map, !on && !pickOn);
+      paintPlaceVisibility();
+      paintRouteStops();
       if (!on) {
         firstFollow = true;
         lastFollow = null;
@@ -832,7 +865,7 @@ export function createLibreMap(
     setPick(on) {
       pickOn = on;
       el.dataset.pick = on ? "1" : "0";
-      setPinVisibility(map, !navOn && !on);
+      paintPlaceVisibility();
     },
     setMe(pt) {
       lastMe = pt;
@@ -920,6 +953,8 @@ export function createLibreMap(
       ro.disconnect();
       try {
         marker?.remove();
+        routeStopMarkers.forEach((stop) => stop.remove());
+        routeStopMarkers = [];
         map.remove();
       } catch {
         /* already torn down */

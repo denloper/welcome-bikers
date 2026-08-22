@@ -99,6 +99,7 @@ test.describe("GO navigation", () => {
     await expectMapVisible(page);
     await expect(page.locator(".map-page.is-nav")).toHaveCount(0);
     await expect(page.locator(".map-gl")).toHaveAttribute("data-pitch", "0");
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-traffic", "off");
   });
 
   test("dark theme reloads the map style and keeps the canvas", async ({ page }) => {
@@ -109,6 +110,7 @@ test.describe("GO navigation", () => {
     await expect(page.locator(".map-page.is-dark")).toBeVisible();
     await expect(page.locator(".map-gl")).toHaveAttribute("data-kind", "vector-dark", { timeout: 20_000 });
     await expectMapVisible(page);
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-traffic", "off");
     const box = await page.locator(".map-gl").boundingBox();
     expect(box && box.width > 100 && box.height > 100).toBeTruthy();
     const searchBg = await page.locator(".map-q").evaluate((el) => getComputedStyle(el).backgroundColor);
@@ -156,7 +158,14 @@ test.describe("GO navigation", () => {
     await expect(page.getByTestId("nav-recenter")).toBeVisible();
     await expect(page.getByLabel("Build route")).toHaveCount(0);
     await expect(page.locator(".wb-me-star")).toHaveCount(0);
-    await expect(page.locator(".wb-nav-puck")).toBeVisible();
+    const navPuck = page.locator(".wb-nav-puck");
+    await expect(navPuck).toBeVisible();
+    await expect(navPuck).toHaveAttribute("data-design", "wide-blue-star");
+    await expect(navPuck).toHaveCSS("width", "54px");
+    await expect(navPuck).toHaveCSS("height", "54px");
+    await expect(navPuck.locator("svg")).toHaveAttribute("viewBox", "0 0 64 64");
+    await expect(navPuck.locator(".wb-puck-core")).toHaveAttribute("fill", "url(#wb-nav-gradient)");
+    await expect(navPuck.locator(".wb-puck-star")).toHaveCSS("fill", "rgb(255, 255, 255)");
 
     await page.getByTestId("nav-mute").tap();
     await expect(page.getByTestId("nav-mute")).toHaveAttribute("aria-pressed", "true");
@@ -268,8 +277,11 @@ test.describe("GO navigation", () => {
     await expect(page.getByLabel("Route profile")).toBeVisible();
     await expect(page.getByRole("button", { name: "Fastest" })).toHaveClass(/on/);
     await expect(page.getByRole("button", { name: "Traffic", exact: true })).toBeVisible();
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-traffic", /on|unavailable/);
     await expect(page.getByRole("button", { name: "Ferries", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Paved roads", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Traffic", exact: true }).tap();
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-traffic", "off");
     await page.getByRole("button", { name: "No highways" }).tap();
     await expect(page.getByRole("button", { name: "No highways" })).toHaveClass(/on/);
     await expect(page.locator(".route-go")).toBeEnabled();
@@ -282,6 +294,34 @@ test.describe("GO navigation", () => {
     await page.goto(`/#/map?via=42.11,19.25|42.44,19.27&name=Podgorica`);
     await expect(page.locator('[data-stop="start"]')).toContainText(/My current location/i);
     await expect(page.locator(".route-go")).toBeEnabled();
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-place-markers", "hidden");
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-route-stops", "3");
+    await expect(page.locator(".wb-route-map-stop")).toHaveCount(3);
+    await expect(page.locator('.wb-route-map-stop[data-stop-role="start"]')).toHaveCount(1);
+    await expect(page.locator('.wb-route-map-stop[data-stop-role="via"]')).toHaveCount(1);
+    await expect(page.locator('.wb-route-map-stop[data-stop-role="end"]')).toHaveCount(1);
+    await expect(page.locator(".wb-gpin-hit, .wb-gcluster, .wb-me-star")).toHaveCount(0);
+    await page.locator(".route-go").tap();
+    await expect(page.locator(".map-page.is-nav")).toBeVisible();
+    await expect(page.locator(".wb-route-map-stop")).toHaveCount(0);
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-route-stops", "0");
+  });
+
+  test("MapLibre multi-stop preview shows only its numbered Stops", async ({ page, context }) => {
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation(START);
+    await page.route(/maps\.googleapis\.com/, (route) => route.abort());
+    await mockRouting(page);
+
+    await page.goto(`/#/map?via=42.11,19.25|42.44,19.27&name=Podgorica`);
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-engine", "libre", { timeout: 25_000 });
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-place-markers", "hidden");
+    await expect(page.locator(".map-gl")).toHaveAttribute("data-route-stops", "3");
+    const routeStops = page.locator(".wb-route-map-stop");
+    await expect(routeStops).toHaveCount(3);
+    await expect(routeStops.nth(0)).toHaveText("1");
+    await expect(routeStops.nth(1)).toHaveText("2");
+    await expect(routeStops.nth(2)).toHaveText("3");
   });
 
   test("Add waypoint picks a point on the map", async ({ page, context }) => {
