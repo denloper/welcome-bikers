@@ -4,8 +4,9 @@ import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const mapsKey = env.VITE_GOOGLE_MAPS_API_KEY || "AIzaSyAldqEbYQZJSOeNYP1pDzg3Zx499U4NVAU";
+  const mapsKey = env.VITE_GOOGLE_MAPS_API_KEY || "";
   const openRouterProxy = env.VITE_OPENROUTER_PROXY_URL || "";
+  const openRouterDiscovery = env.VITE_OPENROUTER_DISCOVERY_URL || "";
   return {
     plugins: [
       react(),
@@ -44,9 +45,6 @@ export default defineConfig(({ mode }) => {
           globPatterns: ["**/*.{html,js,css,svg,png,woff,woff2}"],
           globIgnores: [
             "**/data/**",
-            "**/wbmap-gmaps-*.js",
-            "**/wbmap-libre-*.js",
-            "**/maplibre-gl-worker-*.js",
           ],
           runtimeCaching: [
             {
@@ -79,6 +77,7 @@ export default defineConfig(({ mode }) => {
     define: {
       "import.meta.env.VITE_GOOGLE_MAPS_API_KEY": JSON.stringify(mapsKey),
       "import.meta.env.VITE_OPENROUTER_PROXY_URL": JSON.stringify(openRouterProxy),
+      "import.meta.env.VITE_OPENROUTER_DISCOVERY_URL": JSON.stringify(openRouterDiscovery),
     },
   };
 });

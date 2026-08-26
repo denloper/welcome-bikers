@@ -27,6 +27,7 @@ export function CategoryList() {
   const [filters, setFilters] = useState(false);
   const [openList, setOpenList] = useState(false);
   const [here, setHere] = useState<{ lat: number; lon: number } | null>(null);
+  const [locationUnavailable, setLocationUnavailable] = useState(false);
   const [limit, setLimit] = useState(12);
 
   useEffect(() => {
@@ -34,7 +35,7 @@ export function CategoryList() {
     loadCountries().then(setFlags);
     void readLocation().then((fix) => {
       if (fix) setHere({ lat: fix.lat, lon: fix.lon });
-      else setHere({ lat: 42.43, lon: 19.26 });
+      else setLocationUnavailable(true);
     });
   }, []);
 
@@ -170,13 +171,20 @@ export function CategoryList() {
                   Eco village
                 </button>
               )}
-              <button type="button" className={draftNear ? "on" : ""} onClick={() => setDraftNear((v) => !v)}>
+              <button
+                type="button"
+                className={draftNear ? "on" : ""}
+                disabled={!here}
+                title={!here ? "Location is unavailable" : undefined}
+                onClick={() => setDraftNear((v) => !v)}
+              >
                 <span className="filter-ico">
                   <IconNear />
                 </span>
                 Within 50 km
               </button>
             </div>
+            {locationUnavailable && <p className="muted">Enable location to use the 50 km filter.</p>}
             <button
               className="btn apply"
               onClick={() => {

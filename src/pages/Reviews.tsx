@@ -19,7 +19,9 @@ export function Reviews() {
     loadPlaces().then((all) => setPlace(getPlace(all, id) ?? null));
     Promise.all([loadReviews()]).then(([crm]) => {
       const local = store.get().reviews.filter((r) => r.placeId === id);
-      setRows([...local, ...crm.filter((r) => r.placeId === id)]);
+      const merged = new Map(crm.filter((r) => r.placeId === id).map((review) => [review.id, review]));
+      for (const review of local) merged.set(review.id, review);
+      setRows(Array.from(merged.values()).sort((a, b) => b.createdAt - a.createdAt));
     });
   }, [id]);
 
@@ -31,7 +33,7 @@ export function Reviews() {
       <div className="section">
         <div className="place-name">{place.name}</div>
         <Stars value={place.rating} count={place.reviews + rows.length} />
-        <h3>Write a review</h3>
+        <h3>Write a local review</h3>
         <div className="filters">
           {[1, 2, 3, 4, 5].map((n) => (
             <button key={n} className={`chip ${rating === n ? "on" : ""}`} onClick={() => setRating(n)}>
@@ -67,7 +69,7 @@ export function Reviews() {
             setText("");
           }}
         >
-          Publish
+          Save on this device
         </button>
         <h3>All reviews</h3>
         {rows.length === 0 && <p className="muted">No rider reviews yet. Google score: {place.rating ?? "n/a"}.</p>}

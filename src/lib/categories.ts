@@ -1,5 +1,17 @@
 import type { CategoryId, PlaceType } from "../types";
 
+export const PLACE_TYPES: readonly PlaceType[] = [
+  "hotels",
+  "shops",
+  "bars",
+  "restaurants",
+  "services",
+  "rent",
+  "festivals",
+  "viewpoints",
+  "historical",
+];
+
 export const CATEGORIES: {
   id: CategoryId;
   label: string;

@@ -100,6 +100,7 @@ test.describe("GO navigation", () => {
     await expect(page.locator(".map-page.is-nav")).toHaveCount(0);
     await expect(page.locator(".map-gl")).toHaveAttribute("data-pitch", "0");
     await expect(page.locator(".map-gl")).toHaveAttribute("data-traffic", "off");
+    await expect(page.locator(".maplibregl-ctrl-attrib:visible, .gm-style-cc:visible").first()).toBeVisible();
   });
 
   test("dark theme reloads the map style and keeps the canvas", async ({ page }) => {
@@ -263,6 +264,54 @@ test.describe("GO navigation", () => {
     await expect(page.getByText(/already there/i)).toBeVisible();
     await expect(page.locator(".route-go")).toHaveCount(0);
     await expect(page.locator(".nav-hud")).toHaveCount(0);
+  });
+
+  test("invalidates GO while route options are being replanned", async ({ page, context }) => {
+    await context.grantPermissions(["geolocation"]);
+    await context.setGeolocation(START);
+    await page.route(/valhalla1\.openstreetmap\.de/, (route) => route.fulfill({ status: 500, body: "no" }));
+    let osrmHits = 0;
+    await page.route(/\/route\/v1\/driving\//, async (route) => {
+      osrmHits += 1;
+      if (osrmHits > 1) await new Promise((resolve) => setTimeout(resolve, 700));
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(OSRM) });
+    });
+
+    await page.goto(`/#/map?to=${DEST.lat},${DEST.lon}&name=Replan%20Test`);
+    await expect(page.locator(".route-go")).toBeEnabled();
+    await page.getByRole("button", { name: "No highways" }).click();
+
+    await expect(page.locator(".map-page")).toHaveAttribute("data-route-planning", "1");
+    await expect(page.locator(".route-go")).toHaveCount(0);
+    await expect(page.locator(".map-page")).toHaveAttribute("data-route-planning", "0");
+    await expect(page.locator(".route-go")).toBeEnabled();
+  });
+
+  test("waits for GPS instead of placing the rider at the route origin", async ({ page }) => {
+    await page.addInitScript(() => {
+      const denied = { code: 1, message: "denied", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 };
+      Object.defineProperty(navigator, "geolocation", {
+        configurable: true,
+        value: {
+          getCurrentPosition: (_ok: PositionCallback, fail?: PositionErrorCallback) => fail?.(denied),
+          watchPosition: (_ok: PositionCallback, fail?: PositionErrorCallback) => {
+            queueMicrotask(() => fail?.(denied));
+            return 1;
+          },
+          clearWatch: () => undefined,
+        },
+      });
+    });
+    await mockRouting(page);
+    const via = `${START.latitude},${START.longitude}|${DEST.lat},${DEST.lon}`;
+    await page.goto(`/#/map?via=${encodeURIComponent(via)}&name=No%20GPS`);
+    await expect(page.locator(".route-go")).toBeEnabled();
+    await page.locator(".route-go").click();
+
+    await expect(page.locator(".nav-ui")).toHaveAttribute("data-route-state", "gps-wait");
+    await expect(page.locator(".nav-status")).toContainText("Waiting for a reliable GPS fix");
+    await expect(page.locator(".wb-nav-puck")).toHaveCount(0);
+    await expect(page.getByTestId("nav-exit")).toBeVisible();
   });
 
   test("tapping My current location refreshes the GPS start", async ({ page, context }) => {

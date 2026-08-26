@@ -10,9 +10,9 @@ const config: CapacitorConfig = {
     hostname: "denloper.github.io",
   },
   android: {
-    allowMixedContent: true,
+    allowMixedContent: false,
     backgroundColor: "#111111",
-    webContentsDebuggingEnabled: true,
+    webContentsDebuggingEnabled: false,
   },
   plugins: {
     SplashScreen: {

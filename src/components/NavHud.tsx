@@ -1,7 +1,7 @@
 import type { ManeuverPreview, NavStep } from "../lib/routing-types";
 import { formatDriveTime, formatMeters } from "../lib/osrm";
 
-export type NavRouteState = "following" | "off-route" | "rerouting";
+export type NavRouteState = "following" | "off-route" | "rerouting" | "gps-wait";
 
 type ManeuverKind =
   | "straight"
@@ -139,7 +139,9 @@ export function NavHud({
   const instruction = arrived ? "You have arrived" : primary?.label || "Follow the highlighted route";
   const road = !arrived && primary?.step.name?.trim() ? primary.step.name.trim() : "";
   const stateText =
-    routeState === "rerouting"
+    routeState === "gps-wait"
+      ? "Waiting for a reliable GPS fix"
+      : routeState === "rerouting"
       ? "Rebuilding route…"
       : routeState === "off-route"
         ? "Return to the highlighted route"

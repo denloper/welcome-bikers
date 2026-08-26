@@ -1,8 +1,9 @@
 import { GeoJSONSource, Map as MapLibreMap, Marker, setWorkerUrl, type StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import { PLACE_TYPES } from "./categories";
 import { asset } from "./assets";
-import type { Place, PlaceType } from "../types";
+import type { Place } from "../types";
 import { haversineKm } from "./geo";
 import {
   easeInOutCubic,
@@ -33,17 +34,7 @@ import {
 
 setWorkerUrl(workerUrl);
 
-const PIN_TYPES: PlaceType[] = [
-  "hotels",
-  "shops",
-  "bars",
-  "restaurants",
-  "services",
-  "rent",
-  "festivals",
-  "viewpoints",
-  "historical",
-];
+const PIN_TYPES = PLACE_TYPES;
 const TONES = ["friendly", "black", "white"] as const;
 const pinCache: Record<string, ImageData> = {};
 
@@ -383,8 +374,8 @@ export function createLibreMap(
     zoom: HOME_ZOOM,
     pitch: 0,
     bearing: 0,
-    attributionControl: false,
-    maplibreLogo: false,
+    attributionControl: { compact: true },
+    maplibreLogo: true,
     fadeDuration: 0,
     dragRotate: false,
     pitchWithRotate: false,

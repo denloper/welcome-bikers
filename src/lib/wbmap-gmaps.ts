@@ -98,7 +98,12 @@ export function loadGoogle() {
       importLibrary("maps"),
       importLibrary("marker"),
       importLibrary("routes").catch(() => undefined),
-    ]).then(() => undefined);
+    ])
+      .then(() => undefined)
+      .catch((error) => {
+        boot = null;
+        throw error;
+      });
   }
   return boot;
 }

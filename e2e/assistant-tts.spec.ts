@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { fulfillChatJson, mockProxyChat, mockProxySpeech } from "./helpers/mockProxy";
+import { fulfillChatJson, mockProxyBase, mockProxyChat, mockProxySpeech } from "./helpers/mockProxy";
 
 test("Real Bro opens silently and only voices an actual reply", async ({ page }) => {
   let ttsHits = 0;
   let lastBody: Record<string, unknown> | null = null;
 
+  await mockProxyBase(page);
   await mockProxySpeech(page, (body) => {
     ttsHits += 1;
     lastBody = body;

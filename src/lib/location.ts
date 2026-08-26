@@ -73,7 +73,7 @@ export async function readLocation(opts?: { timeout?: number; maximumAge?: numbe
 
 export function watchLocation(
   onFix: (fix: GeoFix) => void,
-  opts?: { timeout?: number; maximumAge?: number },
+  opts?: { timeout?: number; maximumAge?: number; onError?: (error: unknown) => void },
 ): LocationWatch {
   const timeout = opts?.timeout ?? 12_000;
   const maximumAge = opts?.maximumAge ?? 500;
@@ -81,7 +81,7 @@ export function watchLocation(
     if (!navigator.geolocation) return { clear() {} };
     const id = navigator.geolocation.watchPosition(
       (position) => onFix(fromBrowser(position)),
-      () => {},
+      (error) => opts?.onError?.(error),
       { enableHighAccuracy: true, timeout, maximumAge },
     );
     return { clear: () => navigator.geolocation.clearWatch(id) };
@@ -90,14 +90,30 @@ export function watchLocation(
   let cleared = false;
   let watchId: string | undefined;
   void (async () => {
-    if (!(await ensureLocationPermission()) || cleared) return;
-    watchId = await Geolocation.watchPosition(
-      { enableHighAccuracy: true, timeout, maximumAge },
-      (position, error) => {
-        if (cleared || error || !position) return;
-        onFix(fromNative(position));
-      },
-    );
+    try {
+      if (!(await ensureLocationPermission()) || cleared) {
+        if (!cleared) opts?.onError?.(new Error("Location permission denied"));
+        return;
+      }
+      const id = await Geolocation.watchPosition(
+        { enableHighAccuracy: true, timeout, maximumAge },
+        (position, error) => {
+          if (cleared) return;
+          if (error || !position) {
+            opts?.onError?.(error || new Error("Location unavailable"));
+            return;
+          }
+          onFix(fromNative(position));
+        },
+      );
+      if (cleared) {
+        void Geolocation.clearWatch({ id });
+        return;
+      }
+      watchId = id;
+    } catch (error) {
+      if (!cleared) opts?.onError?.(error);
+    }
   })();
   return {
     clear() {

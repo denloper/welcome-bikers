@@ -1,0 +1,13 @@
+.git
+.github
+.cursor
+.env
+.env.*
+android
+dist
+node_modules
+test-results
+playwright-report
+*.apk
+*.log
+_dl_app.py

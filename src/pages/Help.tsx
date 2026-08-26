@@ -29,7 +29,7 @@ export function Help() {
     <div className="page">
       <TopBar title="Help on the route" />
       <div className="section">
-        <p>One tap alerts nearby riders and roadside help. Share your pin and what happened.</p>
+        <p>Prepare an SOS note with your location. This preview stores it only on this device.</p>
         <button className="btn ghost" onClick={locate}>
           Attach my location
         </button>
@@ -41,7 +41,7 @@ export function Help() {
           placeholder="Flat tire, need a workshop, fuel..."
         />
         {sent ? (
-          <div className="notice">Help request posted to the riders chat.</div>
+          <div className="notice">SOS note saved on this device. No external alert was sent.</div>
         ) : (
           <button
             className="btn blue"
@@ -59,7 +59,7 @@ export function Help() {
               setSent(true);
             }}
           >
-            Send SOS
+            Save SOS note
           </button>
         )}
         {alerts.length > 0 && (

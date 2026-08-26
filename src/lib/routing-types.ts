@@ -53,6 +53,7 @@ export type DriveRoute = {
   distance: number;
   duration: number;
   steps: NavStep[];
+  limitations?: string[];
 };
 
 export type ManeuverPreview = {

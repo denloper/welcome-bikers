@@ -7,6 +7,7 @@ async function installMobileRecordMocks(
   device: "iphone" | "android" = "iphone",
   proxyBases = ["https://proxy.test"],
   micFailure = false,
+  stopDelayMs = 0,
 ) {
   const profile =
     device === "iphone"
@@ -22,7 +23,7 @@ async function installMobileRecordMocks(
           platform: "Linux armv8l",
           mime: "audio/webm;codecs=opus",
         };
-  await page.addInitScript(({ userAgent, platform, mime, micFailure }) => {
+  await page.addInitScript(({ userAgent, platform, mime, micFailure, stopDelayMs }) => {
     Object.defineProperty(navigator, "userAgent", {
       configurable: true,
       get: () => userAgent,
@@ -59,7 +60,8 @@ async function installMobileRecordMocks(
       }
       stop() {
         this.state = "inactive";
-        queueMicrotask(() => this.onstop?.());
+        if (stopDelayMs) window.setTimeout(() => this.onstop?.(), stopDelayMs);
+        else queueMicrotask(() => this.onstop?.());
       }
     }
     (window as unknown as { MediaRecorder: typeof FakeMediaRecorder }).MediaRecorder = FakeMediaRecorder;
@@ -72,7 +74,7 @@ async function installMobileRecordMocks(
       } as unknown as MediaStream;
     };
     Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: md });
-  }, { ...profile, micFailure });
+  }, { ...profile, micFailure, stopDelayMs });
 
   let discoveryHit = 0;
   await page.route("**/or-proxy.json*", async (route) => {
@@ -275,6 +277,54 @@ test.describe("Real Bro mobile voice (MediaRecorder path)", () => {
     await expect(page.locator(".rb-bubble.user").filter({ hasText: /Magnus Moto/i })).toBeVisible();
     expect(oldHits).toBe(1);
     expect(newHits).toBe(1);
+  });
+
+  test("closing during transcription cancels the pending voice result", async ({ page }) => {
+    await installMobileRecordMocks(page);
+    await page.route("https://proxy.test/transcribe", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      await route
+        .fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: '{"text":"this should never be submitted"}',
+        })
+        .catch(() => undefined);
+    });
+
+    await page.goto("/#/");
+    await page.getByTestId("assistant-row").tap();
+    const mic = page.getByLabel("Voice input");
+    await mic.tap();
+    await mic.tap();
+    await expect(page.getByTestId("assistant-voice-notice")).toContainText("Transcribing");
+    await page.getByLabel("Close assistant").tap();
+    await page.waitForTimeout(900);
+
+    await page.getByTestId("assistant-row").tap();
+    await expect(page.locator(".rb-bubble.user").filter({ hasText: "this should never be submitted" })).toHaveCount(0);
+    await expect(page.getByTestId("assistant-send")).toBeEnabled();
+  });
+
+  test("closing while the recorder stops prevents transcription from starting", async ({ page }) => {
+    await installMobileRecordMocks(page, "iphone", ["https://proxy.test"], false, 500);
+    let transcriptionHits = 0;
+    await page.route("https://proxy.test/transcribe", async (route) => {
+      transcriptionHits += 1;
+      await route.fulfill({ status: 200, contentType: "application/json", body: '{"text":"late voice"}' });
+    });
+
+    await page.goto("/#/");
+    await page.getByTestId("assistant-row").tap();
+    const mic = page.getByLabel("Voice input");
+    await mic.tap();
+    await mic.tap();
+    await page.getByLabel("Close assistant").tap();
+    await page.waitForTimeout(700);
+
+    expect(transcriptionHits).toBe(0);
+    await page.getByTestId("assistant-row").tap();
+    await expect(page.getByTestId("assistant-send")).toBeEnabled();
   });
 
   test("shows a useful message when transcription is unavailable", async ({ page }) => {

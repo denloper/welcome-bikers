@@ -1,22 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
+import { PLACE_TYPES } from "../lib/categories";
 import { invalidatePlaces } from "../lib/data";
 import { readLocation } from "../lib/location";
 import { store } from "../lib/store";
 import type { Place, PlaceType } from "../types";
-
-const TYPES: PlaceType[] = [
-  "hotels",
-  "shops",
-  "bars",
-  "restaurants",
-  "services",
-  "rent",
-  "festivals",
-  "viewpoints",
-  "historical",
-];
 
 export function AddPlace() {
   const nav = useNavigate();
@@ -56,7 +45,7 @@ export function AddPlace() {
       <div className="page">
         <TopBar title="Add your place" />
         <div className="section">
-          <p>Sign in to add a place for moderation.</p>
+          <p>Sign in to save a local place submission.</p>
           <button className="btn blue" onClick={() => nav("/login")}>
             Sign in
           </button>
@@ -69,7 +58,7 @@ export function AddPlace() {
     return (
       <div className="page">
         <TopBar title="Add your place" />
-        <div className="notice">Sent to moderation. We will email you after review.</div>
+        <div className="notice">Saved on this device. It has not been sent to a moderator.</div>
       </div>
     );
   }
@@ -113,7 +102,7 @@ export function AddPlace() {
         <input className="field" value={form.name} onChange={(e) => set("name", e.target.value)} required />
         <label className="lbl">Category *</label>
         <select value={form.type} onChange={(e) => set("type", e.target.value as PlaceType)}>
-          {TYPES.map((t) => (
+          {PLACE_TYPES.map((t) => (
             <option key={t}>{t}</option>
           ))}
         </select>
@@ -154,7 +143,7 @@ export function AddPlace() {
           agree with the rules
         </label>
         <button className="btn blue" type="submit">
-          Submit for moderation
+          Save local submission
         </button>
       </form>
     </div>

@@ -86,6 +86,10 @@ function fromGoogleRoute(
     distance,
     duration,
     steps: completedSteps,
+    limitations: [
+      ...(opts.pavedOnly ? ["Paved-only routing is unavailable with Google Directions"] : []),
+      ...(opts.profile === "scenic" ? ["Scenic weighting is unavailable with Google Directions"] : []),
+    ],
   };
 }
 
@@ -103,12 +107,13 @@ export async function googleRoutes(
   options?: Partial<RoutingOptions>,
 ): Promise<DriveRoute[]> {
   if (points.length < 2) return [];
+  if (points.length > 27) return [];
   const opts = { ...DEFAULT_ROUTING_OPTIONS, ...options };
   await loadGoogle();
   const svc = new google.maps.DirectionsService();
   const origin = { lat: points[0].lat, lng: points[0].lon };
   const destination = { lat: points[points.length - 1].lat, lng: points[points.length - 1].lon };
-  const waypoints = points.slice(1, -1).slice(0, 25).map((p) => ({
+  const waypoints = points.slice(1, -1).map((p) => ({
     location: { lat: p.lat, lng: p.lon },
     stopover: true,
   }));

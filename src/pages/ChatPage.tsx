@@ -27,6 +27,9 @@ export function ChatList() {
         </div>
         <div />
       </header>
+      <p className="muted" style={{ padding: "0 16px" }}>
+        Preview chat: messages are stored only on this device.
+      </p>
       <div className="chat-list">
         {ROOMS.map((r) => (
           <Link key={r.id} to={`/chat/${r.id}`}>

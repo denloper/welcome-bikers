@@ -70,7 +70,11 @@ export function tripTooShort(points: { lat: number; lon: number }[]): boolean {
   return haversineKm(points[0], points[points.length - 1]) * 1000 < MIN_NAV_METERS;
 }
 
-export function remainingAlong(route: DriveRoute, here: { lat: number; lon: number }) {
+export function remainingAlong(
+  route: DriveRoute,
+  here: { lat: number; lon: number },
+  previousIndex?: number,
+) {
   const pts = route.geometry;
   if (pts.length < 2 || route.distance < MIN_NAV_METERS) {
     return {
@@ -85,7 +89,14 @@ export function remainingAlong(route: DriveRoute, here: { lat: number; lon: numb
     };
   }
   const last = pts[pts.length - 1];
-  const snap = closestOnPolyline(pts, here);
+  const bounded =
+    previousIndex == null
+      ? closestOnPolyline(pts, here)
+      : closestOnPolyline(pts, here, {
+          start: Math.max(0, previousIndex - 3),
+          end: Math.min(pts.length - 2, previousIndex + 80),
+        });
+  const snap = previousIndex != null && bounded.distKm > 1 ? closestOnPolyline(pts, here) : bounded;
   const distToEnd = haversineKm(here, { lat: last[0], lon: last[1] });
   if (distToEnd < 0.08 && snap.distKm < 0.2) {
     return {

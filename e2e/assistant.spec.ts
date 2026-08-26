@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { fulfillChatJson, mockProxyChat } from "./helpers/mockProxy";
+import { fulfillChatJson, mockProxyBase, mockProxyChat } from "./helpers/mockProxy";
 
 test.describe("Real Bro assistant", () => {
   test("opens from the main page with a greeting and text input", async ({ page }) => {
@@ -45,6 +45,7 @@ test.describe("Real Bro assistant", () => {
   });
 
   test("answers unclear chat with OpenRouter Real Bro AI", async ({ page }) => {
+    await mockProxyBase(page);
     await mockProxyChat(page, async (route) => {
       await fulfillChatJson(route, {
         reply:
@@ -57,6 +58,24 @@ test.describe("Real Bro assistant", () => {
     await page.getByTestId("assistant-input").fill("how is the weather?");
     await page.getByTestId("assistant-send").tap();
     await expect(page.locator(".rb-bubble.bro").last()).toContainText(/build a route/i, { timeout: 15_000 });
+  });
+
+  test("closing Real Bro cancels a delayed provider reply", async ({ page }) => {
+    await mockProxyBase(page);
+    await mockProxyChat(page, async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      await fulfillChatJson(route, { reply: "This reply should be cancelled.", intent: "chat" }).catch(() => undefined);
+    });
+    await page.goto("/#/");
+    await page.getByTestId("assistant-row").tap();
+    await page.getByTestId("assistant-input").fill("give me a delayed reply");
+    await page.getByTestId("assistant-send").tap();
+    await page.getByLabel("Close assistant").tap();
+    await page.waitForTimeout(900);
+
+    await page.getByTestId("assistant-row").tap();
+    await expect(page.locator(".rb-bubble.bro").filter({ hasText: "This reply should be cancelled." })).toHaveCount(0);
+    await expect(page.getByTestId("assistant-send")).toBeEnabled();
   });
 
   test("records in English and shows a live waveform", async ({ page }) => {

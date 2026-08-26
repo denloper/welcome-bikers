@@ -11,6 +11,7 @@ export function Login() {
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
   const [forgot, setForgot] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   return (
     <div className="page">
@@ -27,13 +28,18 @@ export function Login() {
       </header>
       <form
         className="form auth-form"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
+          if (busy) return;
+          setBusy(true);
+          setErr("");
           try {
-            store.login(email.trim(), password);
+            await store.login(email, password);
             nav("/account");
           } catch (ex) {
             setErr((ex as Error).message);
+          } finally {
+            setBusy(false);
           }
         }}
       >
@@ -54,8 +60,8 @@ export function Login() {
         </div>
         {err && <p style={{ color: "#f66" }}>{err}</p>}
         {forgot && <p className="muted">Reset link will be sent to this email when the mail server is connected.</p>}
-        <button className="btn white" type="submit">
-          Sign in
+        <button className="btn white" type="submit" disabled={busy}>
+          {busy ? "Signing in…" : "Sign in"}
         </button>
         <button
           className="btn white google-btn"
@@ -83,6 +89,7 @@ export function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
 
   if (step === "start") {
     return (
@@ -127,13 +134,18 @@ export function Register() {
       </header>
       <form
         className="form auth-form"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
+          if (busy) return;
+          setBusy(true);
+          setErr("");
           try {
-            store.register(name.trim(), email.trim(), password);
+            await store.register(name.trim(), email, password);
             nav("/account");
           } catch (ex) {
             setErr((ex as Error).message);
+          } finally {
+            setBusy(false);
           }
         }}
       >
@@ -144,8 +156,8 @@ export function Register() {
         <label className="lbl">Password *</label>
         <input className="field" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         {err && <p style={{ color: "#f66" }}>{err}</p>}
-        <button className="btn white" type="submit">
-          Create an account
+        <button className="btn white" type="submit" disabled={busy}>
+          {busy ? "Creating…" : "Create an account"}
         </button>
         <p className="muted">By clicking, you agree to our Privacy Statement.</p>
       </form>

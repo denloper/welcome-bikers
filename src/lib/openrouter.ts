@@ -1,21 +1,13 @@
 import type { PlaceType } from "../types";
+import { PLACE_TYPES } from "./categories";
+import { fetchWithTimeout } from "./net";
 import { chatUrl, resolveProxyBase } from "./orProxy";
 
 /** Fast + smart default; fallbacks listed in the request body. */
 const MODEL = "google/gemini-2.5-flash";
 const FALLBACK_MODELS = ["openai/gpt-4o-mini", "google/gemini-2.0-flash-001"];
 
-const PLACE_TYPES = new Set<PlaceType>([
-  "hotels",
-  "shops",
-  "bars",
-  "restaurants",
-  "services",
-  "rent",
-  "festivals",
-  "viewpoints",
-  "historical",
-]);
+const VALID_PLACE_TYPES = new Set<PlaceType>(PLACE_TYPES);
 
 export type BroChatTurn = { role: "user" | "assistant"; content: string };
 
@@ -68,7 +60,7 @@ function normalizeResult(parsed: unknown, fallbackReply: string): BroAiResult {
     intentRaw === "ride" || intentRaw === "category" ? intentRaw : "chat";
   const query = obj.query != null ? String(obj.query).trim() : undefined;
   const typeRaw = obj.type != null ? String(obj.type).trim() : undefined;
-  const type = typeRaw && PLACE_TYPES.has(typeRaw as PlaceType) ? (typeRaw as PlaceType) : undefined;
+  const type = typeRaw && VALID_PLACE_TYPES.has(typeRaw as PlaceType) ? (typeRaw as PlaceType) : undefined;
   const country = obj.country != null ? String(obj.country).trim() : undefined;
   if (intent === "ride" && !query) return { reply, intent: "chat" };
   if (intent === "category" && !type) return { reply, intent: "chat" };
@@ -76,7 +68,11 @@ function normalizeResult(parsed: unknown, fallbackReply: string): BroAiResult {
 }
 
 /** Ask Real Bro via CORS proxy (OpenRouter key stays server-side). Returns null on failure. */
-export async function askRealBro(userText: string, history: BroChatTurn[] = []): Promise<BroAiResult | null> {
+export async function askRealBro(
+  userText: string,
+  history: BroChatTurn[] = [],
+  signal?: AbortSignal,
+): Promise<BroAiResult | null> {
   if (!userText.trim()) return null;
   const base = await resolveProxyBase();
   if (!base) return null;
@@ -87,9 +83,10 @@ export async function askRealBro(userText: string, history: BroChatTurn[] = []):
     { role: "user", content: userText.trim() },
   ];
   try {
-    const res = await fetch(chatUrl(base), {
+    const res = await fetchWithTimeout(chatUrl(base), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal,
       body: JSON.stringify({
         model: MODEL,
         models: FALLBACK_MODELS,
@@ -97,7 +94,7 @@ export async function askRealBro(userText: string, history: BroChatTurn[] = []):
         max_tokens: 220,
         messages,
       }),
-    });
+    }, 20_000);
     if (!res.ok) return null;
     const data = (await res.json()) as {
       choices?: { message?: { content?: string | null } }[];

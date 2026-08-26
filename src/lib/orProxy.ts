@@ -1,9 +1,10 @@
 /** Resolve CORS-friendly OpenRouter proxy base (no trailing slash). Key stays on the proxy. */
 
-const DISCOVERY_URLS = [
-  "https://raw.githubusercontent.com/denloper/welcome-bikers/proxy-url/public/or-proxy.json",
-  "https://api.github.com/repos/denloper/welcome-bikers/contents/public/or-proxy.json?ref=proxy-url",
-];
+const viteEnv = import.meta.env ?? {};
+const DISCOVERY_URLS = String(viteEnv.VITE_OPENROUTER_DISCOVERY_URL || "or-proxy.json")
+  .split(",")
+  .map((url) => url.trim())
+  .filter(Boolean);
 
 let resolved: string | null | undefined;
 let resolving: Promise<string> | null = null;
@@ -13,7 +14,7 @@ function normalizeBase(url: string): string {
 }
 
 export function proxyBaseFromEnv(): string {
-  return normalizeBase(String(import.meta.env.VITE_OPENROUTER_PROXY_URL || ""));
+  return normalizeBase(String(viteEnv.VITE_OPENROUTER_PROXY_URL || ""));
 }
 
 /** True when a proxy URL is baked in at build time (preferred). */
@@ -60,7 +61,7 @@ async function discoverProxyBase(): Promise<string> {
   return "";
 }
 
-/** Resolve proxy base: env first (stable hosts), else published discovery JSON. */
+/** Resolve proxy base: stable build-time URL first, optional discovery document second. */
 export async function resolveProxyBase(forceRefresh = false): Promise<string> {
   if (forceRefresh) {
     resolved = undefined;

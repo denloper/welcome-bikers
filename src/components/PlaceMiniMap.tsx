@@ -3,14 +3,14 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { lightTiles } from "../lib/osm";
 
-export function GoogleMiniMap({ lat, lon }: { lat: number; lon: number }) {
+export function PlaceMiniMap({ lat, lon }: { lat: number; lon: number }) {
   const el = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!el.current) return;
     const map = L.map(el.current, {
       zoomControl: false,
-      attributionControl: false,
+      attributionControl: true,
       dragging: true,
     }).setView([lat, lon], 15);
     lightTiles().addTo(map);
@@ -21,9 +21,9 @@ export function GoogleMiniMap({ lat, lon }: { lat: number; lon: number }) {
       fillColor: "#e10600",
       fillOpacity: 1,
     }).addTo(map);
-    const t = window.setTimeout(() => map.invalidateSize(), 80);
+    const timer = window.setTimeout(() => map.invalidateSize(), 80);
     return () => {
-      window.clearTimeout(t);
+      window.clearTimeout(timer);
       map.remove();
     };
   }, [lat, lon]);

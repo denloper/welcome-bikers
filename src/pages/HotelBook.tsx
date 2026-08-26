@@ -4,6 +4,7 @@ import { TopBar } from "../components/TopBar";
 import { PlacePhoto } from "../components/PlacePhoto";
 import { AmenityIcon } from "../components/Icons";
 import { getPlace, loadHotelRooms, loadPlaces } from "../lib/data";
+import { dateFromToday, validDateRange } from "../lib/dates";
 import { store } from "../lib/store";
 import type { HotelRoom, Place } from "../types";
 
@@ -13,8 +14,8 @@ export function HotelBook() {
   const [place, setPlace] = useState<Place | null>(null);
   const [rooms, setRooms] = useState<HotelRoom[]>([]);
   const [picked, setPicked] = useState<string>("");
-  const [from, setFrom] = useState("2026-08-16");
-  const [to, setTo] = useState("2026-08-17");
+  const [from, setFrom] = useState(() => dateFromToday(1));
+  const [to, setTo] = useState(() => dateFromToday(2));
   const [done, setDone] = useState(false);
 
   useEffect(() => {
@@ -23,6 +24,7 @@ export function HotelBook() {
   }, [id]);
 
   const room = useMemo(() => rooms.find((r) => r.id === picked) ?? rooms[0], [rooms, picked]);
+  const datesValid = validDateRange(from, to);
 
   if (!place) return <div className="empty">Loading…</div>;
 
@@ -72,17 +74,20 @@ export function HotelBook() {
         )}
         <h3>Select date</h3>
         <div className="date-field">
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <input type="date" min={dateFromToday()} value={from} onChange={(e) => setFrom(e.target.value)} />
           <span>→</span>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          <input type="date" min={from || dateFromToday()} value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
+        {!datesValid && <p className="muted">Choose a future check-in and a later check-out date.</p>}
         {done ? (
-          <div className="notice">Booking request sent. The hotel will confirm in the app.</div>
+          <div className="notice">Saved on this device. No request was sent to the hotel.</div>
         ) : (
           <button
             className="btn green"
             style={{ marginTop: 18 }}
+            disabled={!datesValid}
             onClick={() => {
+              if (!datesValid) return;
               const user = store.get().user;
               if (!user) {
                 nav("/login");

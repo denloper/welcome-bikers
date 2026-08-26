@@ -1,10 +1,17 @@
 import type { Booking, ChatMessage, Review, User } from "../types";
 
 const KEY = "wb.v2";
+const PASSWORD_ITERATIONS = 120_000;
+
+type StoredUser = User & {
+  password?: string;
+  passwordHash?: string;
+  passwordSalt?: string;
+};
 
 type State = {
   user: User | null;
-  users: Array<User & { password?: string }>;
+  users: StoredUser[];
   favorites: string[];
   messages: ChatMessage[];
   reviews: Review[];
@@ -45,6 +52,57 @@ function save(state: State) {
   localStorage.setItem(KEY, JSON.stringify(state));
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+async function passwordHash(password: string, salt: Uint8Array): Promise<string> {
+  const material = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: new Uint8Array(salt),
+      iterations: PASSWORD_ITERATIONS,
+    },
+    material,
+    256,
+  );
+  return bytesToBase64(new Uint8Array(bits));
+}
+
+async function createCredential(password: string) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  return {
+    passwordHash: await passwordHash(password, salt),
+    passwordSalt: bytesToBase64(salt),
+  };
+}
+
+function publicUser(user: StoredUser): User {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    avatar: user.avatar,
+    emailVerified: user.emailVerified,
+    friends: user.friends ?? [],
+  };
+}
+
 export const store = {
   get: load,
   setUser(user: User | null) {
@@ -52,41 +110,51 @@ export const store = {
     s.user = user;
     if (user) {
       const i = s.users.findIndex((u) => u.id === user.id);
-      if (i >= 0) s.users[i] = user;
+      if (i >= 0) s.users[i] = { ...s.users[i], ...user };
       else s.users.push(user);
     }
     save(s);
     return s;
   },
-  register(name: string, email: string, password: string): User {
+  async register(name: string, email: string, password: string): Promise<User> {
     const s = load();
-    if (s.users.some((u) => u.email === email)) throw new Error("Email already used");
+    const normalizedEmail = email.trim().toLowerCase();
+    if (password.length < 8) throw new Error("Password must be at least 8 characters");
+    if (s.users.some((u) => u.email.toLowerCase() === normalizedEmail)) throw new Error("Email already used");
     const user: User = {
       id: crypto.randomUUID(),
       name,
-      email,
+      email: normalizedEmail,
       emailVerified: false,
       friends: [],
     };
-    s.users.push({ ...user, password });
+    const credential = await createCredential(password);
+    s.users.push({ ...user, ...credential });
     s.user = user;
     save(s);
     return user;
   },
-  login(email: string, password: string): User {
+  async login(email: string, password: string): Promise<User> {
     const s = load();
-    const found = s.users.find((u) => u.email === email) as (User & { password?: string }) | undefined;
-    if (!found || (found.password && found.password !== password)) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const found = s.users.find((u) => u.email.toLowerCase() === normalizedEmail);
+    if (!found) {
       throw new Error("Wrong email or password");
     }
-    const user: User = {
-      id: found.id,
-      name: found.name,
-      email: found.email,
-      avatar: found.avatar,
-      emailVerified: found.emailVerified,
-      friends: found.friends ?? [],
-    };
+    let valid = false;
+    if (found.passwordHash && found.passwordSalt) {
+      const candidate = await passwordHash(password, base64ToBytes(found.passwordSalt));
+      valid = candidate === found.passwordHash;
+    } else if (typeof found.password === "string") {
+      valid = found.password === password;
+      if (valid) {
+        const credential = await createCredential(password);
+        Object.assign(found, credential);
+        delete found.password;
+      }
+    }
+    if (!valid) throw new Error("Wrong email or password");
+    const user = publicUser(found);
     s.user = user;
     save(s);
     return user;

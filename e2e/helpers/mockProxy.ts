@@ -1,5 +1,18 @@
 import type { Page, Route } from "@playwright/test";
 
+export async function mockProxyBase(page: Page, base = "https://proxy.test") {
+  await page.route("**/or-proxy.json*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ base }),
+    }),
+  );
+  await page.route(`${base}/health`, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: '{"ok":true}' }),
+  );
+}
+
 /** Fulfill chat/completions-shaped JSON through the CORS proxy /chat path. */
 export async function mockProxyChat(
   page: Page,

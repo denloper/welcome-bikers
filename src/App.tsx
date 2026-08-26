@@ -12,7 +12,6 @@ import { Login, Register } from "./pages/Auth";
 import { AddPlace } from "./pages/AddPlace";
 import { Help } from "./pages/Help";
 import { RouteDetail, Routes as RideRoutes } from "./pages/Routes";
-import { Admin } from "./pages/Admin";
 
 const MapPage = lazy(() => import("./pages/MapPage").then((module) => ({ default: module.MapPage })));
 
@@ -45,7 +44,6 @@ export default function App() {
         <Route path="/help" element={<Help />} />
         <Route path="/routes" element={<RideRoutes />} />
         <Route path="/routes/:id" element={<RouteDetail />} />
-        <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <BottomNav />

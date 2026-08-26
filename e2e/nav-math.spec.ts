@@ -112,6 +112,26 @@ test("closestOnPolyline snaps a nearby point onto the line", () => {
   expect(snap.distKm).toBeLessThan(0.05);
   expect(snap.lat).toBeGreaterThan(42.43);
   expect(snap.lat).toBeLessThan(42.441);
+  expect(snap.lon).toBeGreaterThan(19.27);
+  expect(snap.lon).toBeLessThan(19.272);
+});
+
+test("route progress stays near its previous segment on parallel roads", () => {
+  const outbound = Array.from({ length: 101 }, (_, index) => [42, 19 + index * 0.001] as [number, number]);
+  const inbound = Array.from({ length: 101 }, (_, index) => [42.001, 19.1 - index * 0.001] as [number, number]);
+  const parallelRoute: DriveRoute = {
+    ...route,
+    id: "parallel-route",
+    geometry: [...outbound, ...inbound],
+    distance: 20_000,
+    duration: 1_800,
+  };
+  const rider = { lat: 42.001, lon: 19.02 };
+  const global = remainingAlong(parallelRoute, rider);
+  const continuous = remainingAlong(parallelRoute, rider, 10);
+
+  expect(global.routeIndex).toBeGreaterThan(150);
+  expect(continuous.routeIndex).toBeLessThan(90);
 });
 
 test("GPS filter rejects inaccurate fixes and impossible jumps", () => {

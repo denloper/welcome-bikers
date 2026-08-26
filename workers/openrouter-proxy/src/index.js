@@ -1,95 +1,117 @@
-/**
- * Welcome Bikers — OpenRouter proxy (CORS + server-side API key).
- * Routes:
- *   POST /chat       -> https://openrouter.ai/api/v1/chat/completions
- *   POST /speech     -> https://openrouter.ai/api/v1/audio/speech
- *   POST /transcribe -> https://openrouter.ai/api/v1/audio/transcriptions
- *   OPTIONS /*       -> CORS preflight
- */
+import {
+  allowedOrigins,
+  checkRateLimit,
+  corsHeaders,
+  endpointFor,
+  isAllowedOrigin,
+  sanitizeBody,
+} from "../policy.mjs";
 
-const ALLOWED = [
-  "https://denloper.github.io",
-  "http://127.0.0.1:4173",
-  "http://127.0.0.1:5173",
-  "http://localhost:4173",
-  "http://localhost:5173",
-  "https://localhost",
-  "capacitor://localhost",
-];
-
-function corsHeaders(origin) {
-  const allow = ALLOWED.includes(origin) || /^https:\/\/([a-z0-9-]+\.)?denloper\.github\.io$/.test(origin) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
-    ? origin
-    : ALLOWED[0];
-  return {
-    "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Title, HTTP-Referer",
-    "Access-Control-Max-Age": "86400",
-    Vary: "Origin",
-  };
-}
-
-function json(status, body, origin) {
+function json(status, body, origin, origins, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", ...corsHeaders(origin) },
+    headers: { "Content-Type": "application/json", ...corsHeaders(origin, origins), ...extraHeaders },
   });
 }
 
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
+    const origins = allowedOrigins(env.ALLOWED_ORIGINS);
     if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders(origin) });
+      if (!isAllowedOrigin(origin, origins)) return json(403, { error: "Origin not allowed" }, origin, origins);
+      return new Response(null, { status: 204, headers: corsHeaders(origin, origins) });
     }
 
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
 
     if (request.method === "GET" && (path === "/" || path === "/health")) {
-      return json(200, { ok: true, service: "welcome-bikers-openrouter-proxy" }, origin);
+      return json(200, { ok: true, service: "welcome-bikers-openrouter-proxy" }, origin, origins);
     }
 
     if (request.method !== "POST") {
-      return json(405, { error: "Method not allowed" }, origin);
+      return json(405, { error: "Method not allowed" }, origin, origins);
+    }
+
+    if (!isAllowedOrigin(origin, origins)) {
+      return json(403, { error: "Origin not allowed" }, origin, origins);
     }
 
     const key = String(env.OPENROUTER_API_KEY || "").trim();
     if (!key) {
-      return json(500, { error: "Proxy misconfigured: missing OPENROUTER_API_KEY" }, origin);
+      return json(500, { error: "Proxy misconfigured: missing OPENROUTER_API_KEY" }, origin, origins);
     }
 
-    let upstream;
-    if (path === "/chat" || path.endsWith("/chat")) {
-      upstream = "https://openrouter.ai/api/v1/chat/completions";
-    } else if (path === "/speech" || path.endsWith("/speech")) {
-      upstream = "https://openrouter.ai/api/v1/audio/speech";
-    } else if (path === "/transcribe" || path.endsWith("/transcribe")) {
-      upstream = "https://openrouter.ai/api/v1/audio/transcriptions";
-    } else {
-      return json(404, { error: "Not found. Use POST /chat, /speech, or /transcribe" }, origin);
+    const endpoint = endpointFor(path);
+    if (!endpoint) {
+      return json(404, { error: "Not found. Use POST /chat, /speech, or /transcribe" }, origin, origins);
     }
 
-    const body = await request.arrayBuffer();
-    const contentType = request.headers.get("Content-Type") || "application/json";
-    const upstreamRes = await fetch(upstream, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": contentType,
-        "HTTP-Referer": "https://denloper.github.io/welcome-bikers/",
-        "X-Title": "Welcome Bikers",
-        "User-Agent": "WelcomeBikersProxy/1.0 (+https://denloper.github.io/welcome-bikers/)",
-      },
-      body,
-    });
+    const contentType = request.headers.get("Content-Type") || "";
+    if (!contentType.toLowerCase().startsWith("application/json")) {
+      return json(415, { error: "Content-Type must be application/json" }, origin, origins);
+    }
 
-    const headers = new Headers(corsHeaders(origin));
+    const declared = Number(request.headers.get("Content-Length") || 0);
+    if (declared > endpoint.maxBytes) {
+      return json(413, { error: "Request body is too large" }, origin, origins);
+    }
+
+    const client = request.headers.get("CF-Connecting-IP") || "unknown";
+    const rate = checkRateLimit(`${client}:${path}`, Number(env.PROXY_RATE_LIMIT || 40));
+    if (!rate.allowed) {
+      return json(
+        429,
+        { error: "Rate limit exceeded" },
+        origin,
+        origins,
+        { "Retry-After": String(rate.retryAfter) },
+      );
+    }
+
+    let body;
+    try {
+      const raw = new Uint8Array(await request.arrayBuffer());
+      if (raw.byteLength > endpoint.maxBytes) {
+        return json(413, { error: "Request body is too large" }, origin, origins);
+      }
+      body = sanitizeBody(path, raw);
+    } catch (error) {
+      return json(400, { error: String(error?.message || "Request rejected") }, origin, origins);
+    }
+
+    const controller = new AbortController();
+    const abortUpstream = () => controller.abort(request.signal?.reason);
+    request.signal?.addEventListener("abort", abortUpstream, { once: true });
+    const timeout = setTimeout(() => controller.abort(), Math.max(5_000, Number(env.UPSTREAM_TIMEOUT_MS || 45_000)));
+    let upstreamRes;
+    try {
+      upstreamRes = await fetch(endpoint.upstream, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": String(env.PUBLIC_APP_URL || "https://denloper.github.io/welcome-bikers/"),
+          "X-Title": "Welcome Bikers",
+        },
+        body,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      const timedOut = error?.name === "AbortError";
+      return json(timedOut ? 504 : 502, { error: timedOut ? "Upstream timed out" : "Upstream failed" }, origin, origins);
+    } finally {
+      clearTimeout(timeout);
+      request.signal?.removeEventListener("abort", abortUpstream);
+    }
+
+    const headers = new Headers(corsHeaders(origin, origins));
     const ct = upstreamRes.headers.get("Content-Type");
     if (ct) headers.set("Content-Type", ct);
     const gen = upstreamRes.headers.get("X-Generation-Id");
     if (gen) headers.set("X-Generation-Id", gen);
+    headers.set("X-RateLimit-Remaining", String(rate.remaining));
 
     return new Response(upstreamRes.body, { status: upstreamRes.status, headers });
   },

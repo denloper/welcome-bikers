@@ -84,14 +84,21 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-export async function transcribeAudioBlob(blob: Blob, formatHint: string): Promise<string | null> {
+export async function transcribeAudioBlob(
+  blob: Blob,
+  formatHint: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
   if (!blob.size) return null;
   const format = formatFromBlob(blob, formatHint);
   const data = await blobToBase64(blob);
   for (let attempt = 0; attempt < 2; attempt++) {
+    if (signal?.aborted) return null;
     const base = await resolveProxyBase(attempt > 0);
     if (!base) continue;
     const controller = new AbortController();
+    const onAbort = () => controller.abort(signal?.reason);
+    signal?.addEventListener("abort", onAbort, { once: true });
     const timer = window.setTimeout(() => controller.abort(), 45_000);
     try {
       const res = await fetch(transcribeUrl(base), {
@@ -111,9 +118,11 @@ export async function transcribeAudioBlob(blob: Blob, formatHint: string): Promi
       }
       if (res.status < 500 && res.status !== 408 && res.status !== 429) return null;
     } catch {
+      if (signal?.aborted) return null;
       /* Refresh an expired tunnel URL and retry once. */
     } finally {
       window.clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
     }
   }
   return null;

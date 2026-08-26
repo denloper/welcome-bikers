@@ -6,6 +6,7 @@ import {
   type NavStep,
   type RoutingOptions,
 } from "./routing-types";
+import { fetchWithTimeout } from "./net";
 
 export type { DriveRoute, LatLon, NavStep, RouteProfile, RoutingOptions } from "./routing-types";
 
@@ -123,7 +124,7 @@ async function fetchOsrm(
     alternatives: opts.alternatives !== false && points.length === 2 ? "true" : "false",
   });
   try {
-    const res = await fetch(`${host}${coords}?${q}`);
+    const res = await fetchWithTimeout(`${host}${coords}?${q}`, {}, 12_000);
     if (!res.ok) return [];
     const data = (await res.json()) as OsrmJson;
     return (data.routes || [])
@@ -134,13 +135,19 @@ async function fetchOsrm(
         return [{
           id: `osrm-${index}-${Math.round(route.distance)}-${Math.round(route.duration)}`,
           provider: "osrm",
-          profile: opts.profile,
+          profile: "fastest",
           trafficAware: false,
-          summary: index === 0 ? "Recommended" : `Alternative ${index + 1}`,
+          summary: index === 0 ? "Basic fallback route" : `Fallback ${index + 1}`,
           geometry: line.map(([lon, lat]) => [lat, lon]),
           distance: route.distance,
           duration: route.duration,
           steps: stepsFromOsrm(route, points[0]),
+          limitations: [
+            ...(opts.profile !== "fastest" ? ["Selected route profile is unavailable with the OSRM fallback"] : []),
+            ...(!opts.allowTolls ? ["Toll avoidance is unavailable with the OSRM fallback"] : []),
+            ...(!opts.allowFerries ? ["Ferry avoidance is unavailable with the OSRM fallback"] : []),
+            ...(opts.pavedOnly ? ["Paved-only routing is unavailable with the OSRM fallback"] : []),
+          ],
         }];
       });
   } catch {
@@ -155,7 +162,7 @@ async function fetchValhalla(
   try {
     const useHighways = opts.profile === "fastest" ? 0.75 : opts.profile === "scenic" ? 0.2 : 0;
     const useTrails = opts.pavedOnly ? 0 : opts.profile === "scenic" ? 0.18 : 0.04;
-    const res = await fetch("https://valhalla1.openstreetmap.de/route", {
+    const res = await fetchWithTimeout("https://valhalla1.openstreetmap.de/route", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -171,7 +178,7 @@ async function fetchValhalla(
         },
         alternates: opts.alternatives !== false && points.length === 2 ? 2 : 0,
       }),
-    });
+    }, 15_000);
     if (!res.ok) return [];
     const data = (await res.json()) as ValhallaJson;
     const legs = data.trip?.legs || [];

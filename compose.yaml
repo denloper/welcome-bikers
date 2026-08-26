@@ -1,0 +1,33 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
+        VITE_OPENROUTER_PROXY_URL: ${VITE_OPENROUTER_PROXY_URL:-http://localhost:8787}
+        VITE_OPENROUTER_DISCOVERY_URL: ${VITE_OPENROUTER_DISCOVERY_URL:-}
+    ports:
+      - "8080:8080"
+    depends_on:
+      proxy:
+        condition: service_healthy
+
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:8080}
+      PROXY_RATE_LIMIT: ${PROXY_RATE_LIMIT:-40}
+      UPSTREAM_TIMEOUT_MS: ${UPSTREAM_TIMEOUT_MS:-45000}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+    ports:
+      - "8787:8787"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 5

@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { fulfillChatJson, mockProxyChat } from "./helpers/mockProxy";
+import { fulfillChatJson, mockProxyBase, mockProxyChat } from "./helpers/mockProxy";
 
 test("OpenRouter Real Bro JSON normalizes ride and category intents", async ({ page }) => {
+  await mockProxyBase(page);
   await mockProxyChat(page, async (route, last) => {
     if (/beer|бар/i.test(last)) {
       await fulfillChatJson(route, {

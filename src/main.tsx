@@ -12,7 +12,14 @@ if (!isNativeApp()) {
       const update = registerSW({
         immediate: true,
         onNeedRefresh() {
-          void update(true);
+          const applyWhenIdle = () => {
+            if (document.body.classList.contains("wb-nav-go")) {
+              window.setTimeout(applyWhenIdle, 5_000);
+              return;
+            }
+            void update(true);
+          };
+          applyWhenIdle();
         },
       });
     })

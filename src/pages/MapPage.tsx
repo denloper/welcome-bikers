@@ -21,10 +21,10 @@ import { NavHud, type NavRouteState } from "../components/NavHud";
 import { Stars } from "../components/Stars";
 import { PlacePhoto } from "../components/PlacePhoto";
 import { loadPlaces } from "../lib/data";
-import { bearingDeg, haversineKm, pointAhead, validCoords } from "../lib/geo";
+import { bearingDeg, haversineKm, validCoords } from "../lib/geo";
 import { filterGpsFix, freshGpsState } from "../lib/gps";
 import { readLocation, watchLocation, type LocationWatch } from "../lib/location";
-import { angleDelta, navLookAheadMeters } from "../lib/nav-camera";
+import { angleDelta } from "../lib/nav-camera";
 import {
   freshRerouteState,
   MIN_NAV_METERS,
@@ -48,20 +48,10 @@ import {
   type RoutingOptions,
 } from "../lib/osrm";
 import { photosFor } from "../lib/photos";
-import { TYPE_CHIP } from "../lib/categories";
-import type { Place, PlaceType } from "../types";
+import { PLACE_TYPES, TYPE_CHIP } from "../lib/categories";
+import type { Place } from "../types";
 
-const TYPES: PlaceType[] = [
-  "hotels",
-  "shops",
-  "bars",
-  "restaurants",
-  "services",
-  "rent",
-  "festivals",
-  "viewpoints",
-  "historical",
-];
+const TYPES = PLACE_TYPES;
 
 type Stop = { lat: number; lon: number; label: string; role: "start" | "via" | "end" };
 
@@ -166,6 +156,7 @@ export function MapPage() {
   const watchRef = useRef<LocationWatch | null>(null);
   const pickGen = useRef(0);
   const goStartGen = useRef(0);
+  const routePlanGen = useRef(0);
   const [places, setPlaces] = useState<Place[]>([]);
   const placesRef = useRef(places);
   placesRef.current = places;
@@ -206,17 +197,29 @@ export function MapPage() {
   );
   const routingRef = useRef(routingOptions);
   routingRef.current = routingOptions;
+  const routeRequestKey = useMemo(
+    () =>
+      JSON.stringify({
+        stops: stops?.map(({ lat, lon }) => [lat, lon]) ?? [],
+        options: routingOptions,
+      }),
+    [stops, routingOptions],
+  );
   const [drive, setDrive] = useState<DriveRoute | null>(null);
   const [routeChoices, setRouteChoices] = useState<DriveRoute[]>([]);
   const driveRef = useRef<DriveRoute | null>(null);
   driveRef.current = drive;
+  const [routePlanning, setRoutePlanning] = useState(false);
+  const [plannedRouteKey, setPlannedRouteKey] = useState("");
   const [routingErr, setRoutingErr] = useState(false);
   const [rerouting, setRerouting] = useState(false);
   const [offRoute, setOffRoute] = useState(false);
   const [following, setFollowing] = useState(true);
   const [navigating, setNavigating] = useState(false);
+  const [gpsReady, setGpsReady] = useState(false);
   const navigatingRef = useRef(false);
   navigatingRef.current = navigating;
+  const navProgressRef = useRef<{ routeId: string; index?: number }>({ routeId: "" });
   const compassHeadingRef = useRef<number | null>(null);
   const voiceRef = useRef(freshVoiceState());
   const voiceRouteRef = useRef("");
@@ -273,7 +276,14 @@ export function MapPage() {
     selectedRouteId: drive?.id || null,
     traffic: mapTraffic,
   };
-  const live = navigating && drive ? remainingAlong(drive, here || { lat: stops![0].lat, lon: stops![0].lon }) : null;
+  let live: ReturnType<typeof remainingAlong> | null = null;
+  if (navigating && gpsReady && drive && here) {
+    if (navProgressRef.current.routeId !== drive.id) {
+      navProgressRef.current = { routeId: drive.id };
+    }
+    live = remainingAlong(drive, here, navProgressRef.current.index);
+    navProgressRef.current.index = live.routeIndex;
+  }
   const nowStep: NavStep | undefined = drive?.steps[live?.stepI ?? 0];
   const nextStep: NavStep | undefined = drive?.steps[(live?.stepI ?? 0) + 1];
   const maneuvers = navigating && drive && live
@@ -283,6 +293,8 @@ export function MapPage() {
   function stopNavigation() {
     goStartGen.current += 1;
     navigatingRef.current = false;
+    navProgressRef.current = { routeId: "" };
+    setGpsReady(false);
     setNavigating(false);
   }
 
@@ -496,7 +508,10 @@ export function MapPage() {
   }, [params, ready]);
 
   useEffect(() => {
+    const generation = ++routePlanGen.current;
     if (!ready || !stops || stops.length < 2) {
+      setRoutePlanning(false);
+      setPlannedRouteKey("");
       setDrive(null);
       setRouteChoices([]);
       setRoutingErr(false);
@@ -504,6 +519,8 @@ export function MapPage() {
       return;
     }
     if (tripTooShort(stops)) {
+      setRoutePlanning(false);
+      setPlannedRouteKey("");
       setDrive(null);
       setRouteChoices([]);
       setRoutingErr(false);
@@ -511,17 +528,44 @@ export function MapPage() {
       wbRef.current?.flyTo(stops[stops.length - 1].lat, stops[stops.length - 1].lon, 16);
       return;
     }
-    let cancelled = false;
-    planRoutes(stops, routingOptions).then((routes) => {
-      if (cancelled) return;
-      setRouteChoices(routes);
-      setDrive((current) => routes.find((route) => route.id === current?.id) || routes[0] || null);
-      setRoutingErr(routes.length === 0);
-    });
+    setRoutePlanning(true);
+    setPlannedRouteKey("");
+    setRoutingErr(false);
+    if (!navigatingRef.current) {
+      setDrive(null);
+      setRouteChoices([]);
+    }
+    void planRoutes(stops, routingOptions)
+      .then((routes) => {
+        if (generation !== routePlanGen.current) return;
+        if (routes.length) {
+          setRouteChoices(routes);
+          setDrive((current) => routes.find((route) => route.id === current?.id) || routes[0]);
+          setPlannedRouteKey(routeRequestKey);
+          setRoutingErr(false);
+        } else {
+          if (!navigatingRef.current) {
+            setDrive(null);
+            setRouteChoices([]);
+          }
+          setRoutingErr(true);
+        }
+      })
+      .catch(() => {
+        if (generation !== routePlanGen.current) return;
+        if (!navigatingRef.current) {
+          setDrive(null);
+          setRouteChoices([]);
+        }
+        setRoutingErr(true);
+      })
+      .finally(() => {
+        if (generation === routePlanGen.current) setRoutePlanning(false);
+      });
     return () => {
-      cancelled = true;
+      if (generation === routePlanGen.current) routePlanGen.current += 1;
     };
-  }, [stops, routingOptions, ready]);
+  }, [stops, routingOptions, ready, routeRequestKey]);
 
   useEffect(() => {
     const wb = wbRef.current;
@@ -630,15 +674,16 @@ export function MapPage() {
       return;
     }
     const onOrientation = (event: DeviceOrientationEvent) => {
-      const absolute = event as DeviceOrientationEvent & {
+      const orientation = event as DeviceOrientationEvent & {
         webkitCompassHeading?: number;
         absolute?: boolean;
       };
-      const iosHeading = absolute.webkitCompassHeading;
+      const iosHeading = orientation.webkitCompassHeading;
+      const isAbsolute = event.type === "deviceorientationabsolute" || orientation.absolute === true;
       const raw =
         typeof iosHeading === "number"
           ? iosHeading
-          : typeof event.alpha === "number"
+          : isAbsolute && typeof event.alpha === "number"
             ? 360 - event.alpha
             : null;
       if (raw == null || !Number.isFinite(raw)) return;
@@ -670,24 +715,9 @@ export function MapPage() {
     let reroutePending = false;
     let rerouteGeneration = 0;
     let lastUiFix = 0;
+    let lastAcceptedFixAt = 0;
     let active = true;
-    // Enter the navigation camera immediately with the best known position;
-    // GPS fixes will refine it. Waiting for geolocation here made GO feel dead.
-    const bootGeom = driveRef.current?.geometry;
-    const origin =
-      hereRef.current ||
-      (bootGeom?.length ? { lat: bootGeom[0][0], lon: bootGeom[0][1] } : null) ||
-      (stopsRef.current?.[0] ? { lat: stopsRef.current[0].lat, lon: stopsRef.current[0].lon } : null);
-    if (origin) {
-      const look =
-        bootGeom && bootGeom.length >= 2 ? pointAhead(bootGeom, origin, navLookAheadMeters(null)) : null;
-      const br = look ? (bearingDeg(origin, look) + 360) % 360 : null;
-      wb.follow(origin.lon, origin.lat, br, {
-        camera: look ? { lat: look.lat, lon: look.lon } : origin,
-        speed: null,
-        accuracy: null,
-      });
-    }
+    setGpsReady(false);
     const placeMe = (
       lat: number,
       lon: number,
@@ -708,6 +738,8 @@ export function MapPage() {
       if (!filteredFix.accepted || !filteredFix.fix) return;
       gpsState = filteredFix.state;
       const fix = filteredFix.fix;
+      lastAcceptedFixAt = Date.now();
+      setGpsReady(true);
       const gps = { lat: fix.lat, lon: fix.lon };
       if (!lastUiFix || timestamp - lastUiFix >= 800) {
         lastUiFix = timestamp;
@@ -761,19 +793,29 @@ export function MapPage() {
     getHere().then((p) => {
       if (!active || !navigatingRef.current) return;
       if (p) placeMe(p.lat, p.lon, null, null, 25);
-      else if (stops?.[0]) placeMe(stops[0].lat, stops[0].lon, null, null, 25);
+      else setGpsReady(false);
     });
     watchRef.current = watchLocation(
       (fix) => placeMe(fix.lat, fix.lon, fix.heading, fix.speed, fix.accuracy, fix.timestamp),
-      { timeout: 12_000, maximumAge: 500 },
+      {
+        timeout: 12_000,
+        maximumAge: 500,
+        onError: () => {
+          if (!lastAcceptedFixAt || Date.now() - lastAcceptedFixAt > 20_000) setGpsReady(false);
+        },
+      },
     );
+    const gpsWatchdog = window.setInterval(() => {
+      if (!lastAcceptedFixAt || Date.now() - lastAcceptedFixAt > 20_000) setGpsReady(false);
+    }, 5_000);
     return () => {
       active = false;
       rerouteGeneration += 1;
+      window.clearInterval(gpsWatchdog);
       watchRef.current?.clear();
       watchRef.current = null;
     };
-  }, [navigating, stops]);
+  }, [navigating]);
 
   useEffect(() => {
     if (!navigating || drive?.provider !== "google" || !drive.trafficAware || !stops || stops.length !== 2) {
@@ -916,12 +958,20 @@ export function MapPage() {
   const site = picked?.website || (picked ? `https://www.google.com/maps/search/?api=1&query=${picked.lat},${picked.lon}` : "");
   const hudDist = live?.arrived ? 0 : live?.distance ?? drive?.distance ?? 0;
   const hudTime = live?.arrived ? 0 : live?.duration ?? drive?.duration ?? 0;
-  const navRouteState: NavRouteState = rerouting ? "rerouting" : offRoute ? "off-route" : "following";
-  const canGo = Boolean(drive && drive.distance >= MIN_NAV_METERS);
+  const navRouteState: NavRouteState = !gpsReady ? "gps-wait" : rerouting ? "rerouting" : offRoute ? "off-route" : "following";
+  const canGo = Boolean(
+    !routePlanning &&
+      plannedRouteKey === routeRequestKey &&
+      drive &&
+      drive.distance >= MIN_NAV_METERS,
+  );
   const tooShort = Boolean(stops && tripTooShort(stops));
 
   return (
-    <div className={`page map-page${navigating ? " is-nav" : ""}${light || sat ? "" : " is-dark"}${pickMode ? " is-pick" : ""}`}>
+    <div
+      className={`page map-page${navigating ? " is-nav" : ""}${light || sat ? "" : " is-dark"}${pickMode ? " is-pick" : ""}`}
+      data-route-planning={routePlanning ? "1" : "0"}
+    >
       <div className="map-nav-stage">
         <div className="map-wrap full map-gl" ref={mapEl} data-pitch={navigating ? String(NAV_TILT) : "0"} />
         {!online && (
@@ -1060,6 +1110,15 @@ export function MapPage() {
           onExit={stopNavigation}
         />
       )}
+      {navigating && !drive && (
+        <div className="nav-recovery" role="alert">
+          <b>Route unavailable</b>
+          <span>Navigation could not continue with this route.</span>
+          <button type="button" className="nav-exit" data-testid="nav-exit" onClick={stopNavigation}>
+            Exit
+          </button>
+        </div>
+      )}
       {!navigating && <div className={`map-tools${trip ? " route-tools" : ""}`}>
         {!trip && !navigating && (
           <button type="button" className={`map-round${buildOpen ? " on" : ""}`} onClick={openBuild} aria-label="Build route">
@@ -1182,6 +1241,13 @@ export function MapPage() {
             {drive.trafficAware && <span>Traffic ETA</span>}
             {drive.profile !== "fastest" && <span>Motorcycle preference</span>}
           </div>
+          {(drive.limitations?.length ?? 0) > 0 && (
+            <div className="route-limitations" role="status">
+              {drive.limitations!.map((limitation) => (
+                <span key={limitation}>{limitation}</span>
+              ))}
+            </div>
+          )}
           <div className="route-options">
             <label className="route-toll">
               Toll roads
@@ -1245,6 +1311,13 @@ export function MapPage() {
         <div className="route-sheet">
           <p className="route-meta" style={{ margin: 0 }}>
             You&apos;re already there. Tap the start field or the map to choose a different starting point.
+          </p>
+        </div>
+      )}
+      {trip && !navigating && routePlanning && !tooShort && (
+        <div className="route-sheet" role="status">
+          <p className="route-meta" style={{ margin: 0 }}>
+            Building a route with the selected options…
           </p>
         </div>
       )}

@@ -1,6 +1,6 @@
 import type { ChatMessage, Country, HotelRoom, Place, PlaceType, Review, RideRoute, SosAlert } from "../types";
 import { asset } from "./assets";
-import { defaultHours } from "./hours";
+import { fetchJson } from "./net";
 import { DEFAULT_AMENITIES, OVERRIDES } from "./overrides";
 import { store } from "./store";
 
@@ -11,6 +11,12 @@ let roomsCache: HotelRoom[] | null = null;
 let countriesCache: Country[] | null = null;
 let chatCache: ChatMessage[] | null = null;
 let sosCache: SosAlert[] | null = null;
+
+async function loadArray<T>(path: string): Promise<T[]> {
+  const value = await fetchJson<unknown>(asset(path));
+  if (!Array.isArray(value)) throw new Error(`Invalid data file: ${path}`);
+  return value as T[];
+}
 
 function enrich(raw: Place): Place {
   const extra = OVERRIDES[raw.id] ?? {};
@@ -23,9 +29,7 @@ function enrich(raw: Place): Place {
     amenities: extra.amenities ?? raw.amenities ?? DEFAULT_AMENITIES[type] ?? [],
     photos: extra.photos ?? raw.photos,
     status: extra.status ?? raw.status ?? "published",
-    openingHours:
-      extra.openingHours ??
-      (raw.openingHours && raw.openingHours !== "Hours on request" ? raw.openingHours : defaultHours(type)),
+    openingHours: extra.openingHours ?? raw.openingHours ?? "Hours on request",
     address: extra.address ?? raw.address ?? [raw.city, raw.country].filter(Boolean).join(", "),
     description:
       extra.description ??
@@ -36,8 +40,7 @@ function enrich(raw: Place): Place {
 
 export async function loadPlaces(): Promise<Place[]> {
   if (cache) return cache;
-  const res = await fetch(asset("data/objects.json"));
-  const rows = (await res.json()) as Place[];
+  const rows = await loadArray<Place>("data/objects.json");
   const pending = (store.get().pendingPlaces as Place[]) ?? [];
   cache = [...pending.map(enrich), ...rows.map(enrich)];
   return cache;
@@ -49,8 +52,7 @@ export function invalidatePlaces() {
 
 export async function loadRoutes(): Promise<RideRoute[]> {
   if (routesCache) return routesCache;
-  const res = await fetch(asset("data/routes.json"));
-  routesCache = ((await res.json()) as RideRoute[]).map((r) => ({
+  routesCache = (await loadArray<RideRoute>("data/routes.json")).map((r) => ({
     ...r,
     image: asset(r.image),
     gpxUrl: r.gpxUrl ? asset(r.gpxUrl) : undefined,
@@ -60,36 +62,31 @@ export async function loadRoutes(): Promise<RideRoute[]> {
 
 export async function loadReviews(): Promise<Review[]> {
   if (reviewsCache) return reviewsCache;
-  const res = await fetch(asset("data/reviews.json"));
-  reviewsCache = (await res.json()) as Review[];
+  reviewsCache = await loadArray<Review>("data/reviews.json");
   return reviewsCache;
 }
 
 export async function loadHotelRooms(): Promise<HotelRoom[]> {
   if (roomsCache) return roomsCache;
-  const res = await fetch(asset("data/hotel-rooms.json"));
-  roomsCache = (await res.json()) as HotelRoom[];
+  roomsCache = await loadArray<HotelRoom>("data/hotel-rooms.json");
   return roomsCache;
 }
 
 export async function loadCountries(): Promise<Country[]> {
   if (countriesCache) return countriesCache;
-  const res = await fetch(asset("data/countries.json"));
-  countriesCache = (await res.json()) as Country[];
+  countriesCache = await loadArray<Country>("data/countries.json");
   return countriesCache;
 }
 
 export async function loadChat(): Promise<ChatMessage[]> {
   if (chatCache) return chatCache;
-  const res = await fetch(asset("data/chat.json"));
-  chatCache = ((await res.json()) as ChatMessage[]).filter((m) => m.text || m.image);
+  chatCache = (await loadArray<ChatMessage>("data/chat.json")).filter((m) => m.text || m.image);
   return chatCache;
 }
 
 export async function loadSos(): Promise<SosAlert[]> {
   if (sosCache) return sosCache;
-  const res = await fetch(asset("data/sos.json"));
-  sosCache = (await res.json()) as SosAlert[];
+  sosCache = await loadArray<SosAlert>("data/sos.json");
   return sosCache;
 }
 

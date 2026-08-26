@@ -3,10 +3,11 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { Stars } from "../components/Stars";
 import { AmenityIcon, IconCal, IconGlobe, IconPencil, IconPhone, IconPin, IconShare } from "../components/Icons";
-import { GoogleMiniMap } from "../components/GoogleMiniMap";
+import { PlaceMiniMap } from "../components/PlaceMiniMap";
 import { PhotoCarousel } from "../components/PhotoCarousel";
 import { HoursToggle } from "../components/HoursToggle";
 import { getPlace, loadPlaces } from "../lib/data";
+import { dateFromToday, validDateRange } from "../lib/dates";
 import { photosFor } from "../lib/photos";
 import { appleMapsUrl, googleRouteUrl, validCoords, wazeUrl } from "../lib/geo";
 import { fullAddress } from "../lib/hours";
@@ -27,8 +28,8 @@ export function ObjectDetail() {
   const [navOpen, setNavOpen] = useState(false);
   const [fav, setFav] = useState(false);
   const [report, setReport] = useState(false);
-  const [from, setFrom] = useState("2026-08-18");
-  const [to, setTo] = useState("2026-08-26");
+  const [from, setFrom] = useState(() => dateFromToday(1));
+  const [to, setTo] = useState(() => dateFromToday(2));
   const [booked, setBooked] = useState(false);
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export function ObjectDetail() {
   const photos = photosFor(place);
   const canRoute = validCoords(place.lat, place.lon);
   const hotel = place.types.includes("hotels");
+  const datesValid = validDateRange(from, to);
   const maps = `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lon}`;
 
   function share() {
@@ -52,6 +54,7 @@ export function ObjectDetail() {
   }
 
   function requestBook() {
+    if (!datesValid) return;
     const user = store.get().user;
     if (!user) {
       nav("/login");
@@ -132,22 +135,23 @@ export function ObjectDetail() {
           <>
             <label className="date-pill">
               <IconCal />
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <input type="date" min={dateFromToday()} value={from} onChange={(e) => setFrom(e.target.value)} />
               <span>→</span>
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              <input type="date" min={from || dateFromToday()} value={to} onChange={(e) => setTo(e.target.value)} />
             </label>
             <p className="muted date-hint">
               {fmtDate(from)} → {fmtDate(to)}
             </p>
             {booked ? (
               <div className="notice" style={{ margin: "0 0 16px" }}>
-                Booking request sent.
+                Saved on this device. No request was sent to the hotel.
               </div>
             ) : (
-              <button className="btn green" onClick={requestBook} style={{ marginBottom: 14 }}>
-                Request booking
+              <button className="btn green" disabled={!datesValid} onClick={requestBook} style={{ marginBottom: 14 }}>
+                Save booking request
               </button>
             )}
+            {!datesValid && <p className="muted">Choose a future check-in and a later check-out date.</p>}
             <Link className="link" to={`/object/${place.id}/book`}>
               Choose a room
             </Link>
@@ -170,7 +174,7 @@ export function ObjectDetail() {
             Report
           </button>
         </div>
-        <GoogleMiniMap lat={place.lat} lon={place.lon} />
+        <PlaceMiniMap lat={place.lat} lon={place.lon} />
       </div>
 
       {navOpen && (

@@ -168,10 +168,16 @@ export function RealBro() {
   const lastSubmitRef = useRef({ text: "", at: 0 });
   const busyRef = useRef(false);
   const queuedRef = useRef<string | null>(null);
+  const openRef = useRef(false);
+  const aliveRef = useRef(true);
+  const queryGenerationRef = useRef(0);
+  const queryAbortRef = useRef<AbortController | null>(null);
+  const transcribeAbortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const hasSpeechApi = recognizerCtor() !== null;
   const hasMic = hasSpeechApi || canMediaRecord();
   useRecordRef.current = preferRecordStt(hasSpeechApi);
+  openRef.current = open;
 
   function clearListenTimers() {
     window.clearTimeout(restartTimer.current);
@@ -198,6 +204,7 @@ export function RealBro() {
     setPhase("idle");
     if (!session) return;
     const blob = await session.stop();
+    if (token !== voiceTokenRef.current || !aliveRef.current || !openRef.current) return;
     if (!submit || !blob || !blob.size) {
       setInput("");
       if (token === voiceTokenRef.current) {
@@ -206,7 +213,12 @@ export function RealBro() {
       return;
     }
     if (token === voiceTokenRef.current) setVoiceNotice("Transcribing…");
-    const text = await transcribeAudioBlob(blob, session.format);
+    const controller = new AbortController();
+    transcribeAbortRef.current?.abort();
+    transcribeAbortRef.current = controller;
+    const text = await transcribeAudioBlob(blob, session.format, controller.signal);
+    if (transcribeAbortRef.current === controller) transcribeAbortRef.current = null;
+    if (token !== voiceTokenRef.current || !aliveRef.current || !openRef.current) return;
     setInput("");
     if (token === voiceTokenRef.current) {
       setVoiceNotice(
@@ -370,6 +382,7 @@ export function RealBro() {
   }, []);
 
   useEffect(() => {
+    aliveRef.current = true;
     const onVis = () => {
       if (document.visibilityState === "visible" && wantListen.current && !useRecordRef.current && !captureRef.current) {
         beginRec();
@@ -377,8 +390,21 @@ export function RealBro() {
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
+      aliveRef.current = false;
       document.removeEventListener("visibilitychange", onVis);
       clearListenTimers();
+      wantListen.current = false;
+      startingRef.current = false;
+      stopSpeechRecOnly();
+      const session = captureRef.current;
+      captureRef.current = null;
+      void session?.stop();
+      queryGenerationRef.current += 1;
+      queryAbortRef.current?.abort();
+      queryAbortRef.current = null;
+      transcribeAbortRef.current?.abort();
+      transcribeAbortRef.current = null;
+      hushVoice();
     };
   }, []);
 
@@ -431,6 +457,7 @@ export function RealBro() {
   }
 
   function openSheet() {
+    openRef.current = true;
     setOpen(true);
     if (!msgs.length) {
       const hello = greeting();
@@ -440,14 +467,29 @@ export function RealBro() {
   }
 
   function closeSheet() {
+    openRef.current = false;
+    voiceTokenRef.current++;
     setOpen(false);
     hushVoice();
     stopListening(false);
     speakToken.current++;
+    queryGenerationRef.current++;
+    queryAbortRef.current?.abort();
+    queryAbortRef.current = null;
+    transcribeAbortRef.current?.abort();
+    transcribeAbortRef.current = null;
+    queuedRef.current = null;
+    busyRef.current = false;
+    setBusy(false);
   }
 
-  async function answerRide(query: string, aiReply?: string) {
+  function queryActive(token: number): boolean {
+    return aliveRef.current && openRef.current && queryGenerationRef.current === token;
+  }
+
+  async function answerRide(query: string, token: number, aiReply?: string) {
     const places = await loadPlaces();
+    if (!queryActive(token)) return;
     const found = matchPlaces(places, query);
     if (found.length) {
       const reply = aiReply || rideReply(found[0].name, false);
@@ -456,6 +498,7 @@ export function RealBro() {
       return;
     }
     const geo = await geocodePlace(query);
+    if (!queryActive(token)) return;
     if (geo) {
       const reply = aiReply || rideReply(geo.name, false);
       push({
@@ -471,8 +514,9 @@ export function RealBro() {
     say(reply);
   }
 
-  async function answerCategory(type: PlaceType, country?: string, aiReply?: string) {
+  async function answerCategory(type: PlaceType, token: number, country?: string, aiReply?: string) {
     const places = await loadPlaces();
+    if (!queryActive(token)) return;
     const list = topByCategory(places, type, country);
     const reply = aiReply || categoryReply(list.length, type, country, false);
     push({ role: "bro", text: reply, cards: list.map(placeCard) });
@@ -490,6 +534,10 @@ export function RealBro() {
     // Voice silence + send (or overlapping recognizers) used to fire the same line twice.
     if (text === lastSubmitRef.current.text && now - lastSubmitRef.current.at < 2200) return;
     lastSubmitRef.current = { text, at: now };
+    const token = ++queryGenerationRef.current;
+    const controller = new AbortController();
+    queryAbortRef.current?.abort();
+    queryAbortRef.current = controller;
     busyRef.current = true;
     setBusy(true);
     hushVoice();
@@ -497,30 +545,33 @@ export function RealBro() {
     try {
       const intent = parseIntent(text);
       if (intent.kind === "ride") {
-        await answerRide(intent.query);
+        await answerRide(intent.query, token);
         return;
       }
       if (intent.kind === "category") {
-        await answerCategory(intent.type, intent.country);
+        await answerCategory(intent.type, token, intent.country);
         return;
       }
 
       const history: BroChatTurn[] = msgs
         .slice(-8)
         .map((m) => ({ role: m.role === "bro" ? "assistant" : "user", content: m.text }));
-      const ai = await askRealBro(text, history);
+      const ai = await askRealBro(text, history, controller.signal);
+      if (!queryActive(token)) return;
       if (ai?.intent === "ride" && ai.query) {
-        await answerRide(ai.query, ai.reply);
+        await answerRide(ai.query, token, ai.reply);
         return;
       }
       if (ai?.intent === "category" && ai.type) {
-        await answerCategory(ai.type, ai.country, ai.reply);
+        await answerCategory(ai.type, token, ai.country, ai.reply);
         return;
       }
       const reply = ai?.reply || localChatReply(text);
       push({ role: "bro", text: reply });
       say(reply);
     } finally {
+      if (queryAbortRef.current === controller) queryAbortRef.current = null;
+      if (!queryActive(token)) return;
       busyRef.current = false;
       setBusy(false);
       const next = queuedRef.current;
@@ -543,6 +594,8 @@ export function RealBro() {
       return;
     }
     voiceTokenRef.current++;
+    transcribeAbortRef.current?.abort();
+    transcribeAbortRef.current = null;
     hushVoice();
     speakToken.current++;
     heardRef.current = "";

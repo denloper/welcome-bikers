@@ -95,10 +95,21 @@ export function nearestIndex(
 export function closestOnPolyline(
   pts: [number, number][],
   here: { lat: number; lon: number },
+  range?: { start: number; end: number },
 ): { lat: number; lon: number; index: number; distKm: number } {
   if (!pts.length) return { lat: here.lat, lon: here.lon, index: 0, distKm: 0 };
-  let best = { lat: pts[0][0], lon: pts[0][1], index: 0, distKm: Infinity };
-  for (let i = 0; i < pts.length - 1; i++) {
+  if (pts.length === 1) {
+    return {
+      lat: pts[0][0],
+      lon: pts[0][1],
+      index: 0,
+      distKm: haversineKm(here, { lat: pts[0][0], lon: pts[0][1] }),
+    };
+  }
+  const start = Math.max(0, Math.min(pts.length - 2, Math.floor(range?.start ?? 0)));
+  const end = Math.max(start, Math.min(pts.length - 2, Math.floor(range?.end ?? pts.length - 2)));
+  let best = { lat: pts[start][0], lon: pts[start][1], index: start, distKm: Infinity };
+  for (let i = start; i <= end; i++) {
     const a = { lat: pts[i][0], lon: pts[i][1] };
     const b = { lat: pts[i + 1][0], lon: pts[i + 1][1] };
     const p = projectOnSegment(here, a, b);
@@ -117,12 +128,16 @@ function projectOnSegment(
   a: { lat: number; lon: number },
   b: { lat: number; lon: number },
 ) {
-  const dx = b.lon - a.lon;
+  const latitudeScale = Math.cos((((a.lat + b.lat + p.lat) / 3) * Math.PI) / 180);
+  const lonDelta = b.lon - a.lon;
+  const dx = lonDelta * latitudeScale;
   const dy = b.lat - a.lat;
+  const px = (p.lon - a.lon) * latitudeScale;
+  const py = p.lat - a.lat;
   const len2 = dx * dx + dy * dy;
   if (len2 < 1e-12) return a;
-  const t = Math.max(0, Math.min(1, ((p.lon - a.lon) * dx + (p.lat - a.lat) * dy) / len2));
-  return { lat: a.lat + t * dy, lon: a.lon + t * dx };
+  const t = Math.max(0, Math.min(1, (px * dx + py * dy) / len2));
+  return { lat: a.lat + t * dy, lon: a.lon + t * lonDelta };
 }
 
 export function pointAhead(

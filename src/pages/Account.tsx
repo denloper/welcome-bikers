@@ -27,7 +27,7 @@ export function Account() {
         </div>
         {!user.emailVerified && (
           <div className="verify">
-            Get the most out of your account. Confirm your email to stay secure and never lose access.
+            This local profile has not been marked as verified on this device.
             <div>
               <button
                 className="link"
@@ -36,7 +36,7 @@ export function Account() {
                   nav(0);
                 }}
               >
-                Verify Your Email
+                Mark as verified locally
               </button>
             </div>
           </div>
